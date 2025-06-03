@@ -1,14 +1,29 @@
 """
 Module: analysis_causality.py
 Description: Causality analysis utilities for multi-tenant time series analysis, including graph visualization.
+
+Este módulo implementa métodos para análise de causalidade entre séries temporais de diferentes tenants,
+incluindo causalidade de Granger e Transfer Entropy (TE), além de visualizações em formato de grafo.
 """
 import os
+import logging
 import pandas as pd
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import networkx as nx
+import statsmodels.api as sm
+from statsmodels.tsa.stattools import grangercausalitytests
+from statsmodels.tools.sm_exceptions import MissingDataError
+
+# Importação da biblioteca pyinform para Transfer Entropy mais robusta
+try:
+    from pyinform.transferentropy import transfer_entropy
+    PYINFORM_AVAILABLE = True
+except ImportError:
+    PYINFORM_AVAILABLE = False
+    logging.warning("pyinform não está instalado. Transfer Entropy usará implementação básica.")
 
 plt.style.use('tableau-colorblind10')
 
@@ -71,23 +86,52 @@ def plot_causality_graph(causality_matrix: pd.DataFrame, out_path: str, threshol
     plt.close()
     return out_path
 
-def _transfer_entropy(x, y, bins=8):
+def _transfer_entropy(x, y, bins=8, k=1):
     """
-    Calcula a Transfer Entropy (TE) de y para x usando histogramas discretizados.
-    x, y: arrays 1D de mesmo tamanho (séries temporais alinhadas)
-    bins: número de bins para discretização
-    Retorna: valor escalar de TE (y→x)
+    Calcula a Transfer Entropy (TE) de y para x (y→x) usando implementação otimizada.
+    
+    Args:
+        x: Array 1D representando a série temporal destino (target)
+        y: Array 1D representando a série temporal fonte (source)
+        bins: Número de bins para discretização (default=8)
+        k: Histórico da série destino a considerar (default=1)
+        
+    Returns:
+        valor escalar de TE (y→x): quanto y ajuda a prever x além da história de x
     """
+    if PYINFORM_AVAILABLE:
+        try:
+            # Usa a implementação mais robusta da biblioteca pyinform
+            # Normalização e binning automático de séries
+            # Converte para inteiros conforme requisitos do pyinform
+            x_norm = (x - np.min(x)) / (np.max(x) - np.min(x) + 1e-8)
+            y_norm = (y - np.min(y)) / (np.max(y) - np.min(y) + 1e-8)
+            
+            x_bin = np.floor(x_norm * (bins-1)).astype(int)
+            y_bin = np.floor(y_norm * (bins-1)).astype(int)
+            
+            # Calcula TE usando pyinform
+            te_value = transfer_entropy(y_bin, x_bin, k=k, local=False)
+            return te_value
+        except Exception as e:
+            logging.warning(f"Erro ao usar pyinform para TE: {e}. Usando implementação básica.")
+    
+    # Implementação básica fallback usando histogramas numpy
     # Discretiza as séries
     x_binned = np.digitize(x, np.histogram_bin_edges(x, bins=bins))
     y_binned = np.digitize(y, np.histogram_bin_edges(y, bins=bins))
+    
     # Calcula as probabilidades conjuntas e condicionais
     px = np.histogram(x_binned[1:], bins=bins, density=True)[0]
     pxy = np.histogram2d(x_binned[:-1], x_binned[1:], bins=bins, density=True)[0]
-    pxyy = np.histogramdd(np.stack([x_binned[:-1], y_binned[:-1], x_binned[1:]], axis=1), bins=(bins, bins, bins), density=True)[0]
-    pxyy = pxyy + 1e-12  # regularização
+    pxyy = np.histogramdd(np.stack([x_binned[:-1], y_binned[:-1], x_binned[1:]], axis=1), 
+                         bins=(bins, bins, bins), density=True)[0]
+    
+    # Adiciona regularização para evitar log(0)
+    pxyy = pxyy + 1e-12
     pxy = pxy + 1e-12
     px = px + 1e-12
+    
     # TE(y→x) = sum p(x_{t+1}, x_t, y_t) * log [p(x_{t+1}|x_t, y_t) / p(x_{t+1}|x_t)]
     te = 0.0
     for i in range(bins):
@@ -95,9 +139,10 @@ def _transfer_entropy(x, y, bins=8):
             for k in range(bins):
                 pxyz = pxyy[j, k, i]
                 pxz = pxy[j, i]
-                px_i = px[i]  # Corrigido: não sobrescrever px
+                px_i = px[i]
                 if pxyz > 0 and pxz > 0 and px_i > 0:
-                    te += pxyz * np.log((pxyz / (np.sum(pxyy[j, k, :]) + 1e-12)) / (pxz / (np.sum(pxy[j, :]) + 1e-12)))
+                    te += pxyz * np.log((pxyz / (np.sum(pxyy[j, k, :]) + 1e-12)) / 
+                                       (pxz / (np.sum(pxy[j, :]) + 1e-12)))
     return te
 
 class CausalityAnalyzer:
@@ -109,39 +154,128 @@ class CausalityAnalyzer:
 
     def compute_granger_matrix(self, metric: str, phase: str, round_id: str, maxlag: int = 5) -> pd.DataFrame:
         """
-        Calcula a matriz de p-valores do teste de causalidade de Granger entre todos os tenants para uma métrica, fase e round.
-        (Implementação placeholder: retorna matriz de NaN para integração futura)
+        Calcula a matriz de p-valores do teste de causalidade de Granger entre todos os tenants para uma métrica específica.
+        
+        Args:
+            metric: Nome da métrica para análise
+            phase: Fase experimental (ex: "1 - Baseline", "2 - Attack")
+            round_id: ID do round (ex: "round-1")
+            maxlag: Número máximo de lags para o teste de Granger
+            
+        Returns:
+            DataFrame onde mat[i,j] é o menor p-valor de j causando i (considerando lags de 1 a maxlag)
         """
-        subset = self.df[(self.df['metric_name'] == metric) & (self.df['experimental_phase'] == phase) & (self.df['round_id'] == round_id)]
+        subset = self.df[(self.df['metric_name'] == metric) & 
+                        (self.df['experimental_phase'] == phase) & 
+                        (self.df['round_id'] == round_id)]
+        
         tenants = subset['tenant_id'].unique()
         mat = pd.DataFrame(np.nan, index=tenants, columns=tenants)
-        # Aqui será implementada a lógica real de Granger
+        
+        # Transforma para formato amplo para análise de séries temporais
+        wide = subset.pivot_table(index='timestamp', columns='tenant_id', values='metric_value')
+        
+        # Interpolação e preenchimento para lidar com valores ausentes
+        wide = wide.sort_index().interpolate(method='time').ffill().bfill()
+        
+        # Testa causalidade de Granger para cada par de tenants
+        for target in tenants:
+            for source in tenants:
+                if target == source:
+                    continue
+                    
+                # Obtém as séries relevantes
+                try:
+                    # Seleciona apenas dados com sobreposição de timestamps
+                    data = pd.concat([wide[target], wide[source]], axis=1)
+                    data = data.dropna()
+                    
+                    if len(data) < maxlag + 2:
+                        continue
+                        
+                    # Realiza teste de Granger
+                    try:
+                        test_results = grangercausalitytests(
+                            data, 
+                            maxlag=maxlag, 
+                            verbose=False
+                        )
+                        
+                        # Extrai o menor p-valor entre todos os lags
+                        p_values = [test_results[lag][0]['ssr_chi2test'][1] for lag in range(1, maxlag+1)]
+                        min_p_value = min(p_values) if p_values else np.nan
+                        
+                        # Armazena o resultado na matriz
+                        mat.loc[target, source] = min_p_value
+                    except MissingDataError:
+                        continue
+                    except Exception as e:
+                        logging.warning(f"Erro ao calcular Granger para {source}->{target}: {str(e)}")
+                        continue
+                except KeyError:
+                    continue
+                    
         return mat
 
-    def compute_transfer_entropy_matrix(self, metric: str, phase: str, round_id: str, bins: int = 8) -> pd.DataFrame:
+    def compute_transfer_entropy_matrix(self, metric: str, phase: str, round_id: str, bins: int = 8, k: int = 1) -> pd.DataFrame:
         """
-        Calcula a matriz de Transfer Entropy (TE) entre todos os tenants para uma métrica, fase e round.
-        TE[y→x] = quanto y ajuda a prever x (direcional).
-        Agora interpola valores ausentes para maximizar pares válidos.
+        Calcula a matriz de Transfer Entropy (TE) entre todos os tenants para uma métrica específica.
+        
+        Args:
+            metric: Nome da métrica para análise
+            phase: Fase experimental (ex: "1 - Baseline", "2 - Attack")
+            round_id: ID do round (ex: "round-1") 
+            bins: Número de bins para discretização das séries contínuas
+            k: Histórico da série destino a considerar
+            
+        Returns:
+            DataFrame onde mat[i,j] é o valor da Transfer Entropy de j para i (j→i)
+            Valores mais altos indicam maior transferência de informação
         """
-        subset = self.df[(self.df['metric_name'] == metric) & (self.df['experimental_phase'] == phase) & (self.df['round_id'] == round_id)]
+        # Log do início do cálculo
+        logging.info(f"Calculando matriz de Transfer Entropy para {metric} em {phase} ({round_id})")
+        
+        # Filtra os dados relevantes
+        subset = self.df[(self.df['metric_name'] == metric) & 
+                        (self.df['experimental_phase'] == phase) & 
+                        (self.df['round_id'] == round_id)]
+        
         tenants = subset['tenant_id'].unique()
         mat = pd.DataFrame(np.nan, index=tenants, columns=tenants)
+        
+        # Transforma para formato amplo para análise
         wide = subset.pivot_table(index='timestamp', columns='tenant_id', values='metric_value')
+        
         # Interpola e preenche NaNs para alinhar todos os tenants
         wide = wide.sort_index().interpolate(method='time').ffill().bfill()
-        for x in tenants:
-            for y in tenants:
-                if x == y:
+        
+        # Calcula TE para cada par de tenants
+        for target in tenants:
+            for source in tenants:
+                if target == source:
                     continue
-                x_series = wide[x]
-                y_series = wide[y]
-                # Alinha os índices
-                common_idx = x_series.index.intersection(y_series.index)
-                xv = x_series.loc[common_idx].values
-                yv = y_series.loc[common_idx].values
-                if len(xv) > 10:
-                    mat.loc[x, y] = _transfer_entropy(xv, yv, bins=bins)
+                
+                try:
+                    # Obtém séries temporais dos tenants
+                    target_series = wide[target]
+                    source_series = wide[source]
+                    
+                    # Alinha os índices para garantir correspondência temporal
+                    common_idx = target_series.index.intersection(source_series.index)
+                    target_values = target_series.loc[common_idx].values
+                    source_values = source_series.loc[common_idx].values
+                    
+                    # Verifica se há pontos suficientes para cálculo significativo
+                    if len(target_values) > 10:
+                        # Calcula TE e armazena na matriz
+                        te_value = _transfer_entropy(target_values, source_values, bins=bins, k=k)
+                        mat.loc[target, source] = te_value
+                    else:
+                        logging.warning(f"Série temporal insuficiente para par {source}->{target}: {len(target_values)} pontos")
+                        
+                except Exception as e:
+                    logging.error(f"Erro ao calcular Transfer Entropy para {source}->{target}: {str(e)}")
+        
         return mat
 
 class CausalityVisualizer:

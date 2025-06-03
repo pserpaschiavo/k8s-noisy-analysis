@@ -1,0 +1,37 @@
+# Configuração do Pipeline de Análise Multi-Tenant
+
+# Diretórios de entrada/saída
+data_root: /home/phil/Projects/gpt-nn-analysis/demo-data
+processed_data_dir: /home/phil/Projects/gpt-nn-analysis/data/processed
+output_dir: /home/phil/Projects/gpt-nn-analysis/outputs
+
+# Seleção de dados
+selected_metrics:
+  - cpu_usage
+  - memory_usage
+  
+selected_tenants:
+  - tenant-a
+  - tenant-b
+  - tenant-c
+  - tenant-d
+  
+selected_rounds:
+  - round-1
+
+# Parâmetros de análise
+correlation:
+  methods:
+    - pearson
+    - spearman
+  
+causality:
+  granger_max_lag: 5
+  granger_threshold: 0.05
+  transfer_entropy_bins: 8
+  
+# Opções de visualização
+plots:
+  figure_size: [10, 6]
+  style: tableau-colorblind10
+  dpi: 100
