@@ -311,44 +311,45 @@ Após análise da implementação atual e comparação com o plano original, for
 
 As seguintes prioridades foram identificadas para concluir o projeto com sucesso:
 
-### Prioridade Alta (Imediata)
-1. **Completar Implementação do Transfer Entropy**:
-   - Finalizar integração da biblioteca de TE
-   - Garantir armazenamento adequado dos valores
-   - Completar testes unitários específicos para TE
+### Prioridade Alta (Imediata) ✅
+1. **Completar Implementação do Transfer Entropy** ✅:
+   - ✅ Finalizar integração da biblioteca de TE
+   - ✅ Garantir armazenamento adequado dos valores
+   - ✅ Completar testes unitários específicos para TE
 
-2. **Atualizar `requirements.txt`**:
-   - Adicionar `networkx` e biblioteca para TE (ex: `pyinform`)
-   - Especificar versões compatíveis
+2. **Atualizar `requirements.txt`** ✅:
+   - ✅ Adicionar `networkx` e biblioteca para TE (ex: `pyinform`)
+   - ✅ Especificar versões compatíveis
 
-3. **Consolidar Testes Unitários Críticos**:
-   - Focar em testes para ingestão de dados, causalidade e exportação
-   - Garantir cobertura para casos edge de ausência de dados
+3. **Consolidar Testes Unitários Críticos** ✅:
+   - ✅ Focar em testes para ingestão de dados, causalidade e exportação
+   - ✅ Garantir cobertura para casos edge de ausência de dados
 
-### Prioridade Média (Próximas 2-3 semanas)
-1. **Implementar Comparação entre Fases Experimentais**:
-   - Desenvolver lógica para comparar métricas entre baseline/ataque/recovery
-   - Criar visualizações específicas para destacar mudanças
+### Prioridade Média (Próximas 2-3 semanas) ✅
+1. **Implementar Comparação entre Fases Experimentais** ✅:
+   - ✅ Desenvolver lógica para comparar métricas entre baseline/ataque/recovery
+   - ✅ Criar visualizações específicas para destacar mudanças
 
-2. **Desenvolver Metodologia de Agregação de Insights**:
-   - Definir e implementar critérios para identificação de "tenant barulhento"
-   - Estruturar tabela final comparativa
+2. **Desenvolver Metodologia de Agregação de Insights** ✅:
+   - ✅ Definir e implementar critérios para identificação de "tenant barulhento"
+   - ✅ Estruturar tabela final comparativa
 
-3. **Documentar Escolhas Metodológicas**:
-   - Registrar parâmetros utilizados (ex: `max_lags`, thresholds)
-   - Justificar escolhas de bibliotecas e métodos
+3. **Documentar Escolhas Metodológicas** ✅:
+   - ✅ Registrar parâmetros utilizados (ex: `max_lags`, thresholds)
+   - ✅ Justificar escolhas de bibliotecas e métodos
 
-### Prioridade Baixa (Após concluir anteriores)
-1. **Análises com Janelas Móveis**:
-   - Adaptar módulos para análise temporal dinâmica
-   - Implementar visualizações específicas
+### Prioridade Baixa (Após concluir anteriores) 🔄
+1. **Análises com Janelas Móveis** ✅:
+   - ✅ Adaptar módulos para análise temporal dinâmica
+   - ✅ Implementar visualizações específicas
+   - ✅ Testar e validar a execução completa do pipeline com janelas móveis
 
-2. **Refinamentos Estéticos e Usabilidade**:
-   - Melhorar formatação de gráficos
-   - Adicionar opções de personalização de visualizações
-   - Aprimorar mensagens de log e feedback
+2. **Refinamentos Estéticos e Usabilidade** 🔄:
+   - ✅ Melhorar formatação de gráficos (estilo tableau-colorblind10)
+   - 🔄 Adicionar opções de personalização de visualizações
+   - ✅ Aprimorar mensagens de log e feedback
 
-3. **Documentação para Usuários Finais**:
-   - Tutorial de uso do pipeline
-   - Guia de interpretação dos resultados
+3. **Documentação para Usuários Finais** 🔄:
+   - 🔄 Tutorial de uso do pipeline
+   - 🔄 Guia de interpretação dos resultados
 

@@ -155,6 +155,63 @@ O sistema utiliza um DataFrame "long" como fonte única de verdade, com as segui
 - `round_id`: Identificador do round (string)
 - `experiment_id`: Identificador do experimento (string)
 
+## Análises Implementadas
+
+### 1. Análise Descritiva
+- Estatísticas básicas por tenant e fase
+- Visualizações temporais das métricas
+- Boxplots comparativos
+- Gráficos de barras por fase
+
+### 2. Análise de Correlação
+- Matriz de correlação entre tenants
+- Matriz de covariância
+- Heatmaps para visualização
+- Agrupamento hierárquico opcional
+
+### 3. Análise de Causalidade
+- **Causalidade de Granger**: Testa se valores passados de um tenant ajudam a prever valores futuros de outro
+- **Transfer Entropy (TE)**: Mede transferência de informação não-linear entre séries temporais
+- Visualização em forma de grafo direcionado
+
+### 4. Comparação entre Fases
+- Análise comparativa de métricas entre baseline, ataque e recuperação
+- Visualização de variação percentual
+- Identificação de tendências e anomalias
+
+### 5. Identificação de Tenants "Barulhentos"
+- Score composto baseado em múltiplos critérios:
+  - Impacto causal (50%)
+  - Força de correlação (30%)
+  - Variação entre fases (20%)
+- Ranking de tenants por impacto no ambiente
+- Relatório detalhado com justificativas
+
+## Executando Testes
+
+Para verificar a implementação do Transfer Entropy:
+
+```bash
+python src/test_transfer_entropy.py
+```
+
+Para executar todos os testes unitários:
+
+```bash
+python -m pytest src/test_*.py -v
+```
+
+## Relatório Final
+
+Após a execução do pipeline, um relatório markdown é gerado em `outputs/reports/` com:
+
+1. Ranking de tenants por impacto
+2. Tabela comparativa de métricas
+3. Links para visualizações geradas
+4. Explicação da metodologia
+
+Este relatório é ideal para entender quais tenants têm maior impacto no ambiente e por quê, com base em evidências quantitativas.
+
 ## Relatórios
 
 Após a execução, um relatório HTML será gerado em `outputs/reports/` com links para todas as visualizações e resultados.

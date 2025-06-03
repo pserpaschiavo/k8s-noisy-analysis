@@ -12,6 +12,7 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import matplotlib.lines as mlines
 import networkx as nx
 import statsmodels.api as sm
 from statsmodels.tsa.stattools import grangercausalitytests
@@ -64,15 +65,52 @@ def plot_causality_graph(causality_matrix: pd.DataFrame, out_path: str, threshol
                     edge_weights.append(weight * 6 + 1)
                     edge_colors.append(color)
                     edge_labels[(src, tgt)] = f"{weight:.2f}"
-    pos = nx.spring_layout(G, seed=42)
-    plt.figure(figsize=(7, 7))
-    nx.draw_networkx_nodes(G, pos, node_color='skyblue', node_size=1200)
-    nx.draw_networkx_labels(G, pos, font_size=12, font_weight='bold')
+    
+    # Implementa posições fixas para os nós para garantir consistência visual entre diferentes grafos
+    # Primeiro, garante que os tenants estejam em ordem consistente para posicionamento
+    sorted_tenants = sorted(tenants)
+    
+    # Cria dicionário de posições fixas para cada tenant (usando layout circular)
+    pos = {}
+    if len(sorted_tenants) <= 1:
+        pos[sorted_tenants[0]] = np.array([0.0, 0.0])
+    else:
+        angles = np.linspace(0, 2 * np.pi, len(sorted_tenants), endpoint=False)
+        # Posiciona os nós em círculo com raio 0.8 para deixar espaço para labels
+        radius = 0.8
+        for tenant, angle in zip(sorted_tenants, angles):
+            pos[tenant] = np.array([radius * np.cos(angle), radius * np.sin(angle)])
+    
+    # Adiciona um pequeno jitter para evitar sobreposição perfeita de arestas bidirecionais
+    for node in pos:
+        pos[node] = pos[node] + np.random.normal(0, 0.02, size=2)
+    
+    plt.figure(figsize=(10, 10))  # Aumentar o tamanho da figura
+    
+    # Adicionar um fundo claro para melhor visibilidade
+    ax = plt.gca()
+    ax.set_facecolor('#f8f8f8')
+    
+    # Desenhar nós maiores e com bordas
+    nx.draw_networkx_nodes(G, pos, node_color='skyblue', node_size=1600, 
+                          edgecolors='darkblue', linewidths=1.5)
+    
+    # Melhorar os rótulos dos nós
+    nx.draw_networkx_labels(G, pos, font_size=13, font_weight='bold', font_color='black')
+    
     # Desenha cada aresta individualmente para aplicar peso e cor
     for idx, (edge, w, c) in enumerate(zip(edges, edge_weights, edge_colors)):
-        nx.draw_networkx_edges(G, pos, edgelist=[edge], arrowstyle='->' if directed else '-', arrows=directed, width=w, edge_color=c, alpha=0.8)
-    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_color='gray', font_size=10)
-    plt.title(f'Causality Graph ({"Directed" if directed else "Undirected"})\nMétrica: {metric if metric else "?"} | Edges: p < {threshold:.2g}')
+        nx.draw_networkx_edges(G, pos, edgelist=[edge], arrowstyle='->' if directed else '-', 
+                             arrows=directed, width=w, edge_color=c, alpha=0.9,
+                             connectionstyle='arc3,rad=0.2')  # Curva as arestas para melhor visualização
+    
+    # Melhorar os rótulos das arestas
+    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, 
+                               font_color='darkred', font_size=11, font_weight='bold',
+                               bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="gray", alpha=0.7))
+    
+    plt.title(f'Causality Graph ({"Directed" if directed else "Undirected"})\nMétrica: {metric if metric else "?"} | Edges: p < {threshold:.2g}',
+             fontsize=14, fontweight='bold')
     plt.axis('off')
     # Legenda customizada
     import matplotlib.lines as mlines

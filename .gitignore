@@ -13,7 +13,6 @@ __pycache__/
 .venv3-10/
 .venv311/
 .venv3-11/
-.venv/
 build/
 develop-eggs/
 dist/

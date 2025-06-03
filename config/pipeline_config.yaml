@@ -34,4 +34,4 @@ causality:
 plots:
   figure_size: [10, 6]
   style: tableau-colorblind10
-  dpi: 100
+  dpi: 300
