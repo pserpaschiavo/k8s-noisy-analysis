@@ -159,7 +159,8 @@ def run_unified_pipeline(config_path: Optional[str] = None,
                         output_dir: Optional[str] = None,
                         run_sliding_window: bool = True,
                         run_multi_round: bool = True,
-                        force_reprocess: bool = False) -> None:
+                        force_reprocess: bool = False,
+                        input_parquet_path: Optional[str] = None) -> None:
     """
     Executa a versão unificada do pipeline que garante que todas as visualizações sejam geradas.
     
@@ -170,6 +171,7 @@ def run_unified_pipeline(config_path: Optional[str] = None,
         run_sliding_window: Se deve executar análise com janelas deslizantes.
         run_multi_round: Se deve executar análise multi-round.
         force_reprocess: Se deve forçar o reprocessamento dos dados brutos mesmo se existir o arquivo parquet.
+        input_parquet_path: Caminho para um arquivo parquet existente a ser carregado diretamente.
     """
     logger.info("Iniciando execução unificada do pipeline")
     start_time = datetime.now()
@@ -181,6 +183,7 @@ def run_unified_pipeline(config_path: Optional[str] = None,
         args.config = config_path
         args.data_root = data_root
         args.output_dir = output_dir
+        args.input_parquet_path = input_parquet_path
         
         # Cria diretórios necessários
         if output_dir:
@@ -419,6 +422,7 @@ def main():
     parser.add_argument("--no-sliding-window", action="store_true", help="Desativa análise com janelas deslizantes")
     parser.add_argument("--no-multi-round", action="store_true", help="Desativa análise multi-round")
     parser.add_argument("--force-reprocess", action="store_true", help="Força o reprocessamento dos dados brutos, mesmo se existir arquivo parquet")
+    parser.add_argument("--input-parquet-path", help="Caminho para um arquivo parquet existente para ser usado diretamente")
     
     args = parser.parse_args()
     
@@ -428,7 +432,8 @@ def main():
         output_dir=args.output_dir,
         run_sliding_window=not args.no_sliding_window,
         run_multi_round=not args.no_multi_round,
-        force_reprocess=args.force_reprocess
+        force_reprocess=args.force_reprocess,
+        input_parquet_path=args.input_parquet_path
     )
 
 if __name__ == "__main__":

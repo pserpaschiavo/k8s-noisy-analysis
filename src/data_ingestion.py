@@ -44,6 +44,25 @@ def list_metric_files(tenant_path: str) -> List[str]:
     """List all CSV metric files in a tenant directory."""
     return [os.path.join(tenant_path, f) for f in os.listdir(tenant_path) if f.endswith('.csv')]
 
+def load_from_parquet(parquet_path: str) -> pd.DataFrame:
+    """
+    Load data directly from an existing parquet file.
+    
+    Args:
+        parquet_path: Path to the parquet file to load
+        
+    Returns:
+        Pandas DataFrame with the loaded data
+    """
+    if not os.path.exists(parquet_path):
+        raise FileNotFoundError(f"Parquet file not found: {parquet_path}")
+        
+    logging.info(f"Loading data from existing parquet file: {parquet_path}")
+    df = pd.read_parquet(parquet_path)
+    logging.info(f"Loaded {len(df)} records from parquet file")
+    
+    return df
+
 def ingest_experiment_data(
     data_root: str,
     selected_metrics: Optional[List[str]] = None,

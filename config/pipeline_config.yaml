@@ -5,6 +5,10 @@ data_root: /home/phil/Projects/gpt-nn-analysis/demo-data/demo-experiment-1-round
 processed_data_dir: /home/phil/Projects/gpt-nn-analysis/data/processed
 output_dir: /home/phil/Projects/gpt-nn-analysis/outputs
 
+# Configuração de ingestão de dados
+input_parquet_path: /caminho/para/seu/arquivo.parquet  # Usar um arquivo existente
+output_parquet_name: resultados_analise.parquet  # Nome personalizado para arquivo de saída
+
 # Seleção de dados
 selected_metrics:
   - cpu_usage

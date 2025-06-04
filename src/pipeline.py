@@ -129,9 +129,33 @@ class DataIngestionStage(PipelineStage):
         force_reprocess = context.get('force_reprocess', False)
         
         processed_data_dir = context.get('processed_data_dir', config.PROCESSED_DATA_DIR)
-        consolidated_long_path = os.path.join(processed_data_dir, 'consolidated_long.parquet')
         
-        # Verifica se já existe um arquivo parquet consolidado e se não estamos forçando reprocessamento
+        # Verificar se há um caminho de parquet de entrada especificado no config
+        input_parquet_path = config_dict.get('input_parquet_path')
+        
+        # Determinar o nome do arquivo parquet de saída
+        output_parquet_name = config_dict.get('output_parquet_name', 'consolidated_long.parquet')
+        consolidated_long_path = os.path.join(processed_data_dir, output_parquet_name)
+        
+        # Caso 1: Arquivo de entrada parquet especificado - carrega diretamente
+        if input_parquet_path and os.path.exists(input_parquet_path) and not force_reprocess:
+            self.logger.info(f"Usando parquet específico de entrada: {input_parquet_path}")
+            
+            try:
+                from src.data_ingestion import load_from_parquet
+                df_long = load_from_parquet(input_parquet_path)
+                self.logger.info(f"Dados carregados com sucesso. Total de registros: {len(df_long)}")
+                
+                # Adicionar ao contexto
+                context['df_long'] = df_long
+                context['consolidated_long_path'] = input_parquet_path
+                
+                return context
+            except Exception as e:
+                self.logger.error(f"Erro ao carregar arquivo parquet de entrada: {e}")
+                self.logger.info("Continuando com a verificação de dados consolidados ou reprocessamento...")
+        
+        # Caso 2: Verificar se já existe um arquivo parquet consolidado e se não estamos forçando reprocessamento
         if os.path.exists(consolidated_long_path) and not force_reprocess:
             self.logger.info(f"Arquivo de dados consolidados encontrado: {consolidated_long_path}")
             self.logger.info("Carregando dados já processados... (use --force-reprocess para reprocessar)")
@@ -149,6 +173,7 @@ class DataIngestionStage(PipelineStage):
                 self.logger.error(f"Erro ao carregar arquivo existente: {e}")
                 self.logger.info("Continuando com reprocessamento dos dados...")
         
+        # Caso 3: Processar dados brutos
         self.logger.info(f"Iniciando ingestão de dados de: {data_root}")
         
         # Ingerir dados
@@ -163,6 +188,7 @@ class DataIngestionStage(PipelineStage):
         
         # Adicionar ao contexto
         context['df_long'] = df_long
+        context['consolidated_long_path'] = consolidated_long_path
         
         return context
 
@@ -188,8 +214,20 @@ class DataExportStage(PipelineStage):
             self.logger.error("DataFrame não disponível para exportação.")
             return context
             
+        # Obter configurações
+        config_dict = context.get('config', {})
         processed_data_dir = context.get('processed_data_dir', config.PROCESSED_DATA_DIR)
-        consolidated_long_path = os.path.join(processed_data_dir, 'consolidated_long.parquet')
+        
+        # Usar nome do arquivo de saída definido na configuração
+        output_parquet_name = config_dict.get('output_parquet_name', 'consolidated_long.parquet')
+        consolidated_long_path = os.path.join(processed_data_dir, output_parquet_name)
+        
+        # Verificar se estamos usando um arquivo de entrada específico
+        input_parquet_path = config_dict.get('input_parquet_path')
+        if input_parquet_path and os.path.exists(input_parquet_path) and context.get('consolidated_long_path') == input_parquet_path:
+            self.logger.info(f"Usando arquivo parquet de entrada existente: {input_parquet_path}")
+            # Não precisamos salvar novamente se estamos usando o arquivo de entrada diretamente
+            return context
         
         # Criar diretório se não existir
         os.makedirs(os.path.dirname(consolidated_long_path), exist_ok=True)

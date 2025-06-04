@@ -28,3 +28,11 @@ def get_data_root(config: dict) -> Optional[str]:
 def get_processed_data_dir(config: dict) -> Optional[str]:
     """Get the processed data output directory from config, or return None if not set."""
     return config.get('processed_data_dir')
+
+def get_input_parquet_path(config: dict) -> Optional[str]:
+    """Get the input parquet path from config, or return None if not set."""
+    return config.get('input_parquet_path')
+
+def get_output_parquet_name(config: dict) -> Optional[str]:
+    """Get the output parquet name from config, or return None if not set."""
+    return config.get('output_parquet_name', 'consolidated_long.parquet')

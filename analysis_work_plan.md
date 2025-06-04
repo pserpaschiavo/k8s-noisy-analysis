@@ -4,7 +4,7 @@ O objetivo é investigar a co-variação, relações causais e flutuações temp
 
 ## Status do Projeto (Atualizado em Junho/2025)
 
-- ✅ **Concluído**: Estrutura principal do projeto implementada, ingestão de dados, segmentação, persistência, componentes de análise descritiva, correlação e causalidade básicos, agregação de insights, análise multi-round.
+- ✅ **Concluído**: Estrutura principal do projeto implementada, ingestão de dados, segmentação, persistência, componentes de análise descritiva, correlação e causalidade básicos, agregação de insights, análise multi-round, ingestão direta de arquivos parquet.
 - 🔄 **Em andamento**: Refinamento do módulo de Causalidade com Transfer Entropy, testes unitários completos, análises com janelas móveis, documentação detalhada.
 - ❌ **Pendente**: Relatórios comparativos entre fases experimentais, integração completa de todos os componentes, documentação para usuários finais.
 
@@ -32,6 +32,153 @@ O objetivo é investigar a co-variação, relações causais e flutuações temp
 - Subdatasets no formato "wide" podem ser gerados sob demanda, a partir do DataFrame long, para análises específicas (correlação, causalidade, visualizações comparativas), mas nunca devem substituir o long como fonte principal.
 - Recomenda-se fortemente a persistência dos DataFrames processados (long e, se necessário, wide) em formatos eficientes e portáveis (Parquet preferencialmente, ou CSV/Feather), organizados por experimento, round e fase. Isso facilita reuso, integração com notebooks (Jupyter) e compartilhamento com outros times ou ferramentas.
 - O pipeline deve prover funções utilitárias para salvar e carregar datasets processados, garantindo reprodutibilidade e agilidade no desenvolvimento.
+- ✅ **Suporte a ingestão direta de parquet**: O pipeline agora oferece suporte para ingerir diretamente um arquivo parquet criado em análises anteriores, economizando tempo de processamento e permitindo retomar análises de onde pararam.
+
+## Sistema de Configuração YAML Abrangente
+
+Para garantir uma configuração flexível e completa do pipeline, implementou-se um sistema baseado em arquivos YAML capazes de controlar todos os aspectos da análise:
+
+1. **Configuração de Ingestão de Dados**
+   - ✅ `data_root`: Caminho base para os dados brutos
+   - ✅ `processed_data_dir`: Diretório para dados processados
+   - ✅ `output_dir`: Diretório para outputs (plots, relatórios)
+   - ✅ `input_parquet_path`: Caminho para um arquivo parquet existente
+   - ✅ `output_parquet_name`: Nome personalizado para o arquivo parquet gerado
+   - ✅ `selected_metrics`, `selected_tenants`, `selected_rounds`: Filtros de dados
+
+2. **Configuração de Parâmetros de Análise**
+   - ✅ `correlation.methods`: Métodos de correlação a serem usados
+   - ✅ `causality.granger_max_lag`: Lag máximo para teste de Granger
+   - ✅ `causality.granger_threshold`: Threshold para significância estatística
+   - ✅ `causality.transfer_entropy_bins`: Número de bins para cálculo de Transfer Entropy
+
+3. **Configuração de Visualização**
+   - ✅ `plots.figure_size`: Dimensões das figuras geradas
+   - ✅ `plots.style`: Estilo de visualização (ex: tableau-colorblind10)
+   - ✅ `plots.dpi`: Resolução das figuras
+
+4. **Configuração de Análise Avançada**
+   - ✅ `sliding_window.window_size`: Tamanho da janela para análise deslizante
+   - ✅ `sliding_window.step_size`: Passo para janela deslizante
+   - ✅ `multi_round.consistency_threshold`: Threshold para consistência entre rounds
+
+5. **Extensibilidade**
+   - ✅ O sistema de parse de configuração está estruturado para permitir fácil adição de novos parâmetros
+   - ✅ Cada módulo de análise pode acessar suas configurações específicas do arquivo YAML
+
+Este sistema de configuração centralizada via YAML oferece vantagens significativas:
+1. Reprodutibilidade: todos os parâmetros usados em uma análise podem ser documentados e reutilizados
+2. Flexibilidade: alteração de parâmetros sem necessidade de editar código
+3. Experimentação: facilidade para testar diferentes configurações
+4. Transparência: todos os parâmetros explícitos em um único arquivo
+
+## Guia de Uso do Sistema de Configuração YAML
+
+Para maximizar a flexibilidade e reprodutibilidade das análises, o pipeline foi projetado para ser amplamente configurável via arquivos YAML. Este guia descreve como utilizar esse sistema de configuração.
+
+### Arquivo de Configuração Padrão
+
+O arquivo de configuração principal está localizado em `config/pipeline_config.yaml` e contém todas as configurações necessárias para controlar o comportamento do pipeline. Abaixo está um exemplo de configuração completa:
+
+```yaml
+# Configuração do Pipeline de Análise Multi-Tenant
+
+# Diretórios de entrada/saída
+data_root: /path/to/data/demo-experiment-1-round
+processed_data_dir: /path/to/data/processed
+output_dir: /path/to/outputs
+
+# Configuração de ingestão de dados
+input_parquet_path: /path/to/existing/dataframe.parquet  # Opcional: usar arquivo parquet existente
+output_parquet_name: consolidated_long.parquet  # Nome do arquivo parquet a ser gerado
+
+# Seleção de dados
+selected_metrics:
+  - cpu_usage
+  - memory_usage
+  
+selected_tenants:
+  - tenant-a
+  - tenant-b
+  - tenant-c
+  - tenant-d
+  
+selected_rounds:
+  - round-1
+
+# Parâmetros de análise
+correlation:
+  methods:
+    - pearson
+    - spearman
+  time_lag: 5  # Lag máximo para correlação cruzada (minutos)
+  
+causality:
+  granger_max_lag: 5
+  granger_threshold: 0.05
+  transfer_entropy_bins: 8
+  
+# Opções de visualização
+plots:
+  figure_size: [10, 6]
+  style: tableau-colorblind10
+  dpi: 300
+  
+# Configuração para análise com janelas deslizantes
+sliding_window:
+  window_size: 5min
+  step_size: 1min
+  
+# Configuração para análise multi-round
+multi_round:
+  consistency_threshold: 0.7
+  robustness_threshold: 0.05
+```
+
+### Comandos de Execução
+
+O pipeline pode ser executado utilizando diferentes scripts, todos configuráveis via YAML:
+
+1. **Pipeline Padrão:**
+   ```bash
+   python run_pipeline.py --config config/pipeline_config.yaml
+   ```
+
+2. **Pipeline com Ingestão de Parquet Existente:**
+   ```bash
+   python run_pipeline.py --config config/pipeline_config.yaml --input-parquet-path /path/to/existing.parquet
+   ```
+
+3. **Pipeline Unificado (todos os tipos de análises):**
+   ```bash
+   python -m src.run_unified_pipeline --config config/pipeline_config.yaml
+   ```
+
+4. **Execução com Seleção Específica via CLI:**
+   ```bash
+   python run_pipeline.py --config config/pipeline_config.yaml --selected-metrics cpu_usage memory_usage --selected-tenants tenant-a tenant-c
+   ```
+
+### Extensão do Sistema de Configuração
+
+O sistema de configuração foi projetado para ser facilmente extensível. Para adicionar novos parâmetros:
+
+1. **Adicionar ao Arquivo YAML:**
+   Basta adicionar a nova chave e valor ao arquivo `pipeline_config.yaml`.
+
+2. **Atualizar o Parser de Configuração:**
+   Adicionar uma função getter em `parse_config.py`:
+   ```python
+   def get_new_parameter(config: dict) -> Optional[Any]:
+       return config.get('new_parameter')
+   ```
+
+3. **Acessar no Código:**
+   ```python
+   new_parameter = context.get('config', {}).get('new_parameter', default_value)
+   ```
+
+Este sistema de configuração via YAML oferece uma maneira robusta, flexível e transparente de controlar todos os aspectos do pipeline, desde a ingestão de dados até a geração de visualizações e relatórios.
 
 ## Fase 1: Preparação e Estratégia de Dados
 
@@ -56,6 +203,12 @@ O objetivo é investigar a co-variação, relações causais e flutuações temp
             *   Objetivo: otimizar o desempenho em análises subsequentes e facilitar a interoperabilidade com outras ferramentas ou processos.
         *   Implementar a funcionalidade para exportar os DataFrames em formato "wide" gerados para formatos de arquivo eficientes (ex: Parquet ou CSV, a ser definido). 
             *   Objetivo: permitir análises futuras ou o uso por parsers específicos que possam necessitar deste formato.
+    *   2.5. ✅ **Ingestão Direta de DataFrames Parquet:**
+        *   Implementar função `load_from_parquet()` no módulo `data_ingestion.py` para carregar diretamente arquivos parquet de análises anteriores.
+        *   Adicionar parâmetro `input_parquet_path` ao arquivo de configuração YAML para especificar o caminho do parquet a ser carregado.
+        *   Implementar parâmetro `output_parquet_name` para controlar o nome do arquivo parquet gerado pelo pipeline.
+        *   Atualizar `DataIngestionStage` para primeiro tentar carregar do arquivo parquet especificado, depois verificar se há um arquivo consolidado existente e, por fim, processar dados brutos.
+        *   Adicionar argumento de linha de comando `--input-parquet-path` em todos os scripts relevantes.
 
 3.  **Configuração e Aplicação de Otimização de Dados:**
     *   3.1. ✅ Revisar e ajustar otimização para análise descritiva. 
@@ -351,7 +504,7 @@ Com base na análise do estado atual da implementação e no levantamento de plo
 
 ### Fase 2: Unificação e Modularização do Pipeline (Prioridade Média)
 
-1. **Consolidação dos Múltiplos Arquivos de Pipeline:**
+1. **Consolidação dos Arquivos de Pipeline:**
    - ❌ Criar um framework de pipeline unificado que substitua os múltiplos arquivos atuais (`pipeline.py`, `pipeline_new.py`, `pipeline_with_sliding_window.py`)
    - ❌ Implementar sistema de estágios de pipeline como plugins carregáveis baseados em configuração
    - ❌ Garantir compatibilidade com o pipeline existente durante a transição
@@ -445,51 +598,34 @@ Com base no levantamento realizado em 03/06/2025, identificamos uma série de vi
 #### Fase 2: Consolidação da Arquitetura (Junho/2025 - Semanas 2-3)
 
 1. **Unificação dos Arquivos de Pipeline**:
-   - Consolidar `pipeline.py`, `pipeline_new.py` e `pipeline_with_sliding_window.py` em um único arquivo
-   - Implementar sistema de plugins para diferentes estágios do pipeline
-   - Criar configuração baseada em YAML para ativar/desativar módulos específicos
+   - ❌ Criar um framework de pipeline unificado que substitua os múltiplos arquivos atuais (`pipeline.py`, `pipeline_new.py`, `pipeline_with_sliding_window.py`)
+   - ❌ Implementar sistema de estágios de pipeline como plugins carregáveis baseados em configuração
+   - ❌ Garantir compatibilidade com o pipeline existente durante a transição
 
-2. **Sistema de Configuração Centralizado**:
-   - Refatorar `parse_config.py` para um sistema mais robusto e extensível
-   - Implementar validação de configuração com schemas
-   - Documentar todas as opções de configuração disponíveis
+2. **Centralização de Configurações**:
+   - ❌ Criar um sistema de configuração central baseado em YAML mais abrangente
+   - ❌ Parametrizar todos os limiares, janelas e opções atualmente hardcoded no código
+   - ❌ Adicionar documentação inline para todos os parâmetros configuráveis
 
-3. **CLI Unificada**:
-   - Desenvolver uma interface de linha de comando unificada usando `argparse` ou `click`
-   - Oferecer opções para executar apenas partes específicas do pipeline
-   - Implementar flags para controle de verbosidade e depuração
+3. **Interface de Linha de Comando (CLI) Unificada**:
+   - ❌ Desenvolver CLI integrada para controlar todos os aspectos da execução do pipeline
+   - ❌ Implementar opções de execução específicas (apenas descritiva, apenas correlação, etc.)
+   - ❌ Adicionar suporte para execução de estágios específicos ou combinações de estágios
 
-#### Fase 3: Otimizações de Desempenho (Julho/2025)
+#### Fase 3: Otimizações de Desempenho e Usabilidade (Prioridade Baixa)
 
-1. **Sistema de Cache**:
-   - Implementar sistema de cache para resultados intermediários do pipeline
-   - Usar hashes de configuração como chaves de cache
-   - Adicionar opção para forçar recálculo ignorando o cache
+1. **Sistema de Cache Inteligente:**
+   - ❌ Implementar sistema de cache baseado em hash para evitar recálculos desnecessários
+   - ❌ Adicionar invalidação seletiva de cache para recomputar apenas o necessário
+   - ❌ Persistir resultados intermediários em formatos eficientes
 
-2. **Paralelização de Processamento**:
-   - Identificar estágios independentes que podem ser executados em paralelo
-   - Implementar processamento multiprocesso para análises intensivas
-   - Adicionar controle de concorrência para evitar uso excessivo de recursos
+2. **Paralelização de Análises Independentes:**
+   - ❌ Identificar operações paralelizáveis (análises entre diferentes métricas, rounds, etc.)
+   - ❌ Implementar paralelização com multiprocessing ou threading onde aplicável
+   - ❌ Adicionar controle de concorrência e dependências entre tarefas do pipeline
 
-3. **Otimização de Memória**:
-   - Implementar streaming de dados para processamento de grandes conjuntos
-   - Utilizar formatos de arquivo mais eficientes para persistência
-   - Implementar liberação estratégica de memória durante o processamento
-
-#### Fase 4: Extensibilidade e Manutenibilidade (Agosto/2025)
-
-1. **Documentação Aprimorada**:
-   - Gerar documentação automática usando Sphinx
-   - Adicionar exemplos de uso para cada módulo e função
-   - Criar tutoriais para casos de uso comuns
-
-2. **Testes Automáticos**:
-   - Implementar testes unitários para componentes críticos
-   - Adicionar testes de integração para o pipeline completo
-   - Configurar CI/CD para execução automática de testes
-
-3. **Métricas de Qualidade**:
-   - Implementar coleta de métricas de desempenho do pipeline
-   - Adicionar logging estruturado para análise e depuração
-   - Criar dashboards para visualização de métricas de qualidade e desempenho
+3. **Interface Web Simples (Opcional):**
+   - ❌ Criar interface web básica para visualizar resultados e configurar execuções
+   - ❌ Implementar dashboard para monitoramento de execuções longas
+   - ❌ Adicionar capacidade de salvar e compartilhar configurações
 
