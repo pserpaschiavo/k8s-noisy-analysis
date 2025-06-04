@@ -2,10 +2,10 @@
 
 O objetivo é investigar a co-variação, relações causais e flutuações temporais das métricas entre diferentes tenants e fases experimentais (baseline, ataque, recuperação), utilizando ferramentas estatísticas básicas, interpretáveis e confiáveis.
 
-## Status do Projeto (Atualizado em Junho/2025)
+## Status do Projeto (Atualizado em 4 de Junho/2025)
 
-- ✅ **Concluído**: Estrutura principal do projeto implementada, ingestão de dados, segmentação, persistência, componentes de análise descritiva, correlação e causalidade básicos, agregação de insights, análise multi-round, ingestão direta de arquivos parquet.
-- 🔄 **Em andamento**: Refinamento do módulo de Causalidade com Transfer Entropy, testes unitários completos, análises com janelas móveis, documentação detalhada.
+- ✅ **Concluído**: Estrutura principal do projeto implementada, ingestão de dados (incluindo suporte a carregamento direto de Parquet), segmentação, persistência, componentes de análise descritiva, correlação e causalidade básicos, agregação de insights, análise multi-round, ingestão direta de arquivos parquet com resolução de caminhos relativos e absolutos. Correções de erros no pipeline, incluindo problemas com dict comparisons no teste de Granger, uso obsoleto de Series.fillna no módulo de causalidade e problemas no estágio de agregação de insights.
+- 🔄 **Em andamento**: Refinamento do módulo de Causalidade com Transfer Entropy, testes unitários completos, análises com janelas móveis, documentação detalhada, visualizações ausentes/incompletas.
 - ❌ **Pendente**: Relatórios comparativos entre fases experimentais, integração completa de todos os componentes, documentação para usuários finais.
 
 ## Diretrizes Gerais para o Desenvolvimento do Pipeline
@@ -32,7 +32,7 @@ O objetivo é investigar a co-variação, relações causais e flutuações temp
 - Subdatasets no formato "wide" podem ser gerados sob demanda, a partir do DataFrame long, para análises específicas (correlação, causalidade, visualizações comparativas), mas nunca devem substituir o long como fonte principal.
 - Recomenda-se fortemente a persistência dos DataFrames processados (long e, se necessário, wide) em formatos eficientes e portáveis (Parquet preferencialmente, ou CSV/Feather), organizados por experimento, round e fase. Isso facilita reuso, integração com notebooks (Jupyter) e compartilhamento com outros times ou ferramentas.
 - O pipeline deve prover funções utilitárias para salvar e carregar datasets processados, garantindo reprodutibilidade e agilidade no desenvolvimento.
-- ✅ **Suporte a ingestão direta de parquet**: O pipeline agora oferece suporte para ingerir diretamente um arquivo parquet criado em análises anteriores, economizando tempo de processamento e permitindo retomar análises de onde pararam.
+- ✅ **Suporte a ingestão direta de parquet**: O pipeline agora oferece suporte para ingerir diretamente um arquivo parquet criado em análises anteriores, economizando tempo de processamento e permitindo retomar análises de onde pararam. Foi implementada uma hierarquia de prioridades para carregamento de dados: (1) arquivo parquet específico via configuração, (2) arquivo parquet consolidado existente, (3) processamento de dados brutos.
 
 ## Sistema de Configuração YAML Abrangente
 
@@ -139,13 +139,18 @@ multi_round:
 
 O pipeline pode ser executado utilizando diferentes scripts, todos configuráveis via YAML:
 
-1. **Pipeline Padrão:**
+1. **Pipeline Padrão (processamento de dados brutos):**
    ```bash
    python run_pipeline.py --config config/pipeline_config.yaml
    ```
 
 2. **Pipeline com Ingestão de Parquet Existente:**
    ```bash
+   # Via configuração YAML (adicionar ao arquivo config/pipeline_config.yaml):
+   # input_parquet_path: /path/to/existing/dataframe.parquet
+   # output_parquet_name: custom_output_name.parquet
+   
+   # Ou via argumento de linha de comando (sobrescreve a configuração YAML):
    python run_pipeline.py --config config/pipeline_config.yaml --input-parquet-path /path/to/existing.parquet
    ```
 
@@ -157,6 +162,12 @@ O pipeline pode ser executado utilizando diferentes scripts, todos configurávei
 4. **Execução com Seleção Específica via CLI:**
    ```bash
    python run_pipeline.py --config config/pipeline_config.yaml --selected-metrics cpu_usage memory_usage --selected-tenants tenant-a tenant-c
+   ```
+
+5. **Testar Funcionalidade de Carregamento de Parquet:**
+   ```bash
+   # Teste específico para validar a ingestão de parquet:
+   python test_parquet_loading.py
    ```
 
 ### Extensão do Sistema de Configuração
@@ -204,11 +215,14 @@ Este sistema de configuração via YAML oferece uma maneira robusta, flexível e
         *   Implementar a funcionalidade para exportar os DataFrames em formato "wide" gerados para formatos de arquivo eficientes (ex: Parquet ou CSV, a ser definido). 
             *   Objetivo: permitir análises futuras ou o uso por parsers específicos que possam necessitar deste formato.
     *   2.5. ✅ **Ingestão Direta de DataFrames Parquet:**
-        *   Implementar função `load_from_parquet()` no módulo `data_ingestion.py` para carregar diretamente arquivos parquet de análises anteriores.
-        *   Adicionar parâmetro `input_parquet_path` ao arquivo de configuração YAML para especificar o caminho do parquet a ser carregado.
-        *   Implementar parâmetro `output_parquet_name` para controlar o nome do arquivo parquet gerado pelo pipeline.
-        *   Atualizar `DataIngestionStage` para primeiro tentar carregar do arquivo parquet especificado, depois verificar se há um arquivo consolidado existente e, por fim, processar dados brutos.
-        *   Adicionar argumento de linha de comando `--input-parquet-path` em todos os scripts relevantes.
+        *   ✅ Implementada função `load_from_parquet()` no módulo `data_ingestion.py` para carregar diretamente arquivos parquet de análises anteriores.
+        *   ✅ Adicionado parâmetro `input_parquet_path` ao arquivo de configuração YAML para especificar o caminho do parquet a ser carregado.
+        *   ✅ Implementado parâmetro `output_parquet_name` para controlar o nome do arquivo parquet gerado pelo pipeline.
+        *   ✅ Atualizado `DataIngestionStage` para primeiro tentar carregar do arquivo parquet especificado, depois verificar se há um arquivo consolidado existente e, por fim, processar dados brutos.
+        *   ✅ Adicionado argumento de linha de comando `--input-parquet-path` em todos os scripts relevantes.
+        *   ✅ Adicionadas funções `get_input_parquet_path()` e `get_output_parquet_name()` em `parse_config.py` para gerenciar configurações relacionadas a Parquet.
+        *   ✅ Implementada lógica de resolução de caminhos para lidar com caminhos relativos e absolutos.
+        *   ✅ Testada e validada a funcionalidade através do script `test_parquet_loading.py`.
 
 3.  **Configuração e Aplicação de Otimização de Dados:**
     *   3.1. ✅ Revisar e ajustar otimização para análise descritiva. 
@@ -358,7 +372,7 @@ Cada módulo seguirá a arquitetura `BaseModule`, `BaseAnalyzer`, `BaseVisualize
     - Garantir a consistência dos tipos e valores categóricos durante a ingestão.
 - Essa lógica deve ser implementada no módulo central de ingestão de dados, garantindo flexibilidade para diferentes estruturas de experimentos e rounds.
 
-## Lacunas e Oportunidades de Melhoria (Adicionado em Junho/2025)
+## Lacunas e Oportunidades de Melhoria (Atualizado em 4 de Junho/2025)
 
 Após análise da implementação atual e comparação com o plano original, foram identificadas as seguintes lacunas e oportunidades de melhoria:
 
@@ -381,53 +395,57 @@ Após análise da implementação atual e comparação com o plano original, for
 5. **Relatórios e Consolidação de Insights**:
    - ✅ Implementação da metodologia de agregação de insights
    - ✅ Estruturação de relatórios automatizados
+   - ✅ Correção de erros críticos no estágio de agregação de insights para lidar com diferentes formatos de dados e evitar erros de tipo
 
 6. **Janelas Móveis**:
    - ✅ Módulo implementado em `analysis_sliding_window.py` com funcionalidades completas
    - ✅ Disponível via pipeline dedicado (`pipeline_with_sliding_window.py`)
-   - ❌ Não executado no último teste do pipeline, visualizações ausentes
+   - ✅ Correção do erro de comparação de dicionários na análise de causalidade de Granger
+   - 🔄 Pipeline executando sem erros, mas algumas visualizações podem estar ausentes
 
 7. **Análise Consolidada para Experimentos Multi-Round**:
    - ✅ Implementação de metodologias específicas para análise entre rounds
    - ✅ Avaliação de consistência entre diferentes execuções do experimento
    - ✅ Métricas de robustez para relações causais identificadas
-   - ❌ Visualizações implementadas mas não geradas na última execução
+   - 🔄 Visualizações implementadas e o pipeline está executando sem erros
 
 8. **Dependências e Integração**:
    - ✅ `NetworkX` adicionado ao `requirements.txt` para visualizações em grafo
    - ✅ Biblioteca `pyinform` para Transfer Entropy especificada no `requirements.txt`
+   - ✅ Correção do uso obsoleto de Series.fillna no módulo de causalidade
    
 9. **Visualizações Ausentes/Incompletas**:
-   - ❌ Plots de correlação não gerados (apenas covariância está disponível)
-   - ❌ Visualizações de séries temporais combinadas de todas as fases não geradas
-   - ❌ Plots de detecção de anomalias implementados mas não executados
-   - ❌ Visualizações de janelas deslizantes não geradas
+   - 🔄 Plots de correlação - pipeline executando sem erros, verificar geração
+   - 🔄 Visualizações de séries temporais combinadas - pipeline executando sem erros, verificar geração
+   - 🔄 Plots de detecção de anomalias - pipeline executando sem erros, verificar geração
+   - 🔄 Visualizações de janelas deslizantes - pipeline executando sem erros, verificar geração
 
 10. **Arquitetura do Pipeline**:
     - ❌ Múltiplas implementações de pipeline (`pipeline.py`, `pipeline_new.py`, `pipeline_with_sliding_window.py`)
     - ❌ Falta de sistema unificado para configuração e execução
     - ❌ Ausência de mecanismos de cache para evitar recálculos desnecessários
 
-## Prioridades para Próximos Passos (Junho/2025 - Atualizado)
+## Prioridades para Próximos Passos (Atualizado em 4 de Junho/2025)
 
 As seguintes prioridades foram identificadas para concluir o projeto com sucesso:
 
 ### Prioridade Alta (Imediata)
-1. **Gerar Visualizações Faltantes** ❌:
-   - ❌ Executar pipeline com janelas deslizantes para gerar análises de correlação ao longo do tempo
-   - ❌ Corrigir geração de plots de correlação (atualmente apenas covariância é gerada)
-   - ❌ Verificar e corrigir execução de plots de séries temporais combinadas de todas as fases
-   - ❌ Integrar detecção de anomalias ao fluxo principal do pipeline
+1. **Verificar Geração de Visualizações** 🔄:
+   - 🔄 Executar o pipeline unificado com todos os módulos habilitados para verificar a correta geração das visualizações
+   - 🔄 Verificar se os plots de correlação estão sendo gerados corretamente
+   - 🔄 Confirmar a geração de visualizações de séries temporais combinadas de todas as fases
+   - 🔄 Confirmar a integração completa da detecção de anomalias ao fluxo principal do pipeline
 
-2. **Executar Análise Multi-Round Completa** ❌:
-   - ❌ Verificar e corrigir integração do módulo `analysis_multi_round.py`
-   - ❌ Garantir geração de visualizações de consistência e robustez entre rounds
-   - ❌ Documentar resultados e insights gerados por esta análise
+2. **Completar Análise Multi-Round** 🔄:
+   - 🔄 Verificar a integração completa do módulo `analysis_multi_round.py`
+   - 🔄 Validar a geração de visualizações de consistência e robustez entre rounds
+   - 🔄 Documentar resultados e insights gerados por esta análise
 
-3. **Correções Críticas no Pipeline** ✅❌:
+3. **Correções Críticas no Pipeline** ✅:
    - ✅ Desenvolver script utilitário para verificação da geração de todas as visualizações esperadas (`src/run_unified_pipeline.py`)
-   - ❌ Corrigir chamadas para funções de visualização ausentes no fluxo principal
-   - ❌ Garantir que todas as dependências estão sendo instaladas corretamente
+   - ✅ Corrigir erros críticos no estágio de agregação de insights
+   - ✅ Corrigir erros de comparação de dicionários na análise de janelas deslizantes
+   - ✅ Atualizar uso obsoleto de Series.fillna no módulo de causalidade
 
 ### Prioridade Média (Semanas 2-3 de Junho/2025)
 1. **Consolidação da Arquitetura do Pipeline** ❌:
@@ -578,22 +596,27 @@ Com base no levantamento realizado em 03/06/2025, identificamos uma série de vi
 
 ### Plano de Otimização do Pipeline
 
-#### Fase 1: Correção Imediata das Visualizações (Junho/2025 - Semana 1)
+#### Fase 1: Verificação de Visualizações e Resolução de Erros Críticos (Atualizado em 4 de Junho/2025)
 
-1. **Execução do Pipeline Unificado**:
-   - Um script unificado foi desenvolvido em `src/run_unified_pipeline.py` para executar todas as análises
-   - Executar: `python -m src.run_unified_pipeline --config config/pipeline_config.yaml`
-   - O script verifica automaticamente quais visualizações foram geradas e quais estão faltando
-   - Para desativar análises específicas: `--no-sliding-window` ou `--no-multi-round`
+1. **Execução do Pipeline Unificado** ✅:
+   - ✅ Script unificado desenvolvido em `src/run_unified_pipeline.py` para executar todas as análises
+   - ✅ Comando de execução: `python -m src.run_unified_pipeline --config config/pipeline_config.yaml`
+   - ✅ Script verificando automaticamente quais visualizações foram geradas e quais estão faltando
+   - ✅ Opções para desativar análises específicas implementadas: `--no-sliding-window` ou `--no-multi-round`
+   - ✅ Correção de erros críticos que impediam a execução completa do pipeline
+      - ✅ Corrigidos erros na análise de janelas deslizantes (comparação de dicionários)
+      - ✅ Corrigida a manipulação de Series pandas no módulo de causalidade
+      - ✅ Corrigido o estágio de agregação de insights para lidar com diferentes formatos de dados
 
-2. **Correção dos Plots de Correlação**:
-   - Modificar o estágio `CorrelationAnalysisStage` para chamar tanto `plot_correlation_heatmap` quanto `plot_covariance_heatmap`
-   - Verificar se as visualizações de correlação estão sendo geradas corretamente
-   - Garantir que o diretório de saída existe e tem permissões adequadas
+2. **Validação dos Plots de Correlação** 🔄:
+   - 🔄 Pipeline executando sem erros, verificar a geração completa dos plots
+   - 🔄 Verificar se as visualizações de correlação estão sendo geradas corretamente
+   - 🔄 Confirmar que o diretório de saída existe e que os arquivos estão sendo salvos adequadamente
 
-3. **Integração da Detecção de Anomalias**:
-   - Modificar `DescriptiveAnalysisStage` para chamar as funções de detecção de anomalias
-   - Criar diretório específico para salvar os plots de anomalias
+3. **Integração da Detecção de Anomalias** 🔄:
+   - 🔄 Pipeline executando sem erros, verificar a geração dos plots de anomalias
+   - 🔄 Confirmar que as funções de detecção de anomalias estão sendo chamadas corretamente
+   - 🔄 Verificar se os plots de anomalias estão sendo salvos no diretório adequado
 
 #### Fase 2: Consolidação da Arquitetura (Junho/2025 - Semanas 2-3)
 

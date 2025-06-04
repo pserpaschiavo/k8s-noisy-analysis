@@ -237,9 +237,48 @@ class CausalityAnalyzer:
             max_lag: Número máximo de lags para testar
             
         Returns:
-            Dicionário com resultados do teste ou None se falhar
+            Dicionário com resultados do teste ou dicionário vazio se falhar
         """
         try:
+            # Verifica se as séries são constantes (desvio padrão muito baixo)
+            if np.std(source_series) < 1e-6 or np.std(target_series) < 1e-6:
+                logger.warning("Série constante detectada - não é possível executar teste de Granger")
+                return {}
+                
+            # Verifica valores ausentes
+            if np.isnan(source_series).any() or np.isnan(target_series).any():
+                # Tenta interpolar valores faltantes
+                source_series_pd = pd.Series(source_series)
+                target_series_pd = pd.Series(target_series)
+                
+                # Usa interpolação seguida de bfill e ffill diretamente (sem uso do parâmetro method)
+                source_series_pd = source_series_pd.interpolate()
+                source_series_pd = source_series_pd.bfill()  # backward fill
+                source_series_pd = source_series_pd.ffill()  # forward fill
+                
+                target_series_pd = target_series_pd.interpolate()
+                target_series_pd = target_series_pd.bfill()
+                target_series_pd = target_series_pd.ffill()
+                
+                # Converte de volta para arrays numpy
+                source_series_clean = source_series_pd.values
+                target_series_clean = target_series_pd.values
+                
+                # Verifica se ainda há NaNs após a interpolação
+                if np.isnan(source_series_clean).any() or np.isnan(target_series_clean).any():
+                    logger.warning("Valores ausentes não puderam ser corrigidos por interpolação")
+                    return {}
+                    
+                # Usa as séries limpas
+                source_series = source_series_clean
+                target_series = target_series_clean
+            
+            # Ajusta max_lag se a série for muito curta
+            if len(source_series) <= max_lag + 2:
+                new_max_lag = max(1, len(source_series) // 3 - 1)
+                logger.warning(f"Série muito curta para max_lag={max_lag}. Ajustando para {new_max_lag}")
+                max_lag = new_max_lag
+            
             # Cria um DataFrame com as duas séries
             data = pd.DataFrame({
                 'target': target_series,

@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import networkx as nx  # Adicionando importação do NetworkX
 from typing import Dict, List, Tuple, Any, Optional, Union
 from scipy import stats
 from scipy.spatial import distance
@@ -336,8 +337,8 @@ def analyze_causality_robustness(
                 te_values = [matrix.loc[target, source] for matrix in te_matrices]
                 
                 # Calcular média, desvio e CV
-                mean_te = np.mean(te_values)
-                std_te = np.std(te_values)
+                mean_te = np.mean(np.array(te_values))
+                std_te = np.std(np.array(te_values))
                 cv = (std_te / mean_te * 100) if mean_te > 0 else np.inf
                 
                 # Determinar se a relação causal é robusta (CV < 25% e média > 0.05)
@@ -873,8 +874,12 @@ def generate_round_consistency_visualizations(
                 nx.draw_networkx_nodes(G, pos, node_size=700, node_color='skyblue')
                 
                 # Desenhar arestas com largura proporcional ao peso (TE)
-                edge_weights = [G[u][v]['weight'] * 10 for u, v in G.edges()]
-                nx.draw_networkx_edges(G, pos, width=edge_weights, arrowsize=20, alpha=0.7)
+                edges = list(G.edges())
+                edge_weights = [G[u][v]['weight'] * 10 for u, v in edges]
+                nx.draw_networkx_edges(G, pos, edgelist=edges, width=1.0, arrowsize=20, alpha=0.7)
+                # Ou alternativamente, desenhar cada aresta individualmente com sua largura
+                # for i, (u, v) in enumerate(edges):
+                #     nx.draw_networkx_edges(G, pos, edgelist=[(u, v)], width=edge_weights[i], arrowsize=20, alpha=0.7)
                 
                 # Adicionar labels
                 nx.draw_networkx_labels(G, pos)

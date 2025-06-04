@@ -1,18 +1,21 @@
 # Configuração do Pipeline de Análise Multi-Tenant
 
 # Diretórios de entrada/saída
-data_root: /home/phil/Projects/gpt-nn-analysis/demo-data/demo-experiment-1-round
-processed_data_dir: /home/phil/Projects/gpt-nn-analysis/data/processed
-output_dir: /home/phil/Projects/gpt-nn-analysis/outputs
+data_root: /home/phil/Projects/k8s-noisy-analysis/demo-data/demo-experiment-1-round
+processed_data_dir: /home/phil/Projects/k8s-noisy-analysis/data/processed/demo_exp_1_round
+output_dir: /home/phil/Projects/k8s-noisy-analysis/outputs/demo-experiment-1-round
 
 # Configuração de ingestão de dados
-input_parquet_path: /caminho/para/seu/arquivo.parquet  # Usar um arquivo existente
-output_parquet_name: resultados_analise.parquet  # Nome personalizado para arquivo de saída
+output_parquet_name: demo_exp_1_round.parquet
+# Usar um arquivo parquet existente diretamente
+input_parquet_path: /home/phil/Projects/k8s-noisy-analysis/data/processed/demo_exp_1_round.parquet
 
 # Seleção de dados
 selected_metrics:
   - cpu_usage
   - memory_usage
+  - disk_io_total
+  - network_total_bandwidth
   
 selected_tenants:
   - tenant-a

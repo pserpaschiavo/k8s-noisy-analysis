@@ -42,14 +42,16 @@ from src.pipeline import Pipeline, parse_arguments
 from src.pipeline_with_sliding_window import create_pipeline_with_sliding_window
 
 # Configuração de logging
+log_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'unified_pipeline.log')
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('unified_pipeline.log'),
+        logging.FileHandler(log_file),
         logging.StreamHandler(sys.stdout)
     ]
 )
+print(f"Logging to {log_file}")
 
 logger = logging.getLogger("unified_pipeline")
 
@@ -77,9 +79,15 @@ def verify_all_visualizations(base_output_dir: str) -> Dict[str, Dict[str, bool]
             "causality_graph_granger_*.png",
             "causality_graph_te_*.png"
         ],
-        "sliding_window": [  # Diretório não existente
-            "sliding_window_correlation_*.png",
-            "sliding_window_causality_*.png"
+        "sliding_window/correlation": [
+            "sliding_corr_*.png",
+            "sliding_corr_consolidated_*.png"
+        ],
+        "sliding_window/causality/granger": [
+            "sliding_caus_granger_*.png"
+        ],
+        "sliding_window/causality/transfer_entropy": [
+            "sliding_caus_transfer_entropy_*.png"
         ],
         "multi_round": [  # Diretório não existente
             "consistency_*.png",
@@ -139,20 +147,37 @@ def create_missing_directories(base_output_dir: str) -> None:
     Args:
         base_output_dir: Diretório base de saída onde as visualizações são salvas.
     """
+    # Categorias principais e subcategorias
     categories = [
-        "descriptive", "correlation", "causality", "sliding_window", 
-        "multi_round", "anomaly_detection", "phase_comparison"
+        "descriptive", "correlation", "causality", "multi_round", 
+        "anomaly_detection", "phase_comparison"
+    ]
+    
+    # Estrutura específica para sliding window com subcategorias
+    sliding_window_categories = [
+        "sliding_window/correlation",
+        "sliding_window/causality/granger",
+        "sliding_window/causality/transfer_entropy"
     ]
     
     plots_dir = os.path.join(base_output_dir, "plots")
     if not os.path.exists(plots_dir):
         os.makedirs(plots_dir)
+        logger.info(f"Criado diretório base de plots: {plots_dir}")
     
+    # Cria categorias principais
     for category in categories:
         category_dir = os.path.join(plots_dir, category)
         if not os.path.exists(category_dir):
             os.makedirs(category_dir)
             logger.info(f"Criado diretório: {category_dir}")
+    
+    # Cria estrutura específica para sliding window
+    for subcategory in sliding_window_categories:
+        subcategory_dir = os.path.join(plots_dir, subcategory)
+        if not os.path.exists(subcategory_dir):
+            os.makedirs(subcategory_dir)
+            logger.info(f"Criado diretório: {subcategory_dir}")
 
 def run_unified_pipeline(config_path: Optional[str] = None, 
                         data_root: Optional[str] = None, 

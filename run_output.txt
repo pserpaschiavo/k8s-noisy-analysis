@@ -1,0 +1,431 @@
+2025-06-04 18:45:59,972 INFO pyinform disponível. Usando implementação otimizada para Transfer Entropy.
+2025-06-04 18:46:00,083 INFO Iniciando execução unificada do pipeline
+2025-06-04 18:46:00,083 INFO Criado diretório: outputs/demo-experiment-1-round/plots/multi_round
+2025-06-04 18:46:00,083 INFO Criado diretório: outputs/demo-experiment-1-round/plots/anomaly_detection
+2025-06-04 18:46:00,083 INFO Criado diretório: outputs/demo-experiment-1-round/plots/sliding_window/causality/granger
+2025-06-04 18:46:00,083 INFO Executando pipeline com janelas deslizantes
+2025-06-04 18:46:00,084 INFO Carregando configuração padrão do pipeline.
+2025-06-04 18:46:00,086 INFO Configuração carregada de: config/pipeline_config.yaml
+2025-06-04 18:46:00,086 INFO Iniciando execução do pipeline
+2025-06-04 18:46:00,086 INFO Executando estágio: data_ingestion
+2025-06-04 18:46:00,086 INFO Iniciando estágio: data_ingestion
+2025-06-04 18:46:00,086 INFO Arquivo de dados consolidados encontrado: /home/phil/Projects/k8s-noisy-analysis/data/processed/demo_exp_1_round/demo_exp_1_round.parquet
+2025-06-04 18:46:00,086 INFO Carregando dados já processados... (use --force-reprocess para reprocessar)
+2025-06-04 18:46:00,104 INFO Dados carregados com sucesso. Total de registros: 7330
+2025-06-04 18:46:00,104 INFO Estágio data_ingestion concluído em 0.02 segundos
+2025-06-04 18:46:00,104 INFO Executando estágio: data_export
+2025-06-04 18:46:00,104 INFO Iniciando estágio: data_export
+2025-06-04 18:46:00,111 INFO DataFrame exportado para: /home/phil/Projects/k8s-noisy-analysis/data/processed/demo_exp_1_round/demo_exp_1_round.parquet
+2025-06-04 18:46:00,111 INFO Estágio data_export concluído em 0.01 segundos
+2025-06-04 18:46:00,111 INFO Executando estágio: descriptive_analysis
+2025-06-04 18:46:00,111 INFO Iniciando estágio: descriptive_analysis
+2025-06-04 18:46:00,111 INFO Calculando estatísticas descritivas...
+2025-06-04 18:46:00,122 INFO Computed descriptive stats for 4 groups with 44 rows
+2025-06-04 18:46:00,122 INFO Gerando visualizações...
+2025-06-04 18:46:03,186 INFO Estágio descriptive_analysis concluído em 3.08 segundos
+2025-06-04 18:46:03,186 INFO Executando estágio: correlation_analysis
+2025-06-04 18:46:03,186 INFO Iniciando estágio: correlation_analysis
+2025-06-04 18:46:03,189 INFO Calculando correlação para metric: cpu_usage, phase: 1 - Baseline, round_id: round-1
+2025-06-04 18:46:03,194 INFO Matriz de correlação (pearson) calculada para cpu_usage, 1 - Baseline, round-1: (3, 3)
+2025-06-04 18:46:03,194 INFO Gerando plot de correlação para cpu_usage, 1 - Baseline, round-1
+2025-06-04 18:46:03,498 INFO Heatmap de correlação salvo em /home/phil/Projects/k8s-noisy-analysis/outputs/demo-experiment-1-round/plots/correlation/correlation_heatmap_cpu_usage_1 - Baseline_round-1.png
+2025-06-04 18:46:03,498 INFO Plot de correlação gerado com sucesso: /home/phil/Projects/k8s-noisy-analysis/outputs/demo-experiment-1-round/plots/correlation/correlation_heatmap_cpu_usage_1 - Baseline_round-1.png
+2025-06-04 18:46:03,498 INFO Calculando covariância para metric: cpu_usage, phase: 1 - Baseline, round_id: round-1.
+2025-06-04 18:46:03,614 INFO Calculando correlação para metric: cpu_usage, phase: 2 - Attack, round_id: round-1
+2025-06-04 18:46:03,619 INFO Dados faltantes detectados na matriz de correlação. Aplicando interpolação linear.
+2025-06-04 18:46:03,620 INFO Matriz de correlação (pearson) calculada para cpu_usage, 2 - Attack, round-1: (4, 4)
+2025-06-04 18:46:03,620 INFO Gerando plot de correlação para cpu_usage, 2 - Attack, round-1
+2025-06-04 18:46:03,945 INFO Heatmap de correlação salvo em /home/phil/Projects/k8s-noisy-analysis/outputs/demo-experiment-1-round/plots/correlation/correlation_heatmap_cpu_usage_2 - Attack_round-1.png
+2025-06-04 18:46:03,945 INFO Plot de correlação gerado com sucesso: /home/phil/Projects/k8s-noisy-analysis/outputs/demo-experiment-1-round/plots/correlation/correlation_heatmap_cpu_usage_2 - Attack_round-1.png
+2025-06-04 18:46:03,945 INFO Calculando covariância para metric: cpu_usage, phase: 2 - Attack, round_id: round-1.
+2025-06-04 18:46:04,074 INFO Calculando correlação para metric: cpu_usage, phase: 3 - Recovery, round_id: round-1
+2025-06-04 18:46:04,078 INFO Dados faltantes detectados na matriz de correlação. Aplicando interpolação linear.
+2025-06-04 18:46:04,079 INFO Matriz de correlação (pearson) calculada para cpu_usage, 3 - Recovery, round-1: (4, 4)
+2025-06-04 18:46:04,079 INFO Gerando plot de correlação para cpu_usage, 3 - Recovery, round-1
+2025-06-04 18:46:04,396 INFO Heatmap de correlação salvo em /home/phil/Projects/k8s-noisy-analysis/outputs/demo-experiment-1-round/plots/correlation/correlation_heatmap_cpu_usage_3 - Recovery_round-1.png
+2025-06-04 18:46:04,396 INFO Plot de correlação gerado com sucesso: /home/phil/Projects/k8s-noisy-analysis/outputs/demo-experiment-1-round/plots/correlation/correlation_heatmap_cpu_usage_3 - Recovery_round-1.png
+2025-06-04 18:46:04,396 INFO Calculando covariância para metric: cpu_usage, phase: 3 - Recovery, round_id: round-1.
+2025-06-04 18:46:04,543 INFO Calculando correlação para metric: disk_io_total, phase: 1 - Baseline, round_id: round-1
+2025-06-04 18:46:04,547 INFO Matriz de correlação (pearson) calculada para disk_io_total, 1 - Baseline, round-1: (3, 3)
+2025-06-04 18:46:04,547 INFO Gerando plot de correlação para disk_io_total, 1 - Baseline, round-1
+2025-06-04 18:46:04,837 INFO Heatmap de correlação salvo em /home/phil/Projects/k8s-noisy-analysis/outputs/demo-experiment-1-round/plots/correlation/correlation_heatmap_disk_io_total_1 - Baseline_round-1.png
+2025-06-04 18:46:04,837 INFO Plot de correlação gerado com sucesso: /home/phil/Projects/k8s-noisy-analysis/outputs/demo-experiment-1-round/plots/correlation/correlation_heatmap_disk_io_total_1 - Baseline_round-1.png
+2025-06-04 18:46:04,837 INFO Calculando covariância para metric: disk_io_total, phase: 1 - Baseline, round_id: round-1.
+2025-06-04 18:46:04,966 INFO Calculando correlação para metric: disk_io_total, phase: 2 - Attack, round_id: round-1
+2025-06-04 18:46:04,971 INFO Dados faltantes detectados na matriz de correlação. Aplicando interpolação linear.
+2025-06-04 18:46:04,972 INFO Matriz de correlação (pearson) calculada para disk_io_total, 2 - Attack, round-1: (4, 4)
+2025-06-04 18:46:04,972 INFO Gerando plot de correlação para disk_io_total, 2 - Attack, round-1
+2025-06-04 18:46:05,274 INFO Heatmap de correlação salvo em /home/phil/Projects/k8s-noisy-analysis/outputs/demo-experiment-1-round/plots/correlation/correlation_heatmap_disk_io_total_2 - Attack_round-1.png
+2025-06-04 18:46:05,275 INFO Plot de correlação gerado com sucesso: /home/phil/Projects/k8s-noisy-analysis/outputs/demo-experiment-1-round/plots/correlation/correlation_heatmap_disk_io_total_2 - Attack_round-1.png
+2025-06-04 18:46:05,275 INFO Calculando covariância para metric: disk_io_total, phase: 2 - Attack, round_id: round-1.
+2025-06-04 18:46:05,413 INFO Calculando correlação para metric: disk_io_total, phase: 3 - Recovery, round_id: round-1
+2025-06-04 18:46:05,418 INFO Dados faltantes detectados na matriz de correlação. Aplicando interpolação linear.
+2025-06-04 18:46:05,418 INFO Matriz de correlação (pearson) calculada para disk_io_total, 3 - Recovery, round-1: (4, 4)
+2025-06-04 18:46:05,418 INFO Gerando plot de correlação para disk_io_total, 3 - Recovery, round-1
+2025-06-04 18:46:05,723 INFO Heatmap de correlação salvo em /home/phil/Projects/k8s-noisy-analysis/outputs/demo-experiment-1-round/plots/correlation/correlation_heatmap_disk_io_total_3 - Recovery_round-1.png
+2025-06-04 18:46:05,723 INFO Plot de correlação gerado com sucesso: /home/phil/Projects/k8s-noisy-analysis/outputs/demo-experiment-1-round/plots/correlation/correlation_heatmap_disk_io_total_3 - Recovery_round-1.png
+2025-06-04 18:46:05,723 INFO Calculando covariância para metric: disk_io_total, phase: 3 - Recovery, round_id: round-1.
+2025-06-04 18:46:05,858 INFO Calculando correlação para metric: memory_usage, phase: 1 - Baseline, round_id: round-1
+2025-06-04 18:46:05,863 INFO Matriz de correlação (pearson) calculada para memory_usage, 1 - Baseline, round-1: (3, 3)
+2025-06-04 18:46:05,863 INFO Gerando plot de correlação para memory_usage, 1 - Baseline, round-1
+2025-06-04 18:46:06,153 INFO Heatmap de correlação salvo em /home/phil/Projects/k8s-noisy-analysis/outputs/demo-experiment-1-round/plots/correlation/correlation_heatmap_memory_usage_1 - Baseline_round-1.png
+2025-06-04 18:46:06,153 INFO Plot de correlação gerado com sucesso: /home/phil/Projects/k8s-noisy-analysis/outputs/demo-experiment-1-round/plots/correlation/correlation_heatmap_memory_usage_1 - Baseline_round-1.png
+2025-06-04 18:46:06,153 INFO Calculando covariância para metric: memory_usage, phase: 1 - Baseline, round_id: round-1.
+2025-06-04 18:46:06,288 INFO Calculando correlação para metric: memory_usage, phase: 2 - Attack, round_id: round-1
+2025-06-04 18:46:06,293 INFO Dados faltantes detectados na matriz de correlação. Aplicando interpolação linear.
+2025-06-04 18:46:06,293 INFO Matriz de correlação (pearson) calculada para memory_usage, 2 - Attack, round-1: (4, 4)
+2025-06-04 18:46:06,293 INFO Gerando plot de correlação para memory_usage, 2 - Attack, round-1
+2025-06-04 18:46:06,609 INFO Heatmap de correlação salvo em /home/phil/Projects/k8s-noisy-analysis/outputs/demo-experiment-1-round/plots/correlation/correlation_heatmap_memory_usage_2 - Attack_round-1.png
+2025-06-04 18:46:06,609 INFO Plot de correlação gerado com sucesso: /home/phil/Projects/k8s-noisy-analysis/outputs/demo-experiment-1-round/plots/correlation/correlation_heatmap_memory_usage_2 - Attack_round-1.png
+2025-06-04 18:46:06,609 INFO Calculando covariância para metric: memory_usage, phase: 2 - Attack, round_id: round-1.
+2025-06-04 18:46:06,747 INFO Calculando correlação para metric: memory_usage, phase: 3 - Recovery, round_id: round-1
+2025-06-04 18:46:06,751 INFO Dados faltantes detectados na matriz de correlação. Aplicando interpolação linear.
+2025-06-04 18:46:06,752 INFO Matriz de correlação (pearson) calculada para memory_usage, 3 - Recovery, round-1: (4, 4)
+2025-06-04 18:46:06,752 INFO Gerando plot de correlação para memory_usage, 3 - Recovery, round-1
+2025-06-04 18:46:07,078 INFO Heatmap de correlação salvo em /home/phil/Projects/k8s-noisy-analysis/outputs/demo-experiment-1-round/plots/correlation/correlation_heatmap_memory_usage_3 - Recovery_round-1.png
+2025-06-04 18:46:07,078 INFO Plot de correlação gerado com sucesso: /home/phil/Projects/k8s-noisy-analysis/outputs/demo-experiment-1-round/plots/correlation/correlation_heatmap_memory_usage_3 - Recovery_round-1.png
+2025-06-04 18:46:07,078 INFO Calculando covariância para metric: memory_usage, phase: 3 - Recovery, round_id: round-1.
+2025-06-04 18:46:07,226 INFO Calculando correlação para metric: network_total_bandwidth, phase: 1 - Baseline, round_id: round-1
+2025-06-04 18:46:07,230 INFO Matriz de correlação (pearson) calculada para network_total_bandwidth, 1 - Baseline, round-1: (3, 3)
+2025-06-04 18:46:07,230 INFO Gerando plot de correlação para network_total_bandwidth, 1 - Baseline, round-1
+2025-06-04 18:46:07,507 INFO Heatmap de correlação salvo em /home/phil/Projects/k8s-noisy-analysis/outputs/demo-experiment-1-round/plots/correlation/correlation_heatmap_network_total_bandwidth_1 - Baseline_round-1.png
+2025-06-04 18:46:07,507 INFO Plot de correlação gerado com sucesso: /home/phil/Projects/k8s-noisy-analysis/outputs/demo-experiment-1-round/plots/correlation/correlation_heatmap_network_total_bandwidth_1 - Baseline_round-1.png
+2025-06-04 18:46:07,507 INFO Calculando covariância para metric: network_total_bandwidth, phase: 1 - Baseline, round_id: round-1.
+2025-06-04 18:46:07,628 INFO Calculando correlação para metric: network_total_bandwidth, phase: 2 - Attack, round_id: round-1
+2025-06-04 18:46:07,633 INFO Dados faltantes detectados na matriz de correlação. Aplicando interpolação linear.
+2025-06-04 18:46:07,634 INFO Matriz de correlação (pearson) calculada para network_total_bandwidth, 2 - Attack, round-1: (4, 4)
+2025-06-04 18:46:07,634 INFO Gerando plot de correlação para network_total_bandwidth, 2 - Attack, round-1
+2025-06-04 18:46:07,931 INFO Heatmap de correlação salvo em /home/phil/Projects/k8s-noisy-analysis/outputs/demo-experiment-1-round/plots/correlation/correlation_heatmap_network_total_bandwidth_2 - Attack_round-1.png
+2025-06-04 18:46:07,931 INFO Plot de correlação gerado com sucesso: /home/phil/Projects/k8s-noisy-analysis/outputs/demo-experiment-1-round/plots/correlation/correlation_heatmap_network_total_bandwidth_2 - Attack_round-1.png
+2025-06-04 18:46:07,931 INFO Calculando covariância para metric: network_total_bandwidth, phase: 2 - Attack, round_id: round-1.
+2025-06-04 18:46:08,082 INFO Calculando correlação para metric: network_total_bandwidth, phase: 3 - Recovery, round_id: round-1
+2025-06-04 18:46:08,088 INFO Dados faltantes detectados na matriz de correlação. Aplicando interpolação linear.
+2025-06-04 18:46:08,089 INFO Matriz de correlação (pearson) calculada para network_total_bandwidth, 3 - Recovery, round-1: (4, 4)
+2025-06-04 18:46:08,089 INFO Gerando plot de correlação para network_total_bandwidth, 3 - Recovery, round-1
+2025-06-04 18:46:08,384 INFO Heatmap de correlação salvo em /home/phil/Projects/k8s-noisy-analysis/outputs/demo-experiment-1-round/plots/correlation/correlation_heatmap_network_total_bandwidth_3 - Recovery_round-1.png
+2025-06-04 18:46:08,384 INFO Plot de correlação gerado com sucesso: /home/phil/Projects/k8s-noisy-analysis/outputs/demo-experiment-1-round/plots/correlation/correlation_heatmap_network_total_bandwidth_3 - Recovery_round-1.png
+2025-06-04 18:46:08,384 INFO Calculando covariância para metric: network_total_bandwidth, phase: 3 - Recovery, round_id: round-1.
+2025-06-04 18:46:08,519 INFO Análise de correlação concluída. Gerados 24 plots.
+2025-06-04 18:46:08,519 INFO Estágio correlation_analysis concluído em 5.33 segundos
+2025-06-04 18:46:08,519 INFO Executando estágio: causality_analysis
+2025-06-04 18:46:08,519 INFO Iniciando estágio: causality_analysis
+2025-06-04 18:46:08,522 INFO Processando experimento: demo-experiment-1-round
+Logging to /home/phil/Projects/k8s-noisy-analysis/unified_pipeline.log
+Métricas em round-1:   0%|          | 0/4 [00:00<?, ?it/s]2025-06-04 18:46:08,525 INFO Calculando causalidade para cpu_usage, 1 - Baseline, round-1
+2025-06-04 18:46:08,527 INFO Calculando matriz de causalidade Granger para cpu_usage, 1 - Baseline, round-1, maxlag=5
+2025-06-04 18:46:08,618 INFO Calculando matriz de Transfer Entropy para cpu_usage em 1 - Baseline (round-1), bins=8, k=1
+2025-06-04 18:46:08,840 INFO Calculando causalidade para cpu_usage, 2 - Attack, round-1
+2025-06-04 18:46:08,842 INFO Calculando matriz de causalidade Granger para cpu_usage, 2 - Attack, round-1, maxlag=5
+2025-06-04 18:46:09,031 INFO Calculando matriz de Transfer Entropy para cpu_usage em 2 - Attack (round-1), bins=8, k=1
+2025-06-04 18:46:09,410 INFO Calculando causalidade para cpu_usage, 3 - Recovery, round-1
+2025-06-04 18:46:09,412 INFO Calculando matriz de causalidade Granger para cpu_usage, 3 - Recovery, round-1, maxlag=5
+/home/phil/.local/lib/python3.13/site-packages/statsmodels/regression/linear_model.py:955: RuntimeWarning: divide by zero encountered in log
+  llf = -nobs2*np.log(2*np.pi) - nobs2*np.log(ssr / nobs) - nobs2
+/home/phil/.local/lib/python3.13/site-packages/statsmodels/regression/linear_model.py:955: RuntimeWarning: divide by zero encountered in log
+  llf = -nobs2*np.log(2*np.pi) - nobs2*np.log(ssr / nobs) - nobs2
+/home/phil/.local/lib/python3.13/site-packages/statsmodels/regression/linear_model.py:955: RuntimeWarning: divide by zero encountered in log
+  llf = -nobs2*np.log(2*np.pi) - nobs2*np.log(ssr / nobs) - nobs2
+/home/phil/.local/lib/python3.13/site-packages/statsmodels/regression/linear_model.py:955: RuntimeWarning: divide by zero encountered in log
+  llf = -nobs2*np.log(2*np.pi) - nobs2*np.log(ssr / nobs) - nobs2
+/home/phil/.local/lib/python3.13/site-packages/statsmodels/regression/linear_model.py:955: RuntimeWarning: divide by zero encountered in log
+  llf = -nobs2*np.log(2*np.pi) - nobs2*np.log(ssr / nobs) - nobs2
+/home/phil/.local/lib/python3.13/site-packages/statsmodels/regression/linear_model.py:955: RuntimeWarning: divide by zero encountered in log
+  llf = -nobs2*np.log(2*np.pi) - nobs2*np.log(ssr / nobs) - nobs2
+2025-06-04 18:46:09,583 INFO Calculando matriz de Transfer Entropy para cpu_usage em 3 - Recovery (round-1), bins=8, k=1
+Métricas em round-1:  25%|██▌       | 1/4 [00:01<00:04,  1.38s/it]2025-06-04 18:46:09,903 INFO Calculando causalidade para disk_io_total, 1 - Baseline, round-1
+2025-06-04 18:46:09,905 INFO Calculando matriz de causalidade Granger para disk_io_total, 1 - Baseline, round-1, maxlag=5
+/home/phil/.local/lib/python3.13/site-packages/statsmodels/regression/linear_model.py:955: RuntimeWarning: divide by zero encountered in log
+  llf = -nobs2*np.log(2*np.pi) - nobs2*np.log(ssr / nobs) - nobs2
+2025-06-04 18:46:09,914 WARNING Erro ao calcular Granger para tenant-c->tenant-a: Invalid input, x is constant
+/home/phil/.local/lib/python3.13/site-packages/statsmodels/regression/linear_model.py:955: RuntimeWarning: divide by zero encountered in log
+  llf = -nobs2*np.log(2*np.pi) - nobs2*np.log(ssr / nobs) - nobs2
+2025-06-04 18:46:09,930 WARNING Erro ao calcular Granger para tenant-a->tenant-c: Invalid input, x is constant
+2025-06-04 18:46:09,931 WARNING Erro ao calcular Granger para tenant-d->tenant-c: Invalid input, x is constant
+/home/phil/.local/lib/python3.13/site-packages/statsmodels/regression/linear_model.py:955: RuntimeWarning: divide by zero encountered in log
+  llf = -nobs2*np.log(2*np.pi) - nobs2*np.log(ssr / nobs) - nobs2
+2025-06-04 18:46:09,950 WARNING Erro ao calcular Granger para tenant-c->tenant-d: Invalid input, x is constant
+2025-06-04 18:46:09,950 INFO Calculando matriz de Transfer Entropy para disk_io_total em 1 - Baseline (round-1), bins=8, k=1
+2025-06-04 18:46:10,108 INFO Calculando causalidade para disk_io_total, 2 - Attack, round-1
+2025-06-04 18:46:10,110 INFO Calculando matriz de causalidade Granger para disk_io_total, 2 - Attack, round-1, maxlag=5
+2025-06-04 18:46:10,115 WARNING Erro ao calcular Granger para tenant-b->tenant-a: Invalid input, x is constant
+2025-06-04 18:46:10,116 WARNING Erro ao calcular Granger para tenant-c->tenant-a: Invalid input, x is constant
+2025-06-04 18:46:10,117 WARNING Erro ao calcular Granger para tenant-d->tenant-a: Invalid input, x is constant
+2025-06-04 18:46:10,122 WARNING Erro ao calcular Granger para tenant-a->tenant-b: Invalid input, x is constant
+2025-06-04 18:46:10,128 WARNING Erro ao calcular Granger para tenant-c->tenant-b: Invalid input, x is constant
+2025-06-04 18:46:10,145 WARNING Erro ao calcular Granger para tenant-a->tenant-c: Invalid input, x is constant
+2025-06-04 18:46:10,146 WARNING Erro ao calcular Granger para tenant-b->tenant-c: Invalid input, x is constant
+2025-06-04 18:46:10,146 WARNING Erro ao calcular Granger para tenant-d->tenant-c: Invalid input, x is constant
+2025-06-04 18:46:10,151 WARNING Erro ao calcular Granger para tenant-a->tenant-d: Invalid input, x is constant
+2025-06-04 18:46:10,172 WARNING Erro ao calcular Granger para tenant-c->tenant-d: Invalid input, x is constant
+2025-06-04 18:46:10,172 INFO Calculando matriz de Transfer Entropy para disk_io_total em 2 - Attack (round-1), bins=8, k=1
+2025-06-04 18:46:10,400 INFO Calculando causalidade para disk_io_total, 3 - Recovery, round-1
+2025-06-04 18:46:10,401 INFO Calculando matriz de causalidade Granger para disk_io_total, 3 - Recovery, round-1, maxlag=5
+2025-06-04 18:46:10,407 WARNING Erro ao calcular Granger para tenant-b->tenant-a: Invalid input, x is constant
+2025-06-04 18:46:10,408 WARNING Erro ao calcular Granger para tenant-c->tenant-a: Invalid input, x is constant
+2025-06-04 18:46:10,409 WARNING Erro ao calcular Granger para tenant-d->tenant-a: Invalid input, x is constant
+/home/phil/.local/lib/python3.13/site-packages/statsmodels/regression/linear_model.py:955: RuntimeWarning: divide by zero encountered in log
+  llf = -nobs2*np.log(2*np.pi) - nobs2*np.log(ssr / nobs) - nobs2
+2025-06-04 18:46:10,413 WARNING Erro ao calcular Granger para tenant-a->tenant-b: Invalid input, x is constant
+/home/phil/.local/lib/python3.13/site-packages/statsmodels/regression/linear_model.py:955: RuntimeWarning: divide by zero encountered in log
+  llf = -nobs2*np.log(2*np.pi) - nobs2*np.log(ssr / nobs) - nobs2
+2025-06-04 18:46:10,417 WARNING Erro ao calcular Granger para tenant-c->tenant-b: Invalid input, x is constant
+/home/phil/.local/lib/python3.13/site-packages/statsmodels/regression/linear_model.py:955: RuntimeWarning: divide by zero encountered in log
+  llf = -nobs2*np.log(2*np.pi) - nobs2*np.log(ssr / nobs) - nobs2
+2025-06-04 18:46:10,431 WARNING Erro ao calcular Granger para tenant-a->tenant-c: Invalid input, x is constant
+2025-06-04 18:46:10,432 WARNING Erro ao calcular Granger para tenant-b->tenant-c: Invalid input, x is constant
+2025-06-04 18:46:10,433 WARNING Erro ao calcular Granger para tenant-d->tenant-c: Invalid input, x is constant
+2025-06-04 18:46:10,436 WARNING Erro ao calcular Granger para tenant-a->tenant-d: Invalid input, x is constant
+/home/phil/.local/lib/python3.13/site-packages/statsmodels/regression/linear_model.py:955: RuntimeWarning: divide by zero encountered in log
+  llf = -nobs2*np.log(2*np.pi) - nobs2*np.log(ssr / nobs) - nobs2
+2025-06-04 18:46:10,453 WARNING Erro ao calcular Granger para tenant-c->tenant-d: Invalid input, x is constant
+2025-06-04 18:46:10,453 INFO Calculando matriz de Transfer Entropy para disk_io_total em 3 - Recovery (round-1), bins=8, k=1
+Métricas em round-1:  50%|█████     | 2/4 [00:02<00:01,  1.00it/s]2025-06-04 18:46:10,637 INFO Calculando causalidade para memory_usage, 1 - Baseline, round-1
+2025-06-04 18:46:10,639 INFO Calculando matriz de causalidade Granger para memory_usage, 1 - Baseline, round-1, maxlag=5
+2025-06-04 18:46:10,734 INFO Calculando matriz de Transfer Entropy para memory_usage em 1 - Baseline (round-1), bins=8, k=1
+2025-06-04 18:46:10,958 INFO Calculando causalidade para memory_usage, 2 - Attack, round-1
+2025-06-04 18:46:10,960 INFO Calculando matriz de causalidade Granger para memory_usage, 2 - Attack, round-1, maxlag=5
+2025-06-04 18:46:11,171 INFO Calculando matriz de Transfer Entropy para memory_usage em 2 - Attack (round-1), bins=8, k=1
+2025-06-04 18:46:11,609 INFO Calculando causalidade para memory_usage, 3 - Recovery, round-1
+2025-06-04 18:46:11,610 INFO Calculando matriz de causalidade Granger para memory_usage, 3 - Recovery, round-1, maxlag=5
+/home/phil/.local/lib/python3.13/site-packages/statsmodels/regression/linear_model.py:955: RuntimeWarning: divide by zero encountered in log
+  llf = -nobs2*np.log(2*np.pi) - nobs2*np.log(ssr / nobs) - nobs2
+2025-06-04 18:46:11,625 WARNING Erro ao calcular Granger para tenant-b->tenant-a: The x values include a column with constant values and so the test statistic cannot be computed.
+/home/phil/.local/lib/python3.13/site-packages/statsmodels/regression/linear_model.py:955: RuntimeWarning: divide by zero encountered in log
+  llf = -nobs2*np.log(2*np.pi) - nobs2*np.log(ssr / nobs) - nobs2
+2025-06-04 18:46:11,664 WARNING Erro ao calcular Granger para tenant-a->tenant-b: The Granger causality test statistic cannot be computed because the VAR has a perfect fit of the data.
+/home/phil/.local/lib/python3.13/site-packages/statsmodels/regression/linear_model.py:955: RuntimeWarning: divide by zero encountered in log
+  llf = -nobs2*np.log(2*np.pi) - nobs2*np.log(ssr / nobs) - nobs2
+2025-06-04 18:46:11,674 WARNING Erro ao calcular Granger para tenant-c->tenant-b: The Granger causality test statistic cannot be computed because the VAR has a perfect fit of the data.
+/home/phil/.local/lib/python3.13/site-packages/statsmodels/regression/linear_model.py:955: RuntimeWarning: divide by zero encountered in log
+  llf = -nobs2*np.log(2*np.pi) - nobs2*np.log(ssr / nobs) - nobs2
+2025-06-04 18:46:11,684 WARNING Erro ao calcular Granger para tenant-d->tenant-b: The Granger causality test statistic cannot be computed because the VAR has a perfect fit of the data.
+/home/phil/.local/lib/python3.13/site-packages/statsmodels/regression/linear_model.py:955: RuntimeWarning: divide by zero encountered in log
+  llf = -nobs2*np.log(2*np.pi) - nobs2*np.log(ssr / nobs) - nobs2
+2025-06-04 18:46:11,710 WARNING Erro ao calcular Granger para tenant-b->tenant-c: The x values include a column with constant values and so the test statistic cannot be computed.
+/home/phil/.local/lib/python3.13/site-packages/statsmodels/regression/linear_model.py:955: RuntimeWarning: divide by zero encountered in log
+  llf = -nobs2*np.log(2*np.pi) - nobs2*np.log(ssr / nobs) - nobs2
+2025-06-04 18:46:11,749 WARNING Erro ao calcular Granger para tenant-b->tenant-d: The x values include a column with constant values and so the test statistic cannot be computed.
+2025-06-04 18:46:11,764 INFO Calculando matriz de Transfer Entropy para memory_usage em 3 - Recovery (round-1), bins=8, k=1
+Métricas em round-1:  75%|███████▌  | 3/4 [00:03<00:01,  1.16s/it]2025-06-04 18:46:11,980 INFO Calculando causalidade para network_total_bandwidth, 1 - Baseline, round-1
+2025-06-04 18:46:11,982 INFO Calculando matriz de causalidade Granger para network_total_bandwidth, 1 - Baseline, round-1, maxlag=5
+2025-06-04 18:46:12,079 INFO Calculando matriz de Transfer Entropy para network_total_bandwidth em 1 - Baseline (round-1), bins=8, k=1
+2025-06-04 18:46:12,337 INFO Calculando causalidade para network_total_bandwidth, 2 - Attack, round-1
+2025-06-04 18:46:12,339 INFO Calculando matriz de causalidade Granger para network_total_bandwidth, 2 - Attack, round-1, maxlag=5
+2025-06-04 18:46:12,523 INFO Calculando matriz de Transfer Entropy para network_total_bandwidth em 2 - Attack (round-1), bins=8, k=1
+2025-06-04 18:46:12,874 INFO Calculando causalidade para network_total_bandwidth, 3 - Recovery, round-1
+2025-06-04 18:46:12,876 INFO Calculando matriz de causalidade Granger para network_total_bandwidth, 3 - Recovery, round-1, maxlag=5
+/home/phil/.local/lib/python3.13/site-packages/statsmodels/regression/linear_model.py:955: RuntimeWarning: divide by zero encountered in log
+  llf = -nobs2*np.log(2*np.pi) - nobs2*np.log(ssr / nobs) - nobs2
+/home/phil/.local/lib/python3.13/site-packages/statsmodels/regression/linear_model.py:955: RuntimeWarning: divide by zero encountered in log
+  llf = -nobs2*np.log(2*np.pi) - nobs2*np.log(ssr / nobs) - nobs2
+/home/phil/.local/lib/python3.13/site-packages/statsmodels/regression/linear_model.py:955: RuntimeWarning: divide by zero encountered in log
+  llf = -nobs2*np.log(2*np.pi) - nobs2*np.log(ssr / nobs) - nobs2
+/home/phil/.local/lib/python3.13/site-packages/statsmodels/regression/linear_model.py:955: RuntimeWarning: divide by zero encountered in log
+  llf = -nobs2*np.log(2*np.pi) - nobs2*np.log(ssr / nobs) - nobs2
+/home/phil/.local/lib/python3.13/site-packages/statsmodels/regression/linear_model.py:955: RuntimeWarning: divide by zero encountered in log
+  llf = -nobs2*np.log(2*np.pi) - nobs2*np.log(ssr / nobs) - nobs2
+/home/phil/.local/lib/python3.13/site-packages/statsmodels/regression/linear_model.py:955: RuntimeWarning: divide by zero encountered in log
+  llf = -nobs2*np.log(2*np.pi) - nobs2*np.log(ssr / nobs) - nobs2
+2025-06-04 18:46:13,047 INFO Calculando matriz de Transfer Entropy para network_total_bandwidth em 3 - Recovery (round-1), bins=8, k=1
+Métricas em round-1: 100%|██████████| 4/4 [00:04<00:00,  1.25s/it]Métricas em round-1: 100%|██████████| 4/4 [00:04<00:00,  1.21s/it]
+2025-06-04 18:46:13,377 INFO Estágio causality_analysis concluído em 4.86 segundos
+2025-06-04 18:46:13,378 INFO Executando estágio: sliding_window
+2025-06-04 18:46:13,378 INFO Iniciando estágio: sliding_window
+2025-06-04 18:46:13,378 INFO Iniciando análises com janelas deslizantes
+2025-06-04 18:46:13,379 INFO Analisando janelas deslizantes para cpu_usage, 1 - Baseline, round-1
+2025-06-04 18:46:14,475 INFO Gerados 4 plots de correlação deslizante
+2025-06-04 18:46:15,764 INFO Gerados 6 plots de Transfer Entropy deslizante
+2025-06-04 18:46:15,765 INFO Analisando janelas deslizantes para cpu_usage, 2 - Attack, round-1
+2025-06-04 18:46:17,597 INFO Gerados 6 plots de correlação deslizante
+2025-06-04 18:46:19,365 INFO Gerados 6 plots de Transfer Entropy deslizante
+2025-06-04 18:46:19,365 INFO Analisando janelas deslizantes para cpu_usage, 3 - Recovery, round-1
+2025-06-04 18:46:21,470 INFO Gerados 6 plots de correlação deslizante
+2025-06-04 18:46:21,547 INFO Analisando janelas deslizantes para memory_usage, 1 - Baseline, round-1
+2025-06-04 18:46:22,653 INFO Gerados 4 plots de correlação deslizante
+2025-06-04 18:46:23,930 INFO Gerados 6 plots de Transfer Entropy deslizante
+2025-06-04 18:46:23,930 INFO Analisando janelas deslizantes para memory_usage, 2 - Attack, round-1
+2025-06-04 18:46:25,792 INFO Gerados 6 plots de correlação deslizante
+2025-06-04 18:46:27,594 INFO Gerados 6 plots de Transfer Entropy deslizante
+2025-06-04 18:46:27,594 INFO Analisando janelas deslizantes para memory_usage, 3 - Recovery, round-1
+2025-06-04 18:46:29,924 INFO Gerados 6 plots de correlação deslizante
+2025-06-04 18:46:30,002 INFO Analisando janelas deslizantes para disk_io_total, 1 - Baseline, round-1
+/home/phil/.local/lib/python3.13/site-packages/numpy/lib/_function_base_impl.py:3045: RuntimeWarning: invalid value encountered in divide
+  c /= stddev[:, None]
+/home/phil/.local/lib/python3.13/site-packages/numpy/lib/_function_base_impl.py:3046: RuntimeWarning: invalid value encountered in divide
+  c /= stddev[None, :]
+2025-06-04 18:46:31,380 INFO Gerados 4 plots de correlação deslizante
+2025-06-04 18:46:31,389 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:31,392 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:31,395 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:31,399 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:31,403 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:31,406 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:31,416 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:31,420 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:31,423 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:31,427 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:31,431 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:31,434 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:31,438 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:31,441 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:31,445 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:31,448 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:31,452 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:31,456 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:31,460 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:31,463 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:31,467 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:31,471 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:31,474 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:31,484 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:31,488 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:31,491 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:31,495 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:31,498 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:31,502 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:31,506 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:31,510 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:31,514 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:31,517 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:31,521 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:32,477 INFO Gerados 6 plots de Transfer Entropy deslizante
+2025-06-04 18:46:32,477 INFO Analisando janelas deslizantes para disk_io_total, 2 - Attack, round-1
+/home/phil/.local/lib/python3.13/site-packages/numpy/lib/_function_base_impl.py:3045: RuntimeWarning: invalid value encountered in divide
+  c /= stddev[:, None]
+/home/phil/.local/lib/python3.13/site-packages/numpy/lib/_function_base_impl.py:3046: RuntimeWarning: invalid value encountered in divide
+  c /= stddev[None, :]
+2025-06-04 18:46:34,442 INFO Gerados 6 plots de correlação deslizante
+2025-06-04 18:46:34,451 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,455 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,458 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,462 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,466 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,470 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,474 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,478 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,482 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,486 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,490 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,494 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,498 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,502 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,506 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,509 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,513 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,517 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,520 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,524 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,528 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,532 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,536 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,540 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,544 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,547 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,551 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,555 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,559 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,563 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,566 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,570 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,574 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,578 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,581 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,585 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,589 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,592 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,596 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,600 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,604 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,608 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,611 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,615 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,618 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,622 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,626 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,630 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,634 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,637 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,641 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,645 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,648 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,652 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,656 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,721 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,724 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,728 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,732 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,735 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,739 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,743 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,746 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,750 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,753 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,757 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,761 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,765 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,768 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,772 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,776 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,780 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,784 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,788 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,792 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,796 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,800 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,804 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,808 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,811 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,815 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,818 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,822 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,826 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,829 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,833 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,837 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,840 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,844 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,848 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,852 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,856 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,859 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,863 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,866 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,870 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,874 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,878 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,881 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,946 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,950 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,953 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,956 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,959 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,963 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,967 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,971 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,974 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,978 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:34,982 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:36,034 INFO Gerados 6 plots de Transfer Entropy deslizante
+2025-06-04 18:46:36,034 INFO Analisando janelas deslizantes para disk_io_total, 3 - Recovery, round-1
+/home/phil/.local/lib/python3.13/site-packages/numpy/lib/_function_base_impl.py:3045: RuntimeWarning: invalid value encountered in divide
+  c /= stddev[:, None]
+/home/phil/.local/lib/python3.13/site-packages/numpy/lib/_function_base_impl.py:3046: RuntimeWarning: invalid value encountered in divide
+  c /= stddev[None, :]
+2025-06-04 18:46:38,215 INFO Gerados 6 plots de correlação deslizante
+2025-06-04 18:46:38,222 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:38,225 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:38,230 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:38,234 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:38,238 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:38,248 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:38,252 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:38,256 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:38,259 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:38,269 WARNING Série constante detectada - não é possível executar teste de Granger
+2025-06-04 18:46:38,275 INFO Analisando janelas deslizantes para network_total_bandwidth, 1 - Baseline, round-1
+2025-06-04 18:46:39,386 INFO Gerados 4 plots de correlação deslizante
+2025-06-04 18:46:40,691 INFO Gerados 6 plots de Transfer Entropy deslizante
+2025-06-04 18:46:40,691 INFO Analisando janelas deslizantes para network_total_bandwidth, 2 - Attack, round-1
+2025-06-04 18:46:42,602 INFO Gerados 6 plots de correlação deslizante
+2025-06-04 18:46:44,396 INFO Gerados 6 plots de Transfer Entropy deslizante
+2025-06-04 18:46:44,396 INFO Analisando janelas deslizantes para network_total_bandwidth, 3 - Recovery, round-1

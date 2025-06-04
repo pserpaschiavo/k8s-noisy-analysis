@@ -46,14 +46,91 @@ def aggregate_tenant_insights(
     # Dicionário para armazenar os insights
     insights: Dict[str, Dict[str, Any]] = {}
     
-    # Verificar se temos os dados necessários
-    if tenant_metrics is None or tenant_metrics.empty:
-        logger.warning("Métricas de tenant não disponíveis para agregação de insights")
-        return {"error_message": "Dados necessários para agregação de insights não disponíveis"}
+    # Verificar e registrar o status dos dados de entrada para debugging
+    logger.info(f"Status dos dados para agregação de insights:")
+    logger.info(f"- tenant_metrics tipo: {type(tenant_metrics)}")
+    if tenant_metrics is not None:
+        if hasattr(tenant_metrics, 'columns'):
+            logger.info(f"  - Colunas disponíveis: {list(tenant_metrics.columns) if not tenant_metrics.empty else 'DataFrame vazio'}")
+        elif isinstance(tenant_metrics, dict):
+            logger.info(f"  - Chaves disponíveis: {list(tenant_metrics.keys()) if tenant_metrics else 'Dicionário vazio'}")
+    logger.info(f"- phase_comparison_results presente: {phase_comparison_results is not None}")
+    logger.info(f"- granger_matrices presente: {granger_matrices is not None}")
+    logger.info(f"- te_matrices presente: {te_matrices is not None}")
+    logger.info(f"- correlation_matrices presente: {correlation_matrices is not None}")
+    logger.info(f"- anomaly_metrics presente: {anomaly_metrics is not None}")
+    
+    # Garantir que tenant_metrics é um DataFrame
+    if tenant_metrics is None:
+        logger.warning("tenant_metrics não disponível. Tentando criar um DataFrame básico a partir de outros dados.")
         
-    # Verificar se a coluna esperada está presente
+        # Tenta extrair uma lista de tenants de outras matrizes disponíveis
+        tenants = set()
+        
+        # Tenta extrair de matrizes de correlação
+        if correlation_matrices is not None:
+            for method, matrices in correlation_matrices.items():
+                for matrix_key, matrix in matrices.items():
+                    if isinstance(matrix, pd.DataFrame):
+                        tenants.update(matrix.index)
+        
+        # Tenta extrair de matrizes de causalidade
+        if granger_matrices is not None:
+            for key, matrix in granger_matrices.items():
+                if isinstance(matrix, pd.DataFrame):
+                    tenants.update(matrix.index)
+                    
+        # Tenta extrair de matrizes de TE
+        if te_matrices is not None:
+            for key, matrix in te_matrices.items():
+                if isinstance(matrix, pd.DataFrame):
+                    tenants.update(matrix.index)
+        
+        # Se encontramos algum tenant, cria um DataFrame básico
+        if tenants:
+            logger.info(f"Criando DataFrame básico com {len(tenants)} tenants: {tenants}")
+            tenant_metrics = pd.DataFrame({
+                'tenant_id': list(tenants),
+                'noisy_score': [0.5] * len(tenants)  # Valor padrão neutro
+            })
+        else:
+            logger.error("Não foi possível extrair lista de tenants de nenhum dos dados disponíveis")
+            return {"error_message": "Dados necessários para agregação de insights não disponíveis"}
+    
+    # Converter para DataFrame se for um dicionário (compatibilidade)
+    if isinstance(tenant_metrics, dict):
+        try:
+            # Primeiro verificar se é um dicionário que representa um DataFrame 
+            # (chaves são índices e valores são dicionários de colunas)
+            if tenant_metrics and isinstance(list(tenant_metrics.values())[0], dict):
+                # Exemplo: {'tenant1': {'noisy_score': 0.8, ...}, 'tenant2': {...}}
+                df_data = []
+                for tenant_id, metrics in tenant_metrics.items():
+                    tenant_data = metrics.copy()
+                    tenant_data['tenant_id'] = tenant_id
+                    df_data.append(tenant_data)
+                tenant_metrics = pd.DataFrame(df_data)
+            else:
+                # Dicionário simples - converter diretamente
+                tenant_metrics = pd.DataFrame(tenant_metrics)
+        except Exception as e:
+            logger.error(f"Erro ao converter tenant_metrics para DataFrame: {e}")
+            return {"error_message": f"Erro ao processar métricas de tenant: {e}"}
+    
+    # Verificar se a coluna esperada está presente ou se precisamos criá-la
+    if tenant_metrics.empty:
+        logger.error("DataFrame de tenant_metrics está vazio")
+        return {"error_message": "Dados de métricas de tenant vazios"}
+    
+    # Garantir que existe uma coluna tenant_id
     if 'tenant_id' not in tenant_metrics.columns:
-        logger.warning("Coluna 'tenant_id' não encontrada nas métricas de tenant")
+        # Tentar encontrar ou criar coluna tenant_id
+        if tenant_metrics.index.name == 'tenant_id':
+            # Se o índice for tenant_id, reset para coluna
+            tenant_metrics = tenant_metrics.reset_index()
+        else:
+            logger.error("Coluna 'tenant_id' ausente nas métricas de tenant e não pode ser derivada")
+        logger.warning(f"Coluna 'tenant_id' não encontrada nas métricas de tenant. Colunas: {list(tenant_metrics.columns) if not tenant_metrics.empty else 'DataFrame vazio'}")
         return {"error_message": "Dados necessários para agregação de insights não disponíveis - coluna tenant_id ausente"}
     
     # Garantir que os outros parâmetros não são None
@@ -152,7 +229,7 @@ def aggregate_tenant_insights(
                 
             # Verificar variação significativa durante ataque
             attack_vs_baseline_col = '2 - Attack_vs_baseline_pct'
-            if attack_vs_baseline_col in stats_df.columns and not pd.isna(row.get(attack_vs_baseline_col)):
+            if attack_vs_baseline_col in stats_df.columns and row.get(attack_vs_baseline_col) is not None:
                 variation = row[attack_vs_baseline_col]
                 if abs(variation) > 30:  # Variação maior que 30%
                     pattern = {

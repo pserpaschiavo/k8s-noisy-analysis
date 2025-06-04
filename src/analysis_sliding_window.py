@@ -7,15 +7,18 @@ em janelas temporais deslizantes, permitindo visualizar a evolução desses indi
 ao longo do tempo, ao invés de apenas valores agregados para todo o período.
 """
 import os
+import time
 import logging
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
-import matplotlib.cm as cm
+from matplotlib.colors import Normalize
+from matplotlib import colormaps
 import seaborn as sns
 from typing import Dict, List, Tuple, Any, Optional, Union, Callable
 from datetime import datetime, timedelta
+import time
 
 # Importações de módulos do projeto
 from src.analysis_correlation import compute_correlation_matrix
@@ -50,7 +53,7 @@ class SlidingWindowAnalyzer:
         step_size: str = '1min',
         method: str = 'pearson',
         min_periods: int = 3,
-        tenant_pairs: List[Tuple[str, str]] = None
+        tenant_pairs: Optional[List[Tuple[str, str]]] = None
     ) -> Dict[Tuple[str, str], pd.DataFrame]:
         """
         Analisa a correlação entre tenants em janelas deslizantes.
@@ -154,7 +157,7 @@ class SlidingWindowAnalyzer:
         method: str = 'granger',
         max_lag: int = 3,
         min_periods: int = 5,       # Reduzido para permitir mais janelas válidas
-        tenant_pairs: List[Tuple[str, str]] = None,
+        tenant_pairs: Optional[List[Tuple[str, str]]] = None,
         bins: int = 5               # Número de bins para transfer entropy
     ) -> Dict[Tuple[str, str], pd.DataFrame]:
         """
@@ -252,21 +255,34 @@ class SlidingWindowAnalyzer:
                             source_series = window_wide[source].values
                             target_series = window_wide[target].values
                             
-                            # Calcula teste de causalidade de Granger
+                            # Calcula teste de causalidade de Granger com tratamento de erros melhorado
                             try:
+                                # Executa o teste
                                 result = causality_analyzer._granger_causality_test(
                                     source_series, target_series, max_lag=max_lag
                                 )
-                                # Extrai p-valor para o lag com menor p-valor
-                                min_p_value = min([v[0] for v in result.values()])
-                                window_results.append({
-                                    'window_start': current_start,
-                                    'window_end': current_end,
-                                    'p_value': min_p_value,
-                                    'causality_score': 1.0 - min_p_value  # Converte p-value para score (maior = mais causalidade)
-                                })
-                            except:
-                                self.logger.warning(f"Erro no teste de Granger para janela {current_start} a {current_end}")
+                                
+                                # Verifica se o resultado é válido
+                                if result and isinstance(result, dict) and len(result) > 0:
+                                    try:
+                                        # Extrai p-valor para o lag com menor p-valor
+                                        p_values = [v[0] for v in result.values() if isinstance(v, tuple) and len(v) > 0]
+                                        if p_values:
+                                            min_p_value = min(p_values)
+                                            window_results.append({
+                                                'window_start': current_start,
+                                                'window_end': current_end,
+                                                'p_value': min_p_value,
+                                                'causality_score': 1.0 - min_p_value  # Converte p-value para score (maior = mais causalidade)
+                                            })
+                                        else:
+                                            self.logger.debug(f"Valores de p não encontrados para {source}->{target}")
+                                    except Exception as e:
+                                        self.logger.debug(f"Erro ao processar resultados do teste de Granger para {source}->{target}: {str(e)}")
+                                else:
+                                    self.logger.debug(f"Teste de Granger sem resultados válidos para {source}->{target}")
+                            except Exception as e:
+                                self.logger.warning(f"Erro no teste de Granger para {source}->{target}: {str(e)}")
                         
                         elif method == 'transfer_entropy':
                             # Formato específico para cálculo de Transfer Entropy
@@ -307,7 +323,7 @@ class SlidingWindowAnalyzer:
         phase: str,
         round_id: str,
         out_dir: str,
-        top_n: int = None
+        top_n: Optional[int] = None
     ) -> List[str]:
         """
         Plota a evolução da correlação em janelas deslizantes para pares de tenants.
@@ -327,8 +343,7 @@ class SlidingWindowAnalyzer:
             return []
             
         # Paleta de cores aprimorada para melhor visualização
-        from matplotlib import cm
-        color_palette = cm.viridis(np.linspace(0, 1, max(len(results), 10)))
+        color_palette = sns.color_palette("viridis", max(len(results), 10))
         
         # Filtra top_n pares se solicitado
         if top_n is not None and len(results) > top_n:
@@ -388,7 +403,7 @@ class SlidingWindowAnalyzer:
             ax.set_ylabel('Coeficiente de Correlação', fontsize=12)
             
             # Melhora formatação do eixo de tempo
-            ax.xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter('%H:%M:%S'))
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
             fig.autofmt_xdate()  # Rotaciona labels para evitar sobreposição
             
             # Adiciona grid aprimorada para melhor legibilidade
@@ -461,7 +476,7 @@ class SlidingWindowAnalyzer:
             ax.set_ylabel('Coeficiente de Correlação', fontsize=12)
             
             # Formatação de data/hora
-            ax.xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter('%H:%M:%S'))
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
             fig.autofmt_xdate()
             
             # Grid e estilo
@@ -478,7 +493,7 @@ class SlidingWindowAnalyzer:
                 out_dir, 
                 f"sliding_corr_consolidated_{metric}_{phase}_{round_id}.png"
             )
-            fig.tight_layout(rect=[0, 0, 0.85, 0.95])
+            fig.tight_layout(rect=(0, 0, 0.85, 0.95))
             plt.savefig(out_path, dpi=120, bbox_inches='tight')
             plt.close(fig)
             plt.close()
@@ -495,7 +510,7 @@ class SlidingWindowAnalyzer:
         round_id: str,
         out_dir: str,
         method: str = 'granger',
-        top_n: int = None
+        top_n: Optional[int] = None
     ) -> List[str]:
         """
         Plota a evolução da causalidade em janelas deslizantes para pares de tenants.
@@ -546,7 +561,7 @@ class SlidingWindowAnalyzer:
         output_paths = []
         
         # Define cores para diferentes pares
-        pair_colors = plt.cm.tab20(np.linspace(0, 1, max(10, len(results))))
+        pair_colors = sns.color_palette("tab20", max(10, len(results)))
         
         # Gera um plot para cada par
         for i, ((source, target), df) in enumerate(results.items()):
@@ -679,7 +694,35 @@ class SlidingWindowStage:
     Estágio do pipeline para análises de janelas deslizantes.
     """
     
+    def __init__(self):
+        """
+        Inicializa o estágio de janelas deslizantes.
+        """
+        self.name = "sliding_window"
+        self.description = "Análise de séries temporais com janelas deslizantes"
+        self.logger = logging.getLogger("pipeline.sliding_window")
+    
     def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Executa este estágio do pipeline, delegando para a implementação específica.
+        
+        Args:
+            context: Contexto atual do pipeline.
+            
+        Returns:
+            Contexto atualizado com os resultados das análises
+        """
+        self.logger.info(f"Iniciando estágio: {self.name}")
+        start_time = time.time()
+        
+        result = self._execute_implementation(context)
+        
+        elapsed_time = time.time() - start_time
+        self.logger.info(f"Estágio {self.name} concluído em {elapsed_time:.2f} segundos")
+        
+        return result
+    
+    def _execute_implementation(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """
         Executa análises em janelas deslizantes e gera visualizações.
         
@@ -689,7 +732,6 @@ class SlidingWindowStage:
         Returns:
             Contexto atualizado com os resultados das análises
         """
-        logger = logging.getLogger("pipeline.sliding_window")
         logger.info("Iniciando análises com janelas deslizantes")
         
         # Extrai configurações do contexto
@@ -699,7 +741,8 @@ class SlidingWindowStage:
             return context
             
         config = context.get("config", {})
-        output_dir = config.get("output_dir", "outputs")
+        # Garantir que estamos usando o output_dir do contexto se disponível
+        output_dir = context.get("output_dir", config.get("output_dir", "outputs"))
         metrics = config.get("selected_metrics")
         # Usa as métricas do DataFrame se não foram especificadas no config
         if not metrics:

@@ -128,14 +128,24 @@ class DataIngestionStage(PipelineStage):
         selected_rounds = config_dict.get('selected_rounds')
         force_reprocess = context.get('force_reprocess', False)
         
-        processed_data_dir = context.get('processed_data_dir', config.PROCESSED_DATA_DIR)
+        processed_data_dir = context.get('processed_data_dir')
+        if processed_data_dir is None:
+            processed_data_dir = config_dict.get('processed_data_dir', config.PROCESSED_DATA_DIR)
         
         # Verificar se há um caminho de parquet de entrada especificado no config
         input_parquet_path = config_dict.get('input_parquet_path')
         
         # Determinar o nome do arquivo parquet de saída
         output_parquet_name = config_dict.get('output_parquet_name', 'consolidated_long.parquet')
-        consolidated_long_path = os.path.join(processed_data_dir, output_parquet_name)
+        
+        # Garantir que o diretório exista antes de usar
+        os.makedirs(processed_data_dir, exist_ok=True)
+        
+        # Se output_parquet_name já é um caminho absoluto, usar como consolidated_long_path
+        if os.path.isabs(output_parquet_name):
+            consolidated_long_path = output_parquet_name
+        else:
+            consolidated_long_path = os.path.join(processed_data_dir, output_parquet_name)
         
         # Caso 1: Arquivo de entrada parquet especificado - carrega diretamente
         if input_parquet_path and os.path.exists(input_parquet_path) and not force_reprocess:
@@ -719,6 +729,12 @@ class ReportGenerationStage(PipelineStage):
             phase_comparison_results
         )
         
+        # Log sobre o que foi gerado
+        self.logger.info(f"Métricas de tenant geradas: tipo={type(tenant_metrics)}")
+        if isinstance(tenant_metrics, pd.DataFrame):
+            self.logger.info(f"Colunas disponíveis: {list(tenant_metrics.columns)}")
+            self.logger.info(f"Número de tenants: {len(tenant_metrics)}")
+        
         # Salvar a tabela de métricas
         metrics_table_path = os.path.join(report_dir, f"{report_filename}_tenant_metrics.csv")
         tenant_metrics.to_csv(metrics_table_path, index=False)
@@ -784,20 +800,30 @@ class InsightAggregationStage(PipelineStage):
         os.makedirs(insights_dir, exist_ok=True)
         
         # Verificar se temos os dados necessários
-        if not all(key in context for key in ['tenant_metrics', 'phase_comparison_results']):
-            self.logger.warning("Dados de métricas de tenant ou comparação de fases ausentes no contexto")
-            # Tentar obter do relatório se disponível
-            if 'report_context' not in context:
-                self.logger.error("Não foi possível obter dados necessários para agregação de insights")
-                context['error'] = "Dados necessários para agregação de insights não disponíveis"
-                return context
-            
-            # Usar dados do relatório
-            tenant_metrics = context['report_context'].get('tenant_metrics')
-            phase_comparison_results = context['report_context'].get('phase_comparison_results')
-        else:
+        tenant_metrics = None
+        phase_comparison_results = context.get('phase_comparison_results')
+        
+        # Tentar obter tenant_metrics diretamente do contexto
+        if 'tenant_metrics' in context:
             tenant_metrics = context.get('tenant_metrics')
-            phase_comparison_results = context.get('phase_comparison_results')
+            self.logger.info(f"Encontradas métricas de tenant no contexto: {type(tenant_metrics)}")
+        # Tentar obter do relatório se disponível
+        elif 'report_context' in context and 'tenant_metrics' in context['report_context']:
+            tenant_metrics = context['report_context'].get('tenant_metrics')
+            self.logger.info(f"Encontradas métricas de tenant no report_context: {type(tenant_metrics)}")
+        
+        # Log detalhado das métricas encontradas
+        if tenant_metrics is not None:
+            if hasattr(tenant_metrics, 'columns'):  # Verifica se é DataFrame-like
+                self.logger.info(f"DataFrame de tenant_metrics com colunas: {list(tenant_metrics.columns)}")
+            else:
+                self.logger.info(f"Tipo de tenant_metrics inesperado: {type(tenant_metrics)}")
+        
+        # Se não encontrou métricas, retorna erro
+        if tenant_metrics is None:
+            self.logger.error("Não foi possível obter dados necessários para agregação de insights")
+            context['error'] = "Dados necessários para agregação de insights não disponíveis"
+            return context
             
         granger_matrices = context.get('granger_matrices', {})
         te_matrices = context.get('te_matrices', {})
@@ -925,4 +951,183 @@ class Pipeline:
             'selected_metrics': None, # Ou valores padrão
             'selected_tenants': None, # Ou valores padrão
             'selected_rounds': None,  # Ou valores padrão
-            'causality'
+            'causality': {
+                'granger_max_lag': 5,
+                'granger_threshold': 0.05,
+                'transfer_entropy_bins': 8
+            }
+        }
+
+    def run(self) -> Dict[str, Any]:
+        """
+        Executa o pipeline completo, passando o contexto de um estágio para o próximo.
+        
+        Returns:
+            Contexto final após a execução de todos os estágios.
+        """
+        self.logger.info("Iniciando execução do pipeline")
+        start_time = time.time()
+        
+        try:
+            # Obter configurações do contexto
+            config_dict = self.context.get('config', {})
+            
+            # Resolver caminhos relativos para absolutos
+            pipeline_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            
+            # Obter o data_root do contexto ou da configuração
+            data_root = self.context.get('data_root')
+            if data_root is None:
+                data_root = config_dict.get('data_root')
+                if data_root and not os.path.isabs(data_root):
+                    data_root = os.path.abspath(os.path.join(pipeline_dir, data_root))
+            
+            # Obter o processed_data_dir do contexto ou da configuração
+            processed_data_dir = self.context.get('processed_data_dir')
+            if processed_data_dir is None:
+                processed_data_dir = config_dict.get('processed_data_dir')
+                if processed_data_dir and not os.path.isabs(processed_data_dir):
+                    processed_data_dir = os.path.abspath(os.path.join(pipeline_dir, processed_data_dir))
+            
+            # Obter o output_dir do contexto ou da configuração
+            output_dir = self.context.get('output_dir')
+            if output_dir is None:
+                output_dir = config_dict.get('output_dir')
+                if output_dir and not os.path.isabs(output_dir):
+                    output_dir = os.path.abspath(os.path.join(pipeline_dir, output_dir))
+                    
+            # Criar diretórios se não existirem
+            if processed_data_dir:
+                os.makedirs(processed_data_dir, exist_ok=True)
+            if output_dir:
+                os.makedirs(output_dir, exist_ok=True)
+                
+            # Construir o contexto inicial
+            context = {
+                'config': config_dict,
+                'data_root': data_root,
+                'processed_data_dir': processed_data_dir,
+                'output_dir': output_dir,
+                'force_reprocess': self.context.get('force_reprocess', False),
+                'no_plots': self.context.get('no_plots', False),
+                'no_report': self.context.get('no_report', False)
+            }
+            
+            # Executar cada estágio em sequência
+            for stage in self.stages:
+                self.logger.info(f"Executando estágio: {stage.name}")
+                context = stage.execute(context)
+                
+                # Verificar se houve erro no estágio
+                if 'error' in context:
+                    self.logger.error(f"Erro no estágio {stage.name}: {context['error']}")
+                    break
+            
+            elapsed_time = time.time() - start_time
+            self.logger.info(f"Pipeline concluído em {elapsed_time:.2f} segundos")
+            
+            return context
+            
+        except Exception as e:
+            self.logger.error(f"Erro inesperado durante execução do pipeline: {str(e)}", exc_info=True)
+            raise
+
+def parse_arguments():
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(description="Pipeline de análise de séries temporais multi-tenant")
+    
+    # Argumentos básicos
+    parser.add_argument("--config", help="Caminho para arquivo de configuração YAML")
+    parser.add_argument("--data-root", help="Diretório raiz dos dados de experimento")
+    parser.add_argument("--output-dir", help="Diretório para salvar resultados")
+    parser.add_argument("--processed-data-dir", help="Diretório para dados processados")
+    
+    # Filtros de dados
+    parser.add_argument("--selected-metrics", nargs='+', help="Métricas a serem processadas")
+    parser.add_argument("--selected-tenants", nargs='+', help="Tenants a serem processados")
+    parser.add_argument("--selected-rounds", nargs='+', help="Rounds a serem processados")
+    
+    # Controles de processamento
+    parser.add_argument("--force-reprocess", action="store_true", help="Força o reprocessamento dos dados brutos")
+    parser.add_argument("--input-parquet-path", type=str, help="Caminho para um arquivo parquet existente para ser usado diretamente")
+    parser.add_argument("--no-plots", action="store_true", help="Desativa geração de visualizações")
+    parser.add_argument("--no-report", action="store_true", help="Desativa geração de relatório")
+    
+    return parser.parse_args()
+
+def main():
+    """Função principal para execução do pipeline a partir da linha de comando."""
+    args = parse_arguments()
+    
+    # Configurar o pipeline
+    config_path = args.config
+    
+    # Determinar os estágios do pipeline
+    stages = [
+        DataIngestionStage(),
+        DataExportStage(),
+        DescriptiveAnalysisStage(),
+        CorrelationAnalysisStage(),
+        CausalityAnalysisStage(),
+        PhaseComparisonStage(),
+        ReportGenerationStage(),
+        InsightAggregationStage()
+    ]
+    
+    # Inicializar o pipeline
+    pipeline = Pipeline(stages, config_path)
+    
+    # Configurar o contexto com argumentos da linha de comando
+    context = {}
+    
+    if args.data_root:
+        context['data_root'] = args.data_root
+        
+    if args.output_dir:
+        context['output_dir'] = args.output_dir
+        
+    if args.processed_data_dir:
+        context['processed_data_dir'] = args.processed_data_dir
+        
+    if args.force_reprocess:
+        context['force_reprocess'] = True
+        
+    if args.input_parquet_path:
+        if not 'config' in pipeline.context:
+            pipeline.context['config'] = {}
+        pipeline.context['config']['input_parquet_path'] = args.input_parquet_path
+        
+    if args.selected_metrics:
+        if not 'config' in pipeline.context:
+            pipeline.context['config'] = {}
+        pipeline.context['config']['selected_metrics'] = args.selected_metrics
+        
+    if args.selected_tenants:
+        if not 'config' in pipeline.context:
+            pipeline.context['config'] = {}
+        pipeline.context['config']['selected_tenants'] = args.selected_tenants
+        
+    if args.selected_rounds:
+        if not 'config' in pipeline.context:
+            pipeline.context['config'] = {}
+        pipeline.context['config']['selected_rounds'] = args.selected_rounds
+        
+    if args.no_plots:
+        context['no_plots'] = True
+        
+    if args.no_report:
+        context['no_report'] = True
+    
+    # Atualizar o contexto do pipeline
+    pipeline.context.update(context)
+    
+    # Executar o pipeline
+    try:
+        pipeline.run()
+        return 0
+    except Exception as e:
+        logging.error(f"Erro ao executar o pipeline: {e}", exc_info=True)
+        return 1
+
+if __name__ == "__main__":
+    sys.exit(main())
