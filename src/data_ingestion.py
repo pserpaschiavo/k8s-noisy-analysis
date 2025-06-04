@@ -11,8 +11,22 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 
 def list_experiments(data_root: str) -> List[str]:
-    """List all experiment directories under the data root."""
-    return [os.path.join(data_root, d) for d in os.listdir(data_root) if os.path.isdir(os.path.join(data_root, d))]
+    """List all experiment directories under the data root.
+    
+    If the data_root points directly to an experiment directory (containing rounds),
+    return just that directory. Otherwise list all subdirectories as experiments.
+    """
+    # Check if data_root already points to an experiment directory (contains round directories)
+    has_rounds = any(d.startswith("round-") for d in os.listdir(data_root) 
+                     if os.path.isdir(os.path.join(data_root, d)))
+    
+    if has_rounds:
+        # This is already an experiment directory, return it as the only experiment
+        return [data_root]
+    else:
+        # This is a parent directory containing multiple experiments
+        return [os.path.join(data_root, d) for d in os.listdir(data_root) 
+                if os.path.isdir(os.path.join(data_root, d))]
 
 def list_rounds(experiment_path: str) -> List[str]:
     """List all round directories under an experiment."""

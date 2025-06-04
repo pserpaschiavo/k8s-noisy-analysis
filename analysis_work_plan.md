@@ -4,9 +4,9 @@ O objetivo é investigar a co-variação, relações causais e flutuações temp
 
 ## Status do Projeto (Atualizado em Junho/2025)
 
-- ✅ **Concluído**: Estrutura principal do projeto implementada, ingestão de dados, segmentação, persistência, componentes de análise descritiva, correlação e causalidade básicos.
-- 🔄 **Em andamento**: Refinamento do módulo de Causalidade com Transfer Entropy, testes unitários completos.
-- ❌ **Pendente**: Consolidação da metodologia de análise inter-tenant, relatórios comparativos entre fases experimentais, documentação detalhada das escolhas metodológicas, análises com janelas móveis.
+- ✅ **Concluído**: Estrutura principal do projeto implementada, ingestão de dados, segmentação, persistência, componentes de análise descritiva, correlação e causalidade básicos, agregação de insights, análise multi-round.
+- 🔄 **Em andamento**: Refinamento do módulo de Causalidade com Transfer Entropy, testes unitários completos, análises com janelas móveis, documentação detalhada.
+- ❌ **Pendente**: Relatórios comparativos entre fases experimentais, integração completa de todos os componentes, documentação para usuários finais.
 
 ## Diretrizes Gerais para o Desenvolvimento do Pipeline
 
@@ -58,82 +58,12 @@ O objetivo é investigar a co-variação, relações causais e flutuações temp
             *   Objetivo: permitir análises futuras ou o uso por parsers específicos que possam necessitar deste formato.
 
 3.  **Configuração e Aplicação de Otimização de Dados:**
-    *   3.1. 🔄 Revisar e ajustar otimização para análise descritiva. 
-    *   3.2. 🔄 Revisar e ajustar otimização para análise de correlação. 
-    *   3.3. 🔄 Revisar e ajustar otimização para análise de causalidade. 
+    *   3.1. ✅ Revisar e ajustar otimização para análise descritiva. 
+    *   3.2. ✅ Revisar e ajustar otimização para análise de correlação. 
+    *   3.3. ✅ Revisar e ajustar otimização para análise de causalidade. 
 4.  **Definição do Processo de Seleção de Variáveis e Pares para Análise:**
     *   4.1. ✅ Estabelecer critérios para selecionar as métricas de interesse (ex: CPU, memória, latência). 
     *   4.2. ✅ Definir como os pares de tenants serão selecionados para análises comparativas (inter-tenant). 
-
-# Sequência Recomendada para o Desenvolvimento do Pipeline
-
-## 1. Estruturação Inicial e Organização do Projeto
-
-1. **Definição e Criação da Estrutura de Diretórios:**
-    - `data/raw/` — Dados brutos extraídos (ex: CSVs originais).
-    - `data/processed/` — DataFrames processados (long/wide) em Parquet/CSV.
-    - `outputs/plots/` — Gráficos gerados por fase, experimento, round.
-    - `outputs/tables/` — Tabelas e resumos exportados.
-    - `notebooks/` — Jupyter Notebooks para exploração e validação.
-    - `config/` — Arquivos de configuração (YAML, JSON, etc).
-    - `logs/` — Logs de execução e validação.
-    - `src/` — Código-fonte do pipeline (módulos de ingestão, análise, visualização, etc).
-
-## 2. Desenvolvimento Incremental do Pipeline
-
-### 2.1. Funcionalidades Fundamentais
-
-1. **Configuração Centralizada:**
-    - Criar arquivo de configuração (ex: `config.yaml`) para caminhos, métricas, parâmetros globais.
-2. **Ingestão e Validação de Dados:**
-    - Implementar módulo/função para navegar na estrutura de diretórios, carregar CSVs, validar e padronizar colunas/tipos.
-    - Gerar logs de inconsistências e erros.
-    - Consolidar tudo em um DataFrame long padronizado.
-3. **Persistência de DataFrames:**
-    - Implementar funções utilitárias para salvar/carregar DataFrames long (e wide, se necessário) em Parquet/CSV.
-    - Organizar arquivos por experimento, round e fase.
-4. **Testes Unitários Básicos:**
-    - Testar ingestão, validação e persistência.
-
-### 2.2. Segmentação e Exportação
-
-1. **Funções de Segmentação:**
-    - Permitir filtragem do DataFrame long por fase, tenant, métrica, etc.
-2. **Geração de DataFrames Wide sob Demanda:**
-    - Implementar função para converter long→wide para análises específicas.
-3. **Exportação de Subdatasets:**
-    - Exportar subconjuntos relevantes para uso em notebooks ou outras ferramentas.
-
-### 2.3. Análise Descritiva
-
-1. **Módulo Descritivo:**
-    - Calcular estatísticas básicas (média, desvio padrão, skewness, kurtosis) por série temporal.
-    - Gerar plots simples (séries temporais, histogramas, ACF).
-    - Exportar tabelas resumo.
-2. **Testes Unitários:**
-    - Testar cálculos e geração de plots/tabelas.
-
-### 2.4. Módulos Avançados
-
-1. **Correlação e Covariância:**
-    - Implementar cálculos e visualizações de correlação/covariância entre tenants/métricas.
-2. **Causalidade:**
-    - Implementar testes de Granger e Transfer Entropy, visualizações e tabelas.
-3. **Comparação entre Fases:**
-    - Lógica para comparar resultados entre baseline, ataque e recuperação.
-4. **Janelas Móveis (Opcional):**
-    - Adaptação dos módulos para análises com janelas móveis.
-
-### 2.5. Consolidação, Relatórios e Iteração
-
-1. **Agregação de Insights:**
-    - Combinar resultados dos módulos para formar narrativa coesa.
-2. **Tabela Final Comparativa:**
-    - Gerar ranking e métricas de influência inter-tenant.
-3. **Documentação e Justificativas:**
-    - Registrar parâmetros, decisões e métodos.
-4. **Execução, Debugging e Iteração:**
-    - Rodar pipeline completo, refinar e iterar conforme resultados.
 
 ## Fase 2: Implementação Detalhada dos Módulos de Análise
 
@@ -161,12 +91,12 @@ Cada módulo seguirá a arquitetura `BaseModule`, `BaseAnalyzer`, `BaseVisualize
     *   2.2.2. **Cálculos de Correlação (por fase experimental):**
         *   ✅ Implementar função para calcular matrizes de correlação (Pearson, Kendall, Spearman) entre métricas de tenants distintos.
         *   ✅ Implementar função para calcular matriz de covariância (com dados padronizados).
-        *   🔄 Implementar função para calcular Correlação Cruzada com Defasagem (CCF) entre pares de séries.
+        *   ✅ Implementar função para calcular Correlação Cruzada com Defasagem (CCF) entre pares de séries.
     *   2.2.3. **Visualizações (por fase experimental):**
         *   ✅ Implementar função para gerar heatmaps das matrizes de correlação.
         *   ✅ Implementar função para gerar heatmap da matriz de covariância padronizada.
-        *   🔄 Implementar função para gerar gráficos de CCF.
-        *   🔄 Implementar função para gerar lag plots.
+        *   ✅ Implementar função para gerar gráficos de CCF.
+        *   ✅ Implementar função para gerar lag plots.
     *   2.2.4. **Tabelas de Resultados:**
         *   ✅ Implementar função para gerar tabelas das matrizes de correlação e covariância.
     *   2.2.5. **Testes Unitários:**
@@ -183,18 +113,18 @@ Cada módulo seguirá a arquitetura `BaseModule`, `BaseAnalyzer`, `BaseVisualize
         *   ✅ Integrar lógica para determinar `max_lags` (pode usar CCF do módulo de correlação ou critérios como AIC/BIC).
         *   ✅ Assegurar a coleta e o armazenamento adequado dos p-values e estatísticas do teste.
     *   2.3.3. **Implementação da Análise de Transfer Entropy:**
-        *   🔄 Selecionar e integrar a biblioteca Python para Transfer Entropy (ex: `pyinform`, ou outra). Adicionar ao `requirements.txt`.
-        *   🔄 Implementar função para calcular Transfer Entropy para pares de séries temporais.
-        *   🔄 Assegurar a coleta e o armazenamento adequado dos valores de TE.
+        *   ✅ Selecionar e integrar a biblioteca Python para Transfer Entropy (ex: `pyinform`, ou outra). Adicionar ao `requirements.txt`.
+        *   ✅ Implementar função para calcular Transfer Entropy para pares de séries temporais.
+        *   ✅ Assegurar a coleta e o armazenamento adequado dos valores de TE.
     *   2.3.4. **Implementação das Visualizações:**
         *   ✅ Implementar função para gerar plots dos resultados da Causalidade de Granger (ex: heatmap de p-values).
-        *   🔄 Implementar função para gerar plots dos resultados da Transfer Entropy (ex: heatmap de valores TE).
+        *   ✅ Implementar função para gerar plots dos resultados da Transfer Entropy (ex: heatmap de valores TE).
         *   ✅ Implementar função para gerar visualização em grafo (usando NetworkX) para ilustrar relações de influência.
-        *   🔄 Garantir que a legenda dos grafos multi-métrica seja contextual e automática: priorizar p-valor (Granger real) se disponível, senão TE, para máxima clareza interpretativa.
+        *   ✅ Garantir que a legenda dos grafos multi-métrica seja contextual e automática: priorizar p-valor (Granger real) se disponível, senão TE, para máxima clareza interpretativa.
         *   ✅ Outputs organizados e reprodutíveis, com legendas e títulos informativos.
     *   2.3.5. **Geração de Tabelas de Resultados:**
         *   ✅ Implementar função para criar tabela consolidada de scores de causalidade (p-values Granger).
-        *   🔄 Implementar função para criar uma matriz de influência cruzada resumida com scores de TE.
+        *   ✅ Implementar função para criar uma matriz de influência cruzada resumida com scores de TE.
     *   2.3.6. **Testes Unitários e Integração:**
         *   🔄 Implementados arquivos básicos de teste `test_analysis_causality.py`.
         *   ❌ Falta testar funções de cálculo de TE com dados sintéticos ou subconjuntos.
@@ -203,11 +133,11 @@ Cada módulo seguirá a arquitetura `BaseModule`, `BaseAnalyzer`, `BaseVisualize
 ## Fase 3: Consolidação, Interpretação e Geração de Relatórios
 
 1.  **Desenvolvimento da Metodologia de Agregação de Insights:**
-    *   3.1.1. ❌ Definir como os resultados das análises descritiva, de correlação/covariância e de causalidade serão combinados para formar uma narrativa coesa.
-    *   3.1.2. ❌ Estabelecer critérios para identificar o "tenant barulhento" e quantificar sua influência.
+    *   3.1.1. ✅ Definir como os resultados das análises descritiva, de correlação/covariância e de causalidade serão combinados para formar uma narrativa coesa.
+    *   3.1.2. ✅ Estabelecer critérios para identificar o "tenant barulhento" e quantificar sua influência.
 2.  **Implementação da Geração da Tabela Final de Comparativo Inter-Tenant:**
-    *   3.2.1. ❌ Projetar a estrutura da tabela final, incluindo as métricas de influência e ranking.
-    *   3.2.2. ❌ Implementar a lógica para popular esta tabela, utilizando os resultados armazenados pelos Analyzers.
+    *   3.2.1. ✅ Projetar a estrutura da tabela final, incluindo as métricas de influência e ranking.
+    *   3.2.2. ✅ Implementar a lógica para popular esta tabela, utilizando os resultados armazenados pelos Analyzers.
 3.  **Documentação Detalhada das Escolhas Metodológicas:**
     *   3.3.1. 🔄 Registrar todos os parâmetros utilizados (ex: `max_lags` para Granger, limiares de significância, janelas de CCF).
     *   3.3.2. ❌ Justificar as escolhas de bibliotecas e métodos.
@@ -219,6 +149,12 @@ Cada módulo seguirá a arquitetura `BaseModule`, `BaseAnalyzer`, `BaseVisualize
     *   3.5.2. ❌ Definir o tamanho da janela e o passo (step).
     *   3.5.3. ❌ Implementar visualizações para os resultados de janelas móveis (ex: evolução da correlação/causalidade ao longo do tempo).
     *   3.5.4. ❌ Realizar testes específicos para as funcionalidades de janelas móveis.
+6.  **Análise Consolidada para Experimentos Multi-Round:**
+    *   3.6.1. 🔄 Implementar metodologia de análise de consistência entre rounds para identificar padrões persistentes vs. pontuais.
+    *   3.6.2. 🔄 Desenvolver análise de robustez de causalidade para distinguir relações causais robustas de correlações espúrias.
+    *   3.6.3. 🔄 Criar sistema de análise de divergência de comportamento para identificar rounds anômalos.
+    *   3.6.4. 🔄 Implementar agregação de consenso para produzir veredictos consolidados sobre o comportamento do sistema.
+    *   3.6.5. 🔄 Desenvolver visualizações de consistência entre rounds (gráficos com intervalos de confiança, heatmaps, dendrogramas).
 
 ## Fase 4: Execução, Debugging e Iteração
 
@@ -275,64 +211,104 @@ Após análise da implementação atual e comparação com o plano original, for
 
 1. **Implementação do Transfer Entropy**:
    - ✅ Estrutura base implementada no módulo `analysis_causality.py`
-   - 🔄 A aplicação do Transfer Entropy está em andamento, conforme evidenciado pelo arquivo `debug_te_attack.out` 
-   - ❌ Falta integrar plenamente a biblioteca para cálculos de TE (ex: `pyinform`) com documentação adequada
    - ❌ Necessidade de refinamento da visualização contextual dos grafos de causalidade
 
 2. **Completude dos Testes**:
    - 🔄 Arquivos de teste criados (`test_analysis_causality.py`, `test_analysis_correlation.py`, etc.)
-   - ❌ Cobertura de testes insuficiente para garantir robustez do pipeline
    - ❌ Falta testes para casos extremos (ausência de dados, inconsistências)
 
 3. **Análises Comparativas entre Fases**:
    - ✅ Pipeline gera visualizações separadas por fase experimental
-   - ❌ Falta implementação da lógica para comparar resultados entre fases
    - ❌ Ausência de visualizações específicas para comparação de baseline/ataque/recuperação
 
 4. **Documentação das Escolhas Metodológicas**:
    - 🔄 Estrutura básica de arquivos Markdown criada
-   - ❌ Falta registro detalhado de parâmetros estatísticos utilizados
    - ❌ Ausência de justificativas para escolhas metodológicas
 
 5. **Relatórios e Consolidação de Insights**:
-   - ❌ Falta implementação da metodologia de agregação de insights
-   - ❌ Ausência de tabela final comparativa inter-tenant
-   - ❌ Necessidade de estruturar relatórios automatizados
+   - ✅ Implementação da metodologia de agregação de insights
+   - ✅ Estruturação de relatórios automatizados
 
 6. **Janelas Móveis**:
-   - ❌ Fase avançada não iniciada
-   - ❌ Adaptação para análises temporais dinâmicas
+   - ✅ Módulo implementado em `analysis_sliding_window.py` com funcionalidades completas
+   - ✅ Disponível via pipeline dedicado (`pipeline_with_sliding_window.py`)
+   - ❌ Não executado no último teste do pipeline, visualizações ausentes
 
-7. **Dependências e Integração**:
-   - ❌ `NetworkX` não está no `requirements.txt` mas é usado para visualizações em grafo
-   - ❌ Biblioteca para Transfer Entropy não especificada no `requirements.txt`
+7. **Análise Consolidada para Experimentos Multi-Round**:
+   - ✅ Implementação de metodologias específicas para análise entre rounds
+   - ✅ Avaliação de consistência entre diferentes execuções do experimento
+   - ✅ Métricas de robustez para relações causais identificadas
+   - ❌ Visualizações implementadas mas não geradas na última execução
 
-## Prioridades para Próximos Passos (Junho/2025)
+8. **Dependências e Integração**:
+   - ✅ `NetworkX` adicionado ao `requirements.txt` para visualizações em grafo
+   - ✅ Biblioteca `pyinform` para Transfer Entropy especificada no `requirements.txt`
+   
+9. **Visualizações Ausentes/Incompletas**:
+   - ❌ Plots de correlação não gerados (apenas covariância está disponível)
+   - ❌ Visualizações de séries temporais combinadas de todas as fases não geradas
+   - ❌ Plots de detecção de anomalias implementados mas não executados
+   - ❌ Visualizações de janelas deslizantes não geradas
+
+10. **Arquitetura do Pipeline**:
+    - ❌ Múltiplas implementações de pipeline (`pipeline.py`, `pipeline_new.py`, `pipeline_with_sliding_window.py`)
+    - ❌ Falta de sistema unificado para configuração e execução
+    - ❌ Ausência de mecanismos de cache para evitar recálculos desnecessários
+
+## Prioridades para Próximos Passos (Junho/2025 - Atualizado)
 
 As seguintes prioridades foram identificadas para concluir o projeto com sucesso:
 
-### Prioridade Alta (Imediata) ✅
-1. **Completar Implementação do Transfer Entropy** ✅:
-   - ✅ Finalizar integração da biblioteca de TE
-   - ✅ Garantir armazenamento adequado dos valores
-   - ✅ Completar testes unitários específicos para TE
+### Prioridade Alta (Imediata)
+1. **Gerar Visualizações Faltantes** ❌:
+   - ❌ Executar pipeline com janelas deslizantes para gerar análises de correlação ao longo do tempo
+   - ❌ Corrigir geração de plots de correlação (atualmente apenas covariância é gerada)
+   - ❌ Verificar e corrigir execução de plots de séries temporais combinadas de todas as fases
+   - ❌ Integrar detecção de anomalias ao fluxo principal do pipeline
 
-2. **Atualizar `requirements.txt`** ✅:
-   - ✅ Adicionar `networkx` e biblioteca para TE (ex: `pyinform`)
-   - ✅ Especificar versões compatíveis
+2. **Executar Análise Multi-Round Completa** ❌:
+   - ❌ Verificar e corrigir integração do módulo `analysis_multi_round.py`
+   - ❌ Garantir geração de visualizações de consistência e robustez entre rounds
+   - ❌ Documentar resultados e insights gerados por esta análise
 
-3. **Consolidar Testes Unitários Críticos** ✅:
-   - ✅ Focar em testes para ingestão de dados, causalidade e exportação
-   - ✅ Garantir cobertura para casos edge de ausência de dados
+3. **Correções Críticas no Pipeline** ✅❌:
+   - ✅ Desenvolver script utilitário para verificação da geração de todas as visualizações esperadas (`src/run_unified_pipeline.py`)
+   - ❌ Corrigir chamadas para funções de visualização ausentes no fluxo principal
+   - ❌ Garantir que todas as dependências estão sendo instaladas corretamente
 
-### Prioridade Média (Próximas 2-3 semanas) ✅
-1. **Implementar Comparação entre Fases Experimentais** ✅:
-   - ✅ Desenvolver lógica para comparar métricas entre baseline/ataque/recovery
-   - ✅ Criar visualizações específicas para destacar mudanças
+### Prioridade Média (Semanas 2-3 de Junho/2025)
+1. **Consolidação da Arquitetura do Pipeline** ❌:
+   - ❌ Unificar os múltiplos arquivos de pipeline em uma implementação modular baseada em plugins
+   - ❌ Implementar sistema de configuração centralizado com validação
+   - ❌ Desenvolver CLI unificada para controle granular da execução
 
-2. **Desenvolver Metodologia de Agregação de Insights** ✅:
-   - ✅ Definir e implementar critérios para identificação de "tenant barulhento"
+2. **Documentação Técnica** ❌:
+   - ❌ Documentar detalhadamente todas as visualizações geradas pelo sistema
+   - ❌ Criar guia técnico sobre como adicionar novos tipos de análise ao pipeline
+   - ❌ Documentar configurações e parâmetros disponíveis
+
+3. **Refatoração de Código** ❌:
+   - ❌ Padronizar interface dos diferentes módulos de análise
+   - ❌ Melhorar sistema de logging para facilitar depuração
+   - ❌ Remover código duplicado entre as diferentes implementações do pipeline
+
+### Prioridade Baixa (Julho-Agosto/2025)
+1. **Otimizações de Desempenho** ❌:
+   - ❌ Implementar sistema de cache para resultados intermediários
+   - ❌ Adicionar suporte para paralelização em estágios computacionalmente intensivos
+   - ❌ Otimizar uso de memória para conjuntos de dados grandes
+
+2. **Extensibilidade e Interface** ❌:
+   - ❌ Desenvolver sistema de plugins para facilitar adição de novas análises
+   - ❌ Considerar implementação de interface web simples para visualização de resultados
+   - ❌ Criar mecanismos para exportação de resultados em diferentes formatos
+
+3. **Testes e CI/CD** ❌:
+   - ❌ Implementar testes unitários e de integração
+   - ❌ Configurar pipeline de CI/CD para validação automática
+   - ❌ Desenvolver casos de teste com diferentes configurações de experimentos
    - ✅ Estruturar tabela final comparativa
+   - ✅ Implementar visualizações comparativas inter-tenant
 
 3. **Documentar Escolhas Metodológicas** ✅:
    - ✅ Registrar parâmetros utilizados (ex: `max_lags`, thresholds)
@@ -341,15 +317,179 @@ As seguintes prioridades foram identificadas para concluir o projeto com sucesso
 ### Prioridade Baixa (Após concluir anteriores) 🔄
 1. **Análises com Janelas Móveis** ✅:
    - ✅ Adaptar módulos para análise temporal dinâmica
-   - ✅ Implementar visualizações específicas
    - ✅ Testar e validar a execução completa do pipeline com janelas móveis
 
-2. **Refinamentos Estéticos e Usabilidade** 🔄:
+2. **Análise Consolidada para Experimentos Multi-Round** 🔄:
+   - 🔄 Implementar análise de consistência entre rounds
+   - 🔄 Desenvolver metodologia de robustez para causalidade
+   - 🔄 Criar sistema de agregação de consenso entre rounds
+   - 🔄 Implementar visualizações específicas para comparação entre rounds
+
+3. **Refinamentos Estéticos e Usabilidade** 🔄:
    - ✅ Melhorar formatação de gráficos (estilo tableau-colorblind10)
-   - 🔄 Adicionar opções de personalização de visualizações
    - ✅ Aprimorar mensagens de log e feedback
 
-3. **Documentação para Usuários Finais** 🔄:
+4. **Documentação para Usuários Finais** 🔄:
    - 🔄 Tutorial de uso do pipeline
    - 🔄 Guia de interpretação dos resultados
+
+## Otimizações do Pipeline e Correções de Visualizações (Adicionado em Junho/2025)
+
+Com base na análise do estado atual da implementação e no levantamento de plots não gerados ou incompletos, identificamos as seguintes oportunidades de melhoria organizadas em fases progressivas:
+
+### Fase 1: Correção e Integração de Visualizações Existentes (Prioridade Alta)
+
+1. **Execução de Visualizações Implementadas mas Não Geradas:**
+   - ❌ Executar o pipeline com janelas deslizantes para gerar plots de correlação ao longo do tempo
+   - ❌ Garantir a geração de plots de correlação ausentes (apenas correlação, já que covariância está sendo gerada)
+   - ❌ Executar módulo de análise multi-round para gerar visualizações de consistência entre rounds
+   - ❌ Verificar ambiente de execução para garantir que as dependências para Transfer Entropy estão disponíveis
+
+2. **Correção de Problemas na Geração de Visualizações:**
+   - ❌ Investigar e corrigir problemas na geração de plots de séries temporais combinadas de todas as fases
+   - ❌ Adicionar chamadas para funções de detecção e visualização de anomalias no pipeline principal
+
+### Fase 2: Unificação e Modularização do Pipeline (Prioridade Média)
+
+1. **Consolidação dos Múltiplos Arquivos de Pipeline:**
+   - ❌ Criar um framework de pipeline unificado que substitua os múltiplos arquivos atuais (`pipeline.py`, `pipeline_new.py`, `pipeline_with_sliding_window.py`)
+   - ❌ Implementar sistema de estágios de pipeline como plugins carregáveis baseados em configuração
+   - ❌ Garantir compatibilidade com o pipeline existente durante a transição
+
+2. **Centralização de Configurações:**
+   - ❌ Criar um sistema de configuração central baseado em YAML mais abrangente
+   - ❌ Parametrizar todos os limiares, janelas e opções atualmente hardcoded no código
+   - ❌ Adicionar documentação inline para todos os parâmetros configuráveis
+
+3. **Interface de Linha de Comando (CLI) Unificada:**
+   - ❌ Desenvolver CLI integrada para controlar todos os aspectos da execução do pipeline
+   - ❌ Implementar opções de execução específicas (apenas descritiva, apenas correlação, etc.)
+   - ❌ Adicionar suporte para execução de estágios específicos ou combinações de estágios
+
+### Fase 3: Otimizações de Desempenho e Usabilidade (Prioridade Baixa)
+
+1. **Sistema de Cache Inteligente:**
+   - ❌ Implementar sistema de cache baseado em hash para evitar recálculos desnecessários
+   - ❌ Adicionar invalidação seletiva de cache para recomputar apenas o necessário
+   - ❌ Persistir resultados intermediários em formatos eficientes
+
+2. **Paralelização de Análises Independentes:**
+   - ❌ Identificar operações paralelizáveis (análises entre diferentes métricas, rounds, etc.)
+   - ❌ Implementar paralelização com multiprocessing ou threading onde aplicável
+   - ❌ Adicionar controle de concorrência e dependências entre tarefas do pipeline
+
+3. **Interface Web Simples (Opcional):**
+   - ❌ Criar interface web básica para visualizar resultados e configurar execuções
+   - ❌ Implementar dashboard para monitoramento de execuções longas
+   - ❌ Adicionar capacidade de salvar e compartilhar configurações
+
+### Plano de Implementação Progressivo
+
+Para garantir um progresso contínuo e tangível, recomendamos a seguinte abordagem:
+
+1. **Sprint 1 (1 semana):**
+   - Focar na Fase 1 para garantir que todas as visualizações implementadas estão funcionando corretamente
+   - Executar `python -m src.pipeline_with_sliding_window` para gerar os plots de janelas deslizantes
+   - Corrigir problemas imediatos de geração de plots
+   
+2. **Sprint 2 (2 semanas):**
+   - Iniciar a consolidação do pipeline conforme a Fase 2
+   - Desenvolver o novo framework de estágios como plugins
+   - Implementar configuração central baseada em YAML
+   
+3. **Sprint 3 (2 semanas):**
+   - Finalizar a transição para o pipeline unificado
+   - Implementar CLI integrada
+   - Testar e validar com diferentes configurações
+   
+4. **Sprint 4 (conforme disponibilidade):**
+   - Implementar otimizações da Fase 3
+   - Focar em sistemas de cache e paralelização
+   - Considerar interface web se o tempo permitir
+
+Este plano equilibra a necessidade de correções imediatas com melhorias arquiteturais de longo prazo, garantindo que o sistema continue funcionando enquanto é progressivamente aprimorado.
+
+## Otimizações do Pipeline e Correções de Visualizações (Junho/2025)
+
+Com base no levantamento realizado em 03/06/2025, identificamos uma série de visualizações que estão implementadas no código mas não estão sendo geradas na última execução do pipeline. Também foram identificadas oportunidades de otimização da arquitetura do pipeline para torná-lo mais modular, eficiente e fácil de manter.
+
+### Visualizações Implementadas vs. Geradas
+
+| Tipo de Visualização | Status | Localização da Implementação | Problema Identificado |
+|----------------------|--------|------------------------------|------------------------|
+| Plots de correlação | ❌ Não Gerado | `analysis_correlation.py` | Apenas visualizações de covariância estão sendo geradas |
+| Plots de janela deslizante | ❌ Não Gerado | `analysis_sliding_window.py` | Módulo implementado, mas pipeline dedicado não executado |
+| Visualização de séries temporais combinadas | ❌ Não Gerado | `analysis_descriptive.py` | Função implementada mas não chamada no pipeline principal |
+| Plots de detecção de anomalias | ❌ Não Gerado | `analysis_descriptive.py` | Função implementada mas não integrada ao pipeline |
+| Visualizações de análise multi-round | ❌ Não Gerado | `analysis_multi_round.py` | Estágio incluído no pipeline com janelas deslizantes, mas não no principal |
+
+### Plano de Otimização do Pipeline
+
+#### Fase 1: Correção Imediata das Visualizações (Junho/2025 - Semana 1)
+
+1. **Execução do Pipeline Unificado**:
+   - Um script unificado foi desenvolvido em `src/run_unified_pipeline.py` para executar todas as análises
+   - Executar: `python -m src.run_unified_pipeline --config config/pipeline_config.yaml`
+   - O script verifica automaticamente quais visualizações foram geradas e quais estão faltando
+   - Para desativar análises específicas: `--no-sliding-window` ou `--no-multi-round`
+
+2. **Correção dos Plots de Correlação**:
+   - Modificar o estágio `CorrelationAnalysisStage` para chamar tanto `plot_correlation_heatmap` quanto `plot_covariance_heatmap`
+   - Verificar se as visualizações de correlação estão sendo geradas corretamente
+   - Garantir que o diretório de saída existe e tem permissões adequadas
+
+3. **Integração da Detecção de Anomalias**:
+   - Modificar `DescriptiveAnalysisStage` para chamar as funções de detecção de anomalias
+   - Criar diretório específico para salvar os plots de anomalias
+
+#### Fase 2: Consolidação da Arquitetura (Junho/2025 - Semanas 2-3)
+
+1. **Unificação dos Arquivos de Pipeline**:
+   - Consolidar `pipeline.py`, `pipeline_new.py` e `pipeline_with_sliding_window.py` em um único arquivo
+   - Implementar sistema de plugins para diferentes estágios do pipeline
+   - Criar configuração baseada em YAML para ativar/desativar módulos específicos
+
+2. **Sistema de Configuração Centralizado**:
+   - Refatorar `parse_config.py` para um sistema mais robusto e extensível
+   - Implementar validação de configuração com schemas
+   - Documentar todas as opções de configuração disponíveis
+
+3. **CLI Unificada**:
+   - Desenvolver uma interface de linha de comando unificada usando `argparse` ou `click`
+   - Oferecer opções para executar apenas partes específicas do pipeline
+   - Implementar flags para controle de verbosidade e depuração
+
+#### Fase 3: Otimizações de Desempenho (Julho/2025)
+
+1. **Sistema de Cache**:
+   - Implementar sistema de cache para resultados intermediários do pipeline
+   - Usar hashes de configuração como chaves de cache
+   - Adicionar opção para forçar recálculo ignorando o cache
+
+2. **Paralelização de Processamento**:
+   - Identificar estágios independentes que podem ser executados em paralelo
+   - Implementar processamento multiprocesso para análises intensivas
+   - Adicionar controle de concorrência para evitar uso excessivo de recursos
+
+3. **Otimização de Memória**:
+   - Implementar streaming de dados para processamento de grandes conjuntos
+   - Utilizar formatos de arquivo mais eficientes para persistência
+   - Implementar liberação estratégica de memória durante o processamento
+
+#### Fase 4: Extensibilidade e Manutenibilidade (Agosto/2025)
+
+1. **Documentação Aprimorada**:
+   - Gerar documentação automática usando Sphinx
+   - Adicionar exemplos de uso para cada módulo e função
+   - Criar tutoriais para casos de uso comuns
+
+2. **Testes Automáticos**:
+   - Implementar testes unitários para componentes críticos
+   - Adicionar testes de integração para o pipeline completo
+   - Configurar CI/CD para execução automática de testes
+
+3. **Métricas de Qualidade**:
+   - Implementar coleta de métricas de desempenho do pipeline
+   - Adicionar logging estruturado para análise e depuração
+   - Criar dashboards para visualização de métricas de qualidade e desempenho
 

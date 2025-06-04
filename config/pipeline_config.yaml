@@ -1,7 +1,7 @@
 # Configuração do Pipeline de Análise Multi-Tenant
 
 # Diretórios de entrada/saída
-data_root: /home/phil/Projects/gpt-nn-analysis/demo-data
+data_root: /home/phil/Projects/gpt-nn-analysis/demo-data/demo-experiment-1-round
 processed_data_dir: /home/phil/Projects/gpt-nn-analysis/data/processed
 output_dir: /home/phil/Projects/gpt-nn-analysis/outputs
 

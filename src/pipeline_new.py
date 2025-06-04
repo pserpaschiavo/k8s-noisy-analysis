@@ -620,6 +620,11 @@ def parse_arguments():
         nargs="+",
         help="Lista de rounds a serem analisados (ex: round-1 round-2)"
     )
+    parser.add_argument(
+        "--force-reprocess",
+        action="store_true",
+        help="Força o reprocessamento dos dados brutos mesmo se existir arquivo parquet"
+    )
     
     return parser.parse_args()
 

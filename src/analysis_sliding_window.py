@@ -149,12 +149,13 @@ class SlidingWindowAnalyzer:
         metric: str,
         phase: str,
         round_id: str,
-        window_size: str = '5min',
-        step_size: str = '1min',
+        window_size: str = '8min',  # Aumentado para 8min para capturar mais pontos
+        step_size: str = '2min',    # Aumentado para 2min para melhorar performance
         method: str = 'granger',
         max_lag: int = 3,
-        min_periods: int = 10,
-        tenant_pairs: List[Tuple[str, str]] = None
+        min_periods: int = 5,       # Reduzido para permitir mais janelas válidas
+        tenant_pairs: List[Tuple[str, str]] = None,
+        bins: int = 5               # Número de bins para transfer entropy
     ) -> Dict[Tuple[str, str], pd.DataFrame]:
         """
         Analisa a causalidade entre tenants em janelas deslizantes.
@@ -699,8 +700,16 @@ class SlidingWindowStage:
             
         config = context.get("config", {})
         output_dir = config.get("output_dir", "outputs")
-        metrics = config.get("selected_metrics", [])
-        rounds = config.get("selected_rounds", [])
+        metrics = config.get("selected_metrics")
+        # Usa as métricas do DataFrame se não foram especificadas no config
+        if not metrics:
+            logger.info("Nenhuma métrica selecionada no config, usando todas as métricas disponíveis no DataFrame")
+            metrics = df_long['metric_name'].unique().tolist()
+        rounds = config.get("selected_rounds")
+        # Usa os rounds do DataFrame se não foram especificados no config
+        if not rounds:
+            logger.info("Nenhum round selecionado no config, usando todos os rounds disponíveis no DataFrame")
+            rounds = df_long['round_id'].unique().tolist()
         
         # Inicializa analisador
         analyzer = SlidingWindowAnalyzer(df_long)
@@ -755,11 +764,11 @@ class SlidingWindowStage:
                         metric=metric,
                         phase=phase,
                         round_id=round_id,
-                        window_size='5min',  # Parâmetros configuráveis
-                        step_size='1min',
+                        window_size='8min',  # Aumentado para capturar mais pontos
+                        step_size='2min',    # Aumentado para melhorar a performance
                         method='granger',
-                        max_lag=3,
-                        min_periods=10
+                        max_lag=2,           # Reduzido para minimizar erros em séries curtas
+                        min_periods=5        # Reduzido para permitir mais janelas válidas
                     )
                     
                     if causality_results_granger:
@@ -789,10 +798,11 @@ class SlidingWindowStage:
                         metric=metric,
                         phase=phase,
                         round_id=round_id,
-                        window_size='5min',  # Parâmetros configuráveis
-                        step_size='1min',
+                        window_size='12min',  # Aumentado ainda mais para garantir pontos suficientes
+                        step_size='4min',     # Passos maiores para melhor performance
                         method='transfer_entropy',
-                        min_periods=10
+                        min_periods=8,        # Mantido em 8 pontos mínimos
+                        bins=5                # Reduzido o número de bins para melhor estimação com menos pontos
                     )
                     
                     if causality_results_te:

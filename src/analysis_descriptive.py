@@ -4,23 +4,47 @@ Description: Descriptive statistics and plotting utilities for multi-tenant time
 """
 import os
 import pandas as pd
+import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import matplotlib.patches as mpatches
 import seaborn as sns
+from functools import lru_cache
+import logging
+
+# Setup logging
+logger = logging.getLogger(__name__)
+
+# Use the style from config
 plt.style.use('tableau-colorblind10')
 
 
-def compute_descriptive_stats(df: pd.DataFrame, groupby_cols=None) -> pd.DataFrame:
+def compute_descriptive_stats(df, groupby_cols=None) -> pd.DataFrame:
     """
-    Compute descriptive statistics (count, mean, std, min, max) for metric_value,
-    grouped by the specified columns (e.g., ['tenant_id', 'metric_name', 'experimental_phase', 'round_id']).
+    Compute descriptive statistics (count, mean, std, min, max, skewness, kurtosis) for metric_value,
+    grouped by the specified columns.
+    
+    Args:
+        df: DataFrame com os dados a serem analisados
+        groupby_cols: List of columns to group by
+        
+    Returns:
+        DataFrame with descriptive statistics
     """
+    
     if groupby_cols is None:
         groupby_cols = ['tenant_id', 'metric_name', 'experimental_phase', 'round_id']
-    stats = df.groupby(groupby_cols)['metric_value'].agg(['count', 'mean', 'std', 'min', 'max']).reset_index()
+    
+    # More comprehensive statistics including skewness and kurtosis
+    stats = df.groupby(groupby_cols)['metric_value'].agg([
+        'count', 'mean', 'std', 'min', 'max',
+        ('skewness', lambda x: x.skew()),
+        ('kurtosis', lambda x: x.kurtosis())
+    ]).reset_index()
+    
+    logger.info(f"Computed descriptive stats for {len(groupby_cols)} groups with {len(stats)} rows")
     return stats
 
 
@@ -31,7 +55,7 @@ def plot_metric_timeseries_multi_tenant(df: pd.DataFrame, metric: str, phase: st
     """
     subset = df[(df['metric_name'] == metric) & (df['experimental_phase'] == phase) & (df['round_id'] == round_id)]
     if subset.empty:
-        print(f"[DEBUG] Sem dados para {metric}, {phase}, {round_id}")
+        logger.warning(f"Sem dados para {metric}, {phase}, {round_id}")
         return None
     if not pd.api.types.is_datetime64_any_dtype(subset['timestamp']):
         subset['timestamp'] = pd.to_datetime(subset['timestamp'], errors='coerce')
@@ -60,7 +84,7 @@ def plot_metric_barplot_by_phase(df: pd.DataFrame, metric: str, round_id: str, o
     import numpy as np
     subset = df[(df['metric_name'] == metric) & (df['round_id'] == round_id)]
     if subset.empty:
-        print(f"[DEBUG] Sem dados para {metric} em {round_id}")
+        logger.warning(f"Sem dados para {metric} em {round_id}")
         return None
     phases = subset['experimental_phase'].unique()
     tenants = subset['tenant_id'].unique()
@@ -76,7 +100,7 @@ def plot_metric_barplot_by_phase(df: pd.DataFrame, metric: str, round_id: str, o
     plt.figure(figsize=(10, 6))
     for i, tenant in enumerate(tenants):
         plt.bar(x + i*width, means[tenant], width, yerr=stds[tenant], label=tenant, capsize=5)
-    plt.xticks(x + width*(len(tenants)-1)/2, phases)
+    plt.xticks(x + width*(len(tenants)-1)/2, phases.tolist() if isinstance(phases, np.ndarray) else phases) # Convert to list
     plt.xlabel('Fase experimental')
     plt.ylabel(f'{metric} (média ± desvio padrão)')
     plt.title(f'Comparação de {metric} por fase e tenant - {round_id}')
@@ -96,7 +120,7 @@ def plot_metric_timeseries_multi_tenant_all_phases(df: pd.DataFrame, metric: str
     """
     subset = df[(df['metric_name'] == metric) & (df['round_id'] == round_id)].copy()
     if subset.empty:
-        print(f"[DEBUG] Sem dados para {metric} em {round_id}")
+        logger.warning(f"Sem dados para {metric} em {round_id}")
         return None
     if not pd.api.types.is_datetime64_any_dtype(subset['timestamp']):
         subset['timestamp'] = pd.to_datetime(subset['timestamp'], errors='coerce')
@@ -181,4 +205,127 @@ def plot_metric_boxplot(df: pd.DataFrame, metric: str, round_id: str, out_dir: s
     out_path = os.path.join(out_dir, f"boxplot_{metric}_{round_id}.png")
     plt.savefig(out_path)
     plt.close()
+    return out_path
+
+
+def detect_anomalies(df: pd.DataFrame, metric: str, phase: str, round_id: str, window_size: int = 10, threshold: float = 2.0) -> pd.DataFrame:
+    """
+    Detecta anomalias nas séries temporais usando rolling window e Z-score.
+    
+    Args:
+        df: DataFrame em formato long
+        metric: Nome da métrica para analisar
+        phase: Fase experimental para filtrar
+        round_id: ID do round para filtrar
+        window_size: Tamanho da janela para médias móveis
+        threshold: Limiar de Z-score para considerar um ponto como anomalia
+        
+    Returns:
+        DataFrame com as anomalias detectadas
+    """
+    subset = df[(df['metric_name'] == metric) & (df['experimental_phase'] == phase) & (df['round_id'] == round_id)].copy()
+    if subset.empty:
+        logger.warning(f"Sem dados para detecção de anomalias: {metric}, {phase}, {round_id}")
+        return pd.DataFrame()
+    
+    if not pd.api.types.is_datetime64_any_dtype(subset['timestamp']):
+        subset['timestamp'] = pd.to_datetime(subset['timestamp'], errors='coerce')
+    
+    # Ordenar por timestamp para rolling window
+    subset = subset.sort_values(['tenant_id', 'timestamp'])
+    
+    # Inicializar DataFrame para resultados
+    anomalies = pd.DataFrame()
+    
+    # Processar cada tenant separadamente
+    for tenant, group in subset.groupby('tenant_id'):
+        # Calcular estatísticas rolling (média e desvio padrão)
+        rolling_mean = group['metric_value'].rolling(window=window_size, center=True).mean()
+        rolling_std = group['metric_value'].rolling(window=window_size, center=True).std()
+        
+        # Substituir NaN no início/fim do rolling por médias globais
+        rolling_mean = rolling_mean.fillna(group['metric_value'].mean())
+        rolling_std = rolling_std.fillna(group['metric_value'].std())
+        rolling_std = rolling_std.replace(0, group['metric_value'].std())  # Evitar divisão por zero
+        
+        # Calcular Z-score
+        z_scores = np.abs((group['metric_value'] - rolling_mean) / rolling_std)
+        
+        # Identificar anomalias
+        is_anomaly = z_scores > threshold
+        
+        # Filtrar anomalias e adicionar ao DataFrame de resultados
+        tenant_anomalies = group[is_anomaly].copy()
+        if not tenant_anomalies.empty:
+            tenant_anomalies['z_score'] = z_scores[is_anomaly]
+            anomalies = pd.concat([anomalies, tenant_anomalies])
+    
+    # Ordenar por gravidade (Z-score)
+    if not anomalies.empty:
+        anomalies = anomalies.sort_values('z_score', ascending=False)
+        logger.info(f"Detectadas {len(anomalies)} anomalias para {metric} em {phase}, {round_id}")
+    else:
+        logger.info(f"Nenhuma anomalia detectada para {metric} em {phase}, {round_id}")
+    
+    return anomalies
+
+
+def plot_anomalies(df: pd.DataFrame, anomalies: pd.DataFrame, metric: str, phase: str, round_id: str, out_dir: str) -> str | None:
+    """
+    Plota série temporal com anomalias destacadas.
+    
+    Args:
+        df: DataFrame completo em formato long
+        anomalies: DataFrame com anomalias detectadas
+        metric: Nome da métrica
+        phase: Fase experimental
+        round_id: ID do round
+        out_dir: Diretório de saída para o gráfico
+        
+    Returns:
+        Caminho para o gráfico gerado ou None se não houver dados/anomalias
+    """
+    if anomalies.empty:
+        logger.info(f"Sem anomalias para plotar: {metric}, {phase}, {round_id}")
+        return None
+    
+    subset = df[(df['metric_name'] == metric) & (df['experimental_phase'] == phase) & (df['round_id'] == round_id)]
+    if subset.empty:
+        logger.warning(f"Sem dados para plotar anomalias: {metric}, {phase}, {round_id}")
+        return None
+    
+    if not pd.api.types.is_datetime64_any_dtype(subset['timestamp']):
+        subset['timestamp'] = pd.to_datetime(subset['timestamp'], errors='coerce')
+    
+    plt.figure(figsize=(14, 7))
+    color_map = cm.get_cmap('tab10')
+    
+    # Plotar séries temporais normais
+    for i, (tenant, group) in enumerate(subset.groupby('tenant_id')):
+        group = group.sort_values('timestamp')
+        t0 = group['timestamp'].iloc[0]
+        elapsed = (group['timestamp'] - t0).dt.total_seconds()
+        plt.plot(elapsed, group['metric_value'], marker='o', markersize=3, linestyle='-', 
+                label=tenant, color=color_map(i), alpha=0.7)
+    
+    # Destacar anomalias
+    for i, (tenant, group) in enumerate(anomalies.groupby('tenant_id')):
+        t0 = subset[subset['tenant_id'] == tenant]['timestamp'].iloc[0]
+        elapsed = (group['timestamp'] - t0).dt.total_seconds()
+        plt.scatter(elapsed, group['metric_value'], color='red', s=100, marker='X', 
+                   label=f"{tenant} (anomalias)" if i == 0 else "_nolegend_", zorder=10)
+    
+    plt.title(f"Série temporal com anomalias - {metric} - {phase} - {round_id}")
+    plt.xlabel("Segundos desde o início da fase")
+    plt.ylabel(metric)
+    plt.grid(True)
+    plt.legend(title='Tenant')
+    plt.tight_layout()
+    
+    os.makedirs(out_dir, exist_ok=True)
+    out_path = os.path.join(out_dir, f"anomalies_{metric}_{phase}_{round_id}.png")
+    plt.savefig(out_path)
+    plt.close()
+    
+    logger.info(f"Gráfico de anomalias salvo em {out_path}")
     return out_path

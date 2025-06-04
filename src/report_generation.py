@@ -13,7 +13,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Union, Tuple
 from datetime import datetime
 
 # Configuração dos gráficos
@@ -312,3 +312,307 @@ def generate_tenant_ranking_plot(tenant_metrics: pd.DataFrame, output_path: str)
     plt.close()
     
     logger.info(f"Ranking de tenants salvo em: {output_path}")
+
+def aggregate_tenant_insights(
+    tenant_metrics: pd.DataFrame,
+    phase_comparison_results: Dict[str, pd.DataFrame],
+    granger_matrices: Dict[str, pd.DataFrame],
+    te_matrices: Dict[str, pd.DataFrame],
+    correlation_matrices: Dict[str, Dict[str, pd.DataFrame]],
+    anomaly_metrics: Optional[Dict[str, pd.DataFrame]] = None
+) -> Dict[str, Dict[str, Any]]:
+    """
+    Agrega insights sobre cada tenant a partir de todas as análises disponíveis.
+    
+    Args:
+        tenant_metrics: DataFrame com métricas de cada tenant
+        phase_comparison_results: Resultados da comparação entre fases
+        granger_matrices: Matrizes de causalidade de Granger
+        te_matrices: Matrizes de Transfer Entropy
+        correlation_matrices: Matrizes de correlação
+        anomaly_metrics: Dicionário com informações sobre anomalias detectadas
+        
+    Returns:
+        Dicionário com insights consolidados para cada tenant
+    """
+    insights = {}
+    
+    # Inicialização de insights para cada tenant
+    for tenant in tenant_metrics['tenant_id'].unique():
+        insights[tenant] = {
+            # Informações gerais
+            'name': tenant,
+            'rank': None,
+            'noisy_score': 0.0,
+            
+            # Insights específicos
+            'is_noisy_tenant': False,
+            'is_victim_tenant': False,
+            'main_impacted_tenants': [],
+            'main_impact_sources': [],
+            
+            # Métricas com comportamento anômalo
+            'anomalous_metrics': [],
+            
+            # Padrões detectados
+            'attack_phase_patterns': [],
+            'correlation_patterns': [],
+            
+            # Recomendações geradas
+            'recommendations': []
+        }
+    
+    # Preencher informações básicas de ranking e score
+    for idx, row in enumerate(tenant_metrics.itertuples()):
+        tenant = row.tenant_id
+        insights[tenant]['rank'] = idx + 1
+        insights[tenant]['noisy_score'] = row.noisy_score
+        
+        # Determinar se é um "tenant barulhento" (top 25%)
+        if idx < len(tenant_metrics) // 4:
+            insights[tenant]['is_noisy_tenant'] = True
+    
+    # Analisar causalidade para determinar relações de impacto
+    for metric, matrix in te_matrices.items():
+        if matrix.empty:
+            continue
+            
+        # Para cada tenant como fonte de causalidade
+        for tenant in insights.keys():
+            if tenant not in matrix.columns:
+                continue
+                
+            # Identificar os principais tenants impactados por este tenant
+            # (maiores valores de TE indicam mais influência)
+            if tenant in matrix.columns:
+                te_values = matrix[tenant].drop(tenant) if tenant in matrix.index else matrix[tenant]
+                if not te_values.empty:
+                    # Top 2 tenants mais influenciados, com TE > 0.05
+                    impacted = te_values[te_values > 0.05].nlargest(2)
+                    for impacted_tenant, te_val in impacted.items():
+                        impact_info = {
+                            'tenant': impacted_tenant,
+                            'score': float(te_val),
+                            'metric': metric
+                        }
+                        insights[tenant]['main_impacted_tenants'].append(impact_info)
+                        
+                        # Marcar o tenant impactado como potencial "vítima"
+                        if impacted_tenant in insights:
+                            insights[impacted_tenant]['is_victim_tenant'] = True
+                            insights[impacted_tenant]['main_impact_sources'].append({
+                                'tenant': tenant,
+                                'score': float(te_val),
+                                'metric': metric
+                            })
+    
+    # Analisar comparação entre fases para identificar padrões durante ataque
+    for metric, stats_df in phase_comparison_results.items():
+        if stats_df.empty:
+            continue
+            
+        for _, row in stats_df.iterrows():
+            tenant = row['tenant_id']
+            if tenant not in insights:
+                continue
+                
+            # Verificar variação significativa durante ataque
+            attack_vs_baseline_col = '2 - Attack_vs_baseline_pct'
+            if attack_vs_baseline_col in row and not pd.isna(row[attack_vs_baseline_col]):
+                variation = row[attack_vs_baseline_col]
+                if abs(variation) > 30:  # Variação maior que 30%
+                    pattern = {
+                        'metric': metric,
+                        'variation_pct': float(variation),
+                        'direction': 'increase' if variation > 0 else 'decrease'
+                    }
+                    insights[tenant]['attack_phase_patterns'].append(pattern)
+    
+    # Analisar anomalias, se disponíveis
+    if anomaly_metrics and isinstance(anomaly_metrics, dict):
+        for metric, anomalies_df in anomaly_metrics.items():
+            if anomalies_df.empty:
+                continue
+                
+            for tenant in anomalies_df['tenant_id'].unique():
+                if tenant not in insights:
+                    continue
+                    
+                tenant_anomalies = anomalies_df[anomalies_df['tenant_id'] == tenant]
+                if not tenant_anomalies.empty:
+                    insights[tenant]['anomalous_metrics'].append({
+                        'metric': metric,
+                        'anomaly_count': len(tenant_anomalies),
+                        'max_zscore': float(tenant_anomalies['z_score'].max())
+                    })
+    
+    # Gerar recomendações específicas para cada tenant
+    for tenant, tenant_insight in insights.items():
+        recommendations = []
+        
+        # Para tenants barulhentos
+        if tenant_insight['is_noisy_tenant']:
+            recommendations.append("Considerar ajuste de limites de recursos para evitar impacto nos outros tenants.")
+            
+            # Se tiver anomalias, adicionar recomendação específica
+            if tenant_insight['anomalous_metrics']:
+                metrics_list = [m['metric'] for m in tenant_insight['anomalous_metrics']]
+                recommendations.append(f"Investigar picos anômalos de utilização nas métricas: {', '.join(metrics_list)}.")
+        
+        # Para tenants vítimas
+        if tenant_insight['is_victim_tenant'] and tenant_insight['main_impact_sources']:
+            impact_sources = [s['tenant'] for s in tenant_insight['main_impact_sources']]
+            recommendations.append(f"Considerar isolamento de {tenant} dos tenants que o impactam: {', '.join(impact_sources)}.")
+        
+        # Para tenants com padrões detectados durante ataque
+        if tenant_insight['attack_phase_patterns']:
+            metrics_with_patterns = [p['metric'] for p in tenant_insight['attack_phase_patterns']]
+            recommendations.append(f"Monitorar em tempo real as métricas que mostraram maior sensibilidade durante ataque: {', '.join(metrics_with_patterns)}.")
+        
+        tenant_insight['recommendations'] = recommendations
+    
+    return insights
+
+def generate_comparative_table(tenant_insights: Dict[str, Dict[str, Any]]) -> pd.DataFrame:
+    """
+    Gera tabela comparativa final para análise inter-tenant.
+    
+    Args:
+        tenant_insights: Dicionário com insights agregados de cada tenant
+        
+    Returns:
+        DataFrame com tabela comparativa detalhada
+    """
+    # Estrutura para armazenar dados da tabela
+    table_data = []
+    
+    for tenant_id, insights in tenant_insights.items():
+        # Dados básicos
+        tenant_data = {
+            'tenant_id': tenant_id,
+            'rank': insights['rank'],
+            'impact_score': insights['noisy_score'],
+            'is_noisy': insights['is_noisy_tenant'],
+            'is_victim': insights['is_victim_tenant'],
+        }
+        
+        # Contagem de métricas anômalas
+        tenant_data['anomaly_count'] = len(insights['anomalous_metrics'])
+        
+        # Principais tenants impactados por este tenant
+        impacted_tenants = insights['main_impacted_tenants']
+        tenant_data['impacts_others'] = len(impacted_tenants) > 0
+        tenant_data['main_impacted'] = ', '.join([f"{item['tenant']} ({item['score']:.2f})" 
+                                              for item in impacted_tenants[:2]])
+        
+        # Principais fontes de impacto neste tenant
+        impact_sources = insights['main_impact_sources']
+        tenant_data['impacted_by_others'] = len(impact_sources) > 0
+        tenant_data['main_sources'] = ', '.join([f"{item['tenant']} ({item['score']:.2f})" 
+                                              for item in impact_sources[:2]])
+        
+        # Comportamento durante fase de ataque
+        attack_patterns = insights['attack_phase_patterns']
+        tenant_data['attack_pattern_count'] = len(attack_patterns)
+        tenant_data['attack_patterns'] = ', '.join([f"{p['metric']} ({p['direction']}: {p['variation_pct']:.1f}%)" 
+                                                 for p in attack_patterns[:2]])
+        
+        # Recomendações principais
+        recommendations = insights['recommendations']
+        tenant_data['recommendation_count'] = len(recommendations)
+        tenant_data['top_recommendation'] = recommendations[0] if recommendations else ""
+        
+        table_data.append(tenant_data)
+    
+    # Criar DataFrame e ordenar por rank
+    if not table_data:
+        return pd.DataFrame()
+        
+    df = pd.DataFrame(table_data)
+    df = df.sort_values(by='rank')
+    
+    return df
+
+
+def plot_comparative_metrics(comparative_table: pd.DataFrame, out_dir: str) -> Optional[str]:
+    """
+    Gera visualização comparativa das métricas de análise inter-tenant.
+    
+    Args:
+        comparative_table: Tabela comparativa gerada
+        out_dir: Diretório para salvar a visualização
+        
+    Returns:
+        Caminho para o arquivo gerado ou None se não houver dados
+    """
+    if comparative_table.empty:
+        return None
+    
+    # Extrair dados relevantes para visualização
+    plot_data = comparative_table[['tenant_id', 'impact_score', 'is_noisy', 'is_victim', 
+                                  'anomaly_count', 'attack_pattern_count']].copy()
+    
+    # Converter para formato mais adequado para visualização
+    plot_data['tenant_type'] = 'Normal'
+    plot_data.loc[plot_data['is_noisy'], 'tenant_type'] = 'Noisy'
+    plot_data.loc[plot_data['is_victim'], 'tenant_type'] = 'Victim'
+    plot_data.loc[plot_data['is_noisy'] & plot_data['is_victim'], 'tenant_type'] = 'Noisy+Victim'
+    
+    # Gerar visualização comparativa
+    plt.figure(figsize=(12, 8))
+    
+    # Configurar cores por tipo de tenant
+    colors = {
+        'Normal': 'gray',
+        'Noisy': 'red',
+        'Victim': 'blue',
+        'Noisy+Victim': 'purple'
+    }
+    
+    # Barplot principal
+    ax = sns.barplot(
+        x='tenant_id', 
+        y='impact_score', 
+        data=plot_data,
+        hue='tenant_type',
+        palette=colors,
+        dodge=False
+    )
+    
+    # Adicionar pontos para anomalias e padrões de ataque
+    for idx, row in enumerate(plot_data.itertuples()):
+        if row.anomaly_count > 0:
+            plt.scatter(idx, row.impact_score + 0.05, marker='*', s=200, color='yellow', 
+                      edgecolor='black', label='_nolegend_')
+        
+        if row.attack_pattern_count > 0:
+            plt.scatter(idx, row.impact_score + 0.1, marker='^', s=100, color='orange', 
+                      edgecolor='black', label='_nolegend_')
+    
+    # Legendas customizadas para os marcadores
+    from matplotlib.lines import Line2D
+    legend_elements = [
+        Line2D([0], [0], marker='*', color='w', markerfacecolor='yellow', markersize=15,
+               markeredgecolor='black', label='Anomalias Detectadas'),
+        Line2D([0], [0], marker='^', color='w', markerfacecolor='orange', markersize=10,
+               markeredgecolor='black', label='Padrões em Fase de Ataque')
+    ]
+    
+    # Combinar legendas
+    handles, labels = ax.get_legend_handles_labels()
+    ax.legend(handles=handles + legend_elements, loc='best')
+    
+    plt.title('Análise Comparativa Inter-Tenant', fontsize=14, fontweight='bold')
+    plt.xlabel('Tenant', fontsize=12)
+    plt.ylabel('Score de Impacto', fontsize=12)
+    plt.xticks(rotation=45)
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    plt.tight_layout()
+    
+    # Salvar visualização
+    os.makedirs(out_dir, exist_ok=True)
+    out_path = os.path.join(out_dir, f"comparative_metrics_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png")
+    plt.savefig(out_path, dpi=300)
+    plt.close()
+    
+    return out_path

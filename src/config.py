@@ -8,6 +8,7 @@ import os
 DATA_ROOT = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'demo-data')
 PROCESSED_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'processed')
 CONFIG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config')
+OUTPUT_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'outputs') # Added OUTPUT_DIR
 
 # Default output paths
 CONSOLIDATED_LONG_PATH = os.path.join(PROCESSED_DATA_DIR, 'consolidated_long.parquet')
@@ -21,4 +22,5 @@ DEFAULT_SELECTED_ROUNDS = None   # or list of round names
 def ensure_directories():
     os.makedirs(PROCESSED_DATA_DIR, exist_ok=True)
     os.makedirs(CONFIG_DIR, exist_ok=True)
+    os.makedirs(OUTPUT_DIR, exist_ok=True) # Ensure OUTPUT_DIR is created
 

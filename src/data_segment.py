@@ -14,18 +14,22 @@ def filter_long_df(
     experiment_id: Optional[str] = None
 ) -> pd.DataFrame:
     """Filter the long DataFrame by phase, tenant, metric, round, and/or experiment."""
-    mask = pd.Series([True] * len(df))
+    # Criar uma cópia para evitar SettingWithCopyWarning e outros problemas de visualização
+    filtered_df = df.copy()
+    
+    # Aplicar filtros sequencialmente em vez de usar operadores bit a bit com máscaras
     if phase:
-        mask &= df['experimental_phase'] == phase
+        filtered_df = filtered_df[filtered_df['experimental_phase'] == phase]
     if tenant:
-        mask &= df['tenant_id'] == tenant
+        filtered_df = filtered_df[filtered_df['tenant_id'] == tenant]
     if metric:
-        mask &= df['metric_name'] == metric
+        filtered_df = filtered_df[filtered_df['metric_name'] == metric]
     if round_id:
-        mask &= df['round_id'] == round_id
+        filtered_df = filtered_df[filtered_df['round_id'] == round_id]
     if experiment_id:
-        mask &= df['experiment_id'] == experiment_id
-    return df[mask].copy()
+        filtered_df = filtered_df[filtered_df['experiment_id'] == experiment_id]
+        
+    return filtered_df
 
 def get_wide_format_for_analysis(
     df: pd.DataFrame,

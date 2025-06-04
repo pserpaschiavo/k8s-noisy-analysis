@@ -17,14 +17,32 @@ import networkx as nx
 import statsmodels.api as sm
 from statsmodels.tsa.stattools import grangercausalitytests
 from statsmodels.tools.sm_exceptions import MissingDataError
+from functools import lru_cache
+import warnings
+
+# Importa utilitários para processamento de séries temporais
+try:
+    from src.utils_timeseries import check_and_transform_timeseries, resample_and_align_timeseries
+    UTILS_AVAILABLE = True
+except ImportError:
+    UTILS_AVAILABLE = False
+    logging.warning("Módulo utils_timeseries não disponível. Algumas otimizações não serão aplicadas.")
+
+# Configurar logging
+logger = logging.getLogger(__name__)
+
+# Suprimir avisos específicos de statsmodels
+warnings.filterwarnings("ignore", "Maximum Likelihood optimization failed to converge")
+warnings.filterwarnings("ignore", "Unable to solve the eigenvalue problem")
 
 # Importação da biblioteca pyinform para Transfer Entropy mais robusta
 try:
     from pyinform.transferentropy import transfer_entropy
     PYINFORM_AVAILABLE = True
+    logger.info("pyinform disponível. Usando implementação otimizada para Transfer Entropy.")
 except ImportError:
     PYINFORM_AVAILABLE = False
-    logging.warning("pyinform não está instalado. Transfer Entropy usará implementação básica.")
+    logger.warning("pyinform não está instalado. Transfer Entropy usará implementação básica. Instale com: pip install pyinform")
 
 plt.style.use('tableau-colorblind10')
 
@@ -124,20 +142,38 @@ def plot_causality_graph(causality_matrix: pd.DataFrame, out_path: str, threshol
     plt.close()
     return out_path
 
-def _transfer_entropy(x, y, bins=8, k=1):
+def _transfer_entropy(x, y, bins=5, k=1):
     """
     Calcula a Transfer Entropy (TE) de y para x (y→x) usando implementação otimizada.
     
     Args:
         x: Array 1D representando a série temporal destino (target)
         y: Array 1D representando a série temporal fonte (source)
-        bins: Número de bins para discretização (default=8)
+        bins: Número de bins para discretização (default=5)
         k: Histórico da série destino a considerar (default=1)
         
     Returns:
         valor escalar de TE (y→x): quanto y ajuda a prever x além da história de x
     """
-    if PYINFORM_AVAILABLE:
+    # Verificar dados de entrada
+    min_points = 8  # Reduzido de 10 para permitir mais cálculos
+    if len(x) != len(y):
+        logger.warning(f"Comprimentos desiguais para TE: x={len(x)}, y={len(y)}. Alinhando séries.")
+        # Truncar para o menor comprimento
+        length = min(len(x), len(y))
+        x = x[:length]
+        y = y[:length]
+    
+    if len(x) < min_points:
+        logger.warning(f"Dados insuficientes para TE: {len(x)} pontos disponíveis. Mínimo {min_points} pontos.")
+        return 0.0
+    
+    # Tratar valores ausentes (NaN)
+    x = np.nan_to_num(x, nan=np.nanmean(x))
+    y = np.nan_to_num(y, nan=np.nanmean(y))
+    
+    # Se pyinform está disponível, use implementação otimizada
+    if 'transfer_entropy' in globals() and PYINFORM_AVAILABLE:
         try:
             # Usa a implementação mais robusta da biblioteca pyinform
             # Normalização e binning automático de séries
@@ -148,11 +184,12 @@ def _transfer_entropy(x, y, bins=8, k=1):
             x_bin = np.floor(x_norm * (bins-1)).astype(int)
             y_bin = np.floor(y_norm * (bins-1)).astype(int)
             
-            # Calcula TE usando pyinform
+            # Calcular TE usando pyinform
+            from pyinform.transferentropy import transfer_entropy
             te_value = transfer_entropy(y_bin, x_bin, k=k, local=False)
-            return te_value
+            return float(te_value)  # Garantir tipo escalar
         except Exception as e:
-            logging.warning(f"Erro ao usar pyinform para TE: {e}. Usando implementação básica.")
+            logger.warning(f"Erro ao usar pyinform para TE: {e}. Usando implementação básica.")
     
     # Implementação básica fallback usando histogramas numpy
     # Discretiza as séries
@@ -190,9 +227,40 @@ class CausalityAnalyzer:
     def __init__(self, df: pd.DataFrame):
         self.df = df
 
+    def _granger_causality_test(self, source_series: np.ndarray, target_series: np.ndarray, max_lag: int = 3) -> dict:
+        """
+        Executa um teste de causalidade de Granger entre duas séries temporais.
+        
+        Args:
+            source_series: Série temporal fonte (possível causa)
+            target_series: Série temporal alvo (possível efeito)
+            max_lag: Número máximo de lags para testar
+            
+        Returns:
+            Dicionário com resultados do teste ou None se falhar
+        """
+        try:
+            # Cria um DataFrame com as duas séries
+            data = pd.DataFrame({
+                'target': target_series,
+                'source': source_series
+            })
+            
+            # Executa o teste de Granger
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                results = grangercausalitytests(data, maxlag=max_lag, verbose=False)
+                
+            return results
+        except Exception as e:
+            logger.warning(f"Erro no teste de causalidade de Granger: {str(e)}")
+            return {}
+
+    @lru_cache(maxsize=32)
     def compute_granger_matrix(self, metric: str, phase: str, round_id: str, maxlag: int = 5) -> pd.DataFrame:
         """
         Calcula a matriz de p-valores do teste de causalidade de Granger entre todos os tenants para uma métrica específica.
+        Resultados são cacheados para melhorar performance em execuções repetidas.
         
         Args:
             metric: Nome da métrica para análise
@@ -203,6 +271,7 @@ class CausalityAnalyzer:
         Returns:
             DataFrame onde mat[i,j] é o menor p-valor de j causando i (considerando lags de 1 a maxlag)
         """
+        logger.info(f"Calculando matriz de causalidade Granger para {metric}, {phase}, {round_id}, maxlag={maxlag}")
         subset = self.df[(self.df['metric_name'] == metric) & 
                         (self.df['experimental_phase'] == phase) & 
                         (self.df['round_id'] == round_id)]
@@ -221,18 +290,40 @@ class CausalityAnalyzer:
             for source in tenants:
                 if target == source:
                     continue
-                    
-                # Obtém as séries relevantes
+                
                 try:
                     # Seleciona apenas dados com sobreposição de timestamps
                     data = pd.concat([wide[target], wide[source]], axis=1)
                     data = data.dropna()
                     
-                    if len(data) < maxlag + 2:
+                    # Verificação adicional para garantir dados suficientes
+                    if len(data) < maxlag + 5:  # Requer pelo menos 5 pontos além do maxlag
+                        logger.warning(f"Dados insuficientes para teste Granger {source}->{target}: {len(data)} pontos, mínimo {maxlag+5}")
                         continue
                         
-                    # Realiza teste de Granger
-                    try:
+                    # Verificar estacionariedade antes do teste
+                    from statsmodels.tsa.stattools import adfuller
+                    # Diferenciação de primeira ordem se não for estacionário
+                    for col in [0, 1]:
+                        adf_result = adfuller(data.iloc[:, col], autolag='AIC')
+                        if adf_result[1] > 0.05:  # p-valor > 0.05 indica não-estacionariedade
+                            # Aplicamos diferenciação - use .astype(float) para garantir tipo compatível
+                            col_data = data.iloc[:, col].diff().dropna().astype(float)
+                            # Reconstruir o DataFrame para evitar o aviso de tipo incompatível
+                            data = data.iloc[1:].copy()  # Remove a primeira linha que seria NaN após diff()
+                            # Usar iteração para evitar problemas de tipo na atribuição
+                            for idx in range(len(data)):
+                                data.iat[idx, col] = col_data.iloc[idx]
+                            
+                    data = data.dropna()  # Remover valores NaN após diferenciação
+                    
+                    if len(data) <= maxlag + 3:  # Verifica novamente após diferenciação
+                        logger.warning(f"Dados insuficientes após diferenciação: {len(data)} pontos")
+                        continue
+                        
+                    with warnings.catch_warnings():
+                        warnings.simplefilter('ignore')
+                        # Realiza teste de Granger com tratamento de erro aprimorado
                         test_results = grangercausalitytests(
                             data, 
                             maxlag=maxlag, 
@@ -242,22 +333,24 @@ class CausalityAnalyzer:
                         # Extrai o menor p-valor entre todos os lags
                         p_values = [test_results[lag][0]['ssr_chi2test'][1] for lag in range(1, maxlag+1)]
                         min_p_value = min(p_values) if p_values else np.nan
-                        
-                        # Armazena o resultado na matriz
-                        mat.loc[target, source] = min_p_value
-                    except MissingDataError:
-                        continue
-                    except Exception as e:
-                        logging.warning(f"Erro ao calcular Granger para {source}->{target}: {str(e)}")
-                        continue
+                    
+                    # Armazena o resultado na matriz
+                    mat.loc[target, source] = min_p_value
                 except KeyError:
+                    continue
+                except MissingDataError:
+                    continue
+                except Exception as e:
+                    logging.warning(f"Erro ao calcular Granger para {source}->{target}: {str(e)}")
                     continue
                     
         return mat
 
+    @lru_cache(maxsize=32)
     def compute_transfer_entropy_matrix(self, metric: str, phase: str, round_id: str, bins: int = 8, k: int = 1) -> pd.DataFrame:
         """
         Calcula a matriz de Transfer Entropy (TE) entre todos os tenants para uma métrica específica.
+        Resultados são cacheados para melhorar performance em execuções repetidas.
         
         Args:
             metric: Nome da métrica para análise
@@ -271,7 +364,7 @@ class CausalityAnalyzer:
             Valores mais altos indicam maior transferência de informação
         """
         # Log do início do cálculo
-        logging.info(f"Calculando matriz de Transfer Entropy para {metric} em {phase} ({round_id})")
+        logger.info(f"Calculando matriz de Transfer Entropy para {metric} em {phase} ({round_id}), bins={bins}, k={k}")
         
         # Filtra os dados relevantes
         subset = self.df[(self.df['metric_name'] == metric) & 
@@ -304,10 +397,13 @@ class CausalityAnalyzer:
                     source_values = source_series.loc[common_idx].values
                     
                     # Verifica se há pontos suficientes para cálculo significativo
-                    if len(target_values) > 10:
+                    if len(target_values) >= 8:  # Reduzido de 10 para 8 pontos mínimos
                         # Calcula TE e armazena na matriz
-                        te_value = _transfer_entropy(target_values, source_values, bins=bins, k=k)
-                        mat.loc[target, source] = te_value
+                        try:
+                            te_value = _transfer_entropy(target_values, source_values, bins=bins, k=k)
+                            mat.loc[target, source] = te_value
+                        except Exception as calc_error:
+                            logging.warning(f"Erro no cálculo de TE para {source}->{target}: {calc_error}")
                     else:
                         logging.warning(f"Série temporal insuficiente para par {source}->{target}: {len(target_values)} pontos")
                         

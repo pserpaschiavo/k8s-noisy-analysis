@@ -18,10 +18,11 @@ from typing import Dict, Any, Optional
 from src.pipeline import Pipeline, PipelineStage, parse_arguments
 from src.pipeline import DataIngestionStage, DataExportStage, DescriptiveAnalysisStage
 from src.pipeline import CorrelationAnalysisStage, CausalityAnalysisStage, PhaseComparisonStage
-from src.pipeline import ReportGenerationStage
+from src.pipeline import ReportGenerationStage, InsightAggregationStage
 
-# Importação do estágio de janelas deslizantes
+# Importação dos estágios especializados
 from src.analysis_sliding_window import SlidingWindowStage
+from src.analysis_multi_round import MultiRoundAnalysisStage
 
 # Configuração de logging
 logging.basicConfig(
@@ -40,19 +41,22 @@ def create_pipeline_with_sliding_window() -> Pipeline:
     Returns:
         Pipeline configurado com todos os estágios, incluindo janelas deslizantes.
     """
-    pipeline = Pipeline()
-    
-    # Remove a lista padrão de estágios e a substitui por uma lista personalizada
-    pipeline.stages = [
+    # Cria uma lista de estágios que inclui o estágio de janelas deslizantes
+    stages = [
         DataIngestionStage(),
         DataExportStage(),
         DescriptiveAnalysisStage(),
         CorrelationAnalysisStage(),
         CausalityAnalysisStage(),
         SlidingWindowStage(),  # Adiciona o estágio de janelas deslizantes
+        MultiRoundAnalysisStage(),  # Adiciona o estágio de análise multi-round
         PhaseComparisonStage(),
+        InsightAggregationStage(),  # Adiciona o estágio de agregação de insights
         ReportGenerationStage()
     ]
+    
+    # Inicializa o pipeline com os estágios
+    pipeline = Pipeline(stages=stages)
     
     return pipeline
 
@@ -62,7 +66,15 @@ def main():
     logger.info("Iniciando pipeline com análise de janelas deslizantes")
     
     # Parse argumentos da linha de comando
-    args = parse_arguments()
+    parser = argparse.ArgumentParser(description="Pipeline com análise de janelas deslizantes")
+    parser.add_argument("--config", help="Caminho para arquivo de configuração YAML")
+    parser.add_argument("--data-root", help="Diretório raiz dos dados de experimento")
+    parser.add_argument("--output-dir", help="Diretório para salvar resultados")
+    parser.add_argument("--selected-metrics", nargs='+', help="Lista de métricas a analisar")
+    parser.add_argument("--selected-tenants", nargs='+', help="Lista de tenants a analisar")
+    parser.add_argument("--selected-rounds", nargs='+', help="Lista de rounds a analisar")
+    
+    args = parser.parse_args()
     
     # Criar pipeline customizado com análise de janelas deslizantes
     pipeline = create_pipeline_with_sliding_window()
@@ -87,12 +99,12 @@ def main():
     results = pipeline.run()
     
     # Verificar se houve erro
-    if "error" in results:
+    if results and "error" in results:
         logger.error(f"Pipeline falhou: {results['error']}")
         return 1
     
     # Log de estatísticas finais
-    logger.info(f"Pipeline concluído em {results.get('elapsed_time', 0):.2f} segundos")
+    logger.info(f"Pipeline concluído em {results.get('elapsed_time', 0) if results else 0} segundos")
     logger.info(f"Diretório de outputs: {pipeline.context['config'].get('output_dir', 'outputs')}")
     
     return 0
