@@ -28,11 +28,26 @@
 - ✅ **Tratamento de caminhos**: Implementação robusta para evitar duplicação de caminhos
 - ✅ **Integração com sistema existente**: Tanto a abordagem via patch (em `pipeline_experiment_folder.py`) quanto diretamente via `DataIngestionStage` funcionam de forma harmoniosa
 
-### 3. Recomendações para Próximos Passos
+### 3. Implementação de Visualizações com Tempo Relativo
+
+- ✅ **Conversão para tempo relativo**: Modificação de todas as funções de visualização para exibir o tempo em segundos desde o início de cada fase, em vez de timestamps absolutos.
+  - Implementado nas funções de visualização em `analysis_descriptive.py`, `analysis_anomaly.py` e `analysis_sliding_window.py`
+  - Melhoria significativa na legibilidade e interpretabilidade dos gráficos
+  - Facilita a comparação entre fases e experimentos diferentes
+
+- ✅ **Correções de tipo**: Adicionadas conversões explícitas para tipos numéricos adequados para evitar erros de tipo ArrayLike ao usar arrays NumPy com Matplotlib
+  - Uso de `pd.to_numeric(...).to_numpy(dtype=float, na_value=np.nan)` para garantir compatibilidade
+
+- ✅ **Padronização dos rótulos de eixo**: Todos os eixos X em visualizações temporais agora mostram "Tempo (segundos)" para consistência
+
+- ✅ **Validação completa**: Pipeline executado com sucesso usando a configuração de 3 rounds, confirmando que todas as visualizações estão gerando corretamente o tempo relativo
+
+### 4. Recomendações para Próximos Passos
 
 1. **Expansão da documentação**: Adicionar mais exemplos de uso em diferentes cenários
 2. **Integração mais profunda**: Incorporar a funcionalidade experiment_folder em todos os scripts de execução
 3. **UI/UX**: Considerar complementar com uma interface de seleção de experimentos mais amigável
+4. **Melhorias adicionais nas visualizações**: Considerar opções para personalização de visualizações com base na necessidade do usuário
 
 ## Impactos na Arquitetura do Sistema
 

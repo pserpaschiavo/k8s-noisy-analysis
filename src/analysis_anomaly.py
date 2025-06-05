@@ -17,7 +17,16 @@ from typing import Dict, List, Tuple, Any, Optional, Union
 from sklearn.ensemble import IsolationForest
 from scipy import stats
 
-from src.pipeline import PipelineStage
+# Usando import condicional para evitar dependência circular
+try:
+    from src.pipeline import PipelineStage
+    pipeline_available = True
+except ImportError:
+    pipeline_available = False
+    # Classe base mock para quando pipeline.py não pode ser importado
+    class PipelineStage:
+        def __init__(self, *args, **kwargs):
+            pass
 
 # Configuração de logging
 logger = logging.getLogger("analysis_anomaly")
@@ -187,12 +196,35 @@ def plot_anomalies(
     """
     fig, ax = plt.subplots(figsize=(12, 6))
     
+    # Converter timestamp para datetime se necessário
+    if not pd.api.types.is_datetime64_any_dtype(df['timestamp']):
+        df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
+    
+    # Encontrar o timestamp inicial da fase
+    phase_start = df['timestamp'].min()
+    
+    # Calcular a duração total da fase em segundos
+    total_duration = (df['timestamp'].max() - phase_start).total_seconds()
+    
+    # Sempre usar segundos para consistência
+    time_unit = 1  # Usar sempre segundos
+    x_label = "Segundos desde o início da fase"
+    
+    # Calcular tempos relativos
+    elapsed = (df['timestamp'] - phase_start).dt.total_seconds() / time_unit
+    
     # Plot da série temporal
-    ax.plot(df['timestamp'], df['metric_value'], 'b-', label='Série Temporal')
+    ax.plot(elapsed, df['metric_value'], 'b-', label='Série Temporal')
     
     # Destaca anomalias
     if not anomalies.empty:
-        ax.scatter(anomalies['timestamp'], anomalies['metric_value'], color='red', s=80, alpha=0.6, label='Anomalias')
+        # Garantir formato datetime
+        if not pd.api.types.is_datetime64_any_dtype(anomalies['timestamp']):
+            anomalies['timestamp'] = pd.to_datetime(anomalies['timestamp'], errors='coerce')
+        
+        # Calcular tempo relativo para anomalias
+        anomaly_elapsed = (anomalies['timestamp'] - phase_start).dt.total_seconds() / time_unit
+        ax.scatter(anomaly_elapsed, anomalies['metric_value'], color='red', s=80, alpha=0.6, label='Anomalias')
     
     # Adiciona linha média e bandas de confiança
     mean_val = df['metric_value'].mean()
@@ -205,7 +237,7 @@ def plot_anomalies(
     # Formatação do gráfico
     ax.set_title(f'Detecção de Anomalias: {metric} - {tenant}', fontweight='bold')
     plt.suptitle(f'Round: {round_id}, Fase: {phase}', fontsize=10)
-    ax.set_xlabel('Timestamp')
+    ax.set_xlabel(x_label)
     ax.set_ylabel(f'Valor ({metric})')
     
     # Formata timestamps

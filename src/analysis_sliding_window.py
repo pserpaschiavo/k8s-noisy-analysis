@@ -49,8 +49,8 @@ class SlidingWindowAnalyzer:
         metric: str,
         phase: str,
         round_id: str,
-        window_size: str = '5min',
-        step_size: str = '1min',
+        window_size: str = '300s',  # 5min convertido para segundos
+        step_size: str = '60s',     # 1min convertido para segundos
         method: str = 'pearson',
         min_periods: int = 3,
         tenant_pairs: Optional[List[Tuple[str, str]]] = None
@@ -62,7 +62,7 @@ class SlidingWindowAnalyzer:
             metric: Nome da métrica para análise
             phase: Fase experimental para análise
             round_id: ID do round para análise
-            window_size: Tamanho da janela (formato pandas offset string, ex: '5min', '1h')
+            window_size: Tamanho da janela (formato pandas offset string, ex: '300s', '3600s')
             step_size: Tamanho do passo para deslizar a janela (mesmo formato)
             method: Método de correlação ('pearson', 'spearman', 'kendall')
             min_periods: Número mínimo de períodos para calcular correlação
@@ -152,8 +152,8 @@ class SlidingWindowAnalyzer:
         metric: str,
         phase: str,
         round_id: str,
-        window_size: str = '8min',  # Aumentado para 8min para capturar mais pontos
-        step_size: str = '2min',    # Aumentado para 2min para melhorar performance
+        window_size: str = '480s',  # 8min convertido para segundos
+        step_size: str = '120s',    # 2min convertido para segundos
         method: str = 'granger',
         max_lag: int = 3,
         min_periods: int = 5,       # Reduzido para permitir mais janelas válidas
@@ -167,7 +167,7 @@ class SlidingWindowAnalyzer:
             metric: Nome da métrica para análise
             phase: Fase experimental para análise
             round_id: ID do round para análise
-            window_size: Tamanho da janela (formato pandas offset string, ex: '5min', '1h')
+            window_size: Tamanho da janela (formato pandas offset string, ex: '300s', '3600s')
             step_size: Tamanho do passo para deslizar a janela
             method: Método de causalidade ('granger' ou 'transfer_entropy')
             max_lag: Atraso máximo para testes de causalidade
@@ -374,11 +374,34 @@ class SlidingWindowAnalyzer:
         for idx, ((tenant1, tenant2), df) in enumerate(results.items()):
             fig, ax = plt.subplots(figsize=(12, 6))
             
-            # Formata o timestamp para exibição mais legível
-            df['formatted_time'] = df['window_start'].dt.strftime('%H:%M:%S')
+            # Converter para tempo relativo desde o início da fase
+            # Usar o pandas para calcular a diferença de tempo
+            window_starts_pd = pd.Series(df['window_start'])
+            phase_start = window_starts_pd.min()
+            
+            # Transformar os timestamps em objetos datetime do pandas
+            if not pd.api.types.is_datetime64_any_dtype(window_starts_pd):
+                window_starts_pd = pd.to_datetime(window_starts_pd)
+                phase_start = pd.to_datetime(phase_start)
+            
+            # Calcular tempos relativos sempre em segundos
+            try:
+                elapsed_times = [(t - phase_start).total_seconds() for t in window_starts_pd]
+            except AttributeError:
+                # Fallback para numpy.timedelta64
+                elapsed_times = [(pd.Timestamp(t) - pd.Timestamp(phase_start)).total_seconds() 
+                                for t in window_starts_pd]
+            
+            # Usar sempre segundos para o eixo x
+            x_label = 'Segundos desde início da fase (janela)'
+            
+            # Converter dados para NumPy arrays para o plot
+            x_plot_data = np.array(elapsed_times, dtype=float)
+            # Explicitly convert to numeric and then to NumPy array, handling potential NAs
+            y_plot_data = pd.to_numeric(df['correlation'], errors='coerce').to_numpy(dtype=float, na_value=np.nan)
             
             # Plota correlação ao longo do tempo com estilo aprimorado
-            ax.plot(df['window_start'], df['correlation'], 'o-', 
+            ax.plot(x_plot_data, y_plot_data, 'o-', 
                    markersize=5, linewidth=2.5, 
                    color=color_palette[idx % len(color_palette)],
                    markeredgecolor='black', markeredgewidth=0.5)
@@ -453,10 +476,35 @@ class SlidingWindowAnalyzer:
         if len(results) > 1:
             fig, ax = plt.subplots(figsize=(14, 8))
             
+            # Determinar o timestamp inicial global para todo o conjunto
+            all_starts = []
+            for _, df_item in results.items():
+                if 'window_start' in df_item.columns:
+                    all_starts.extend(df_item['window_start'].tolist())
+            
+            all_starts_series = pd.Series(all_starts)
+            global_start = all_starts_series.min()
+            
+            # Transformar os timestamps em objetos datetime do pandas
+            if not pd.api.types.is_datetime64_any_dtype(all_starts_series):
+                all_starts_series = pd.to_datetime(all_starts_series)
+                global_start = pd.to_datetime(global_start)
+            
             for idx, ((tenant1, tenant2), df) in enumerate(results.items()):
+                window_starts_pd = pd.Series(df['window_start'])
+                if not pd.api.types.is_datetime64_any_dtype(window_starts_pd):
+                    window_starts_pd = pd.to_datetime(window_starts_pd)
+                
+                # Calcular tempo relativo em segundos para este par
+                try:
+                    elapsed = [(t - global_start).total_seconds() for t in window_starts_pd]
+                except AttributeError:
+                    elapsed = [(pd.Timestamp(t) - pd.Timestamp(global_start)).total_seconds() 
+                              for t in window_starts_pd]
+                
                 label = f"{tenant1} vs {tenant2}"
                 color = color_palette[idx % len(color_palette)]
-                ax.plot(df['window_start'], df['correlation'], 'o-', 
+                ax.plot(elapsed, df['correlation'], 'o-', 
                        markersize=4, linewidth=2, alpha=0.8,
                        color=color, markeredgecolor='black', markeredgewidth=0.5,
                        label=label)
@@ -472,12 +520,8 @@ class SlidingWindowAnalyzer:
             ax.set_title(title, fontweight='bold')
             fig.suptitle(subtitle, fontsize=12, y=0.97)
             
-            ax.set_xlabel('Tempo (início da janela)', fontsize=12)
+            ax.set_xlabel('Segundos desde início da fase (janela)', fontsize=12)
             ax.set_ylabel('Coeficiente de Correlação', fontsize=12)
-            
-            # Formatação de data/hora
-            ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
-            fig.autofmt_xdate()
             
             # Grid e estilo
             ax.grid(True, which='major', linestyle='-', linewidth=0.5, alpha=0.7)
@@ -590,9 +634,51 @@ class SlidingWindowAnalyzer:
             ax.axhline(y=threshold, color='red', linestyle='--', 
                       linewidth=1.5, alpha=0.7, label=threshold_label)
             
-            # Formata o eixo de tempo
-            ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
-            plt.gcf().autofmt_xdate()  # Rotaciona labels de data
+            # Converte o eixo de tempo para duração relativa desde o início da fase
+            window_starts_pd = pd.Series(df['window_start'])
+            phase_start = window_starts_pd.min()
+            
+            # Transformar os timestamps em objetos datetime do pandas para evitar erros
+            if not pd.api.types.is_datetime64_any_dtype(window_starts_pd):
+                window_starts_pd = pd.to_datetime(window_starts_pd)
+                phase_start = pd.to_datetime(phase_start)
+            
+            # Calcular tempos relativos sempre em segundos
+            try:
+                elapsed_times = [(t - phase_start).total_seconds() for t in window_starts_pd]
+            except AttributeError:
+                # Fallback para numpy.timedelta64
+                elapsed_times = [(pd.Timestamp(t) - pd.Timestamp(phase_start)).total_seconds() 
+                                for t in window_starts_pd]
+            
+            # Usar sempre segundos para o eixo x
+            x_label = 'Segundos desde início da fase (janela)'
+                
+            # Converter dados para NumPy arrays para o plot
+            x_plot_data = np.array(elapsed_times, dtype=float)
+            # Explicitly convert to numeric and then to NumPy array, handling potential NAs
+            y_plot_data = pd.to_numeric(df[value_col], errors='coerce').to_numpy(dtype=float, na_value=np.nan)
+
+            # Substituir dados de tempo no gráfico
+            ax.clear()  # Limpa o gráfico atual
+            ax.plot(x_plot_data, y_plot_data, 'b-', linewidth=2, alpha=0.8)
+            
+            # Re-plotar os pontos significativos, se houver
+            mask_np = pd.to_numeric(df[value_col], errors='coerce').to_numpy(dtype=float, na_value=np.nan) > threshold
+            if np.any(mask_np):
+                significant_indices = np.where(mask_np)[0]
+                
+                valid_indices = [i for i in significant_indices if i < len(x_plot_data)]
+                if valid_indices:
+                    significant_times_np = x_plot_data[valid_indices]
+                    significant_values_np = y_plot_data[valid_indices]
+                    
+                    ax.plot(significant_times_np, significant_values_np, 
+                          'ro', markersize=8, alpha=0.7, 
+                          label='Causalidade significativa')
+            
+            # Adiciona linha horizontal para o limiar de significância
+            ax.axhline(y=threshold, color='red', linestyle='--', linewidth=1.5, alpha=0.7, label=threshold_label)
             
             # Títulos e formatação do gráfico
             title = f'Causalidade Deslizante: {source} → {target}'
@@ -601,7 +687,7 @@ class SlidingWindowAnalyzer:
             plt.suptitle(subtitle, fontsize=12)
             
             # Configurações dos eixos
-            ax.set_xlabel('Tempo (início da janela)', fontsize=12)
+            ax.set_xlabel(x_label, fontsize=12)
             ax.set_ylabel(y_label, fontsize=12)
             
             # Adiciona grid 
@@ -642,11 +728,37 @@ class SlidingWindowAnalyzer:
         if len(results) > 1:
             fig, ax = plt.subplots(figsize=(14, 8))
             
+            # Determinar o timestamp inicial global para todo o conjunto
+            all_starts = []
+            for _, df_item in results.items():
+                if 'window_start' in df_item.columns:
+                    all_starts.extend(df_item['window_start'].tolist())
+            
+            all_starts_series = pd.Series(all_starts)
+            global_start = all_starts_series.min()
+            
+            # Transformar os timestamps em objetos datetime do pandas
+            if not pd.api.types.is_datetime64_any_dtype(all_starts_series):
+                all_starts_series = pd.to_datetime(all_starts_series)
+                global_start = pd.to_datetime(global_start)
+            
             for i, ((source, target), df) in enumerate(results.items()):
                 if value_col not in df.columns:
                     continue
+                
+                # Calcular tempo relativo em segundos para este par
+                window_starts_pd = pd.Series(df['window_start'])
+                if not pd.api.types.is_datetime64_any_dtype(window_starts_pd):
+                    window_starts_pd = pd.to_datetime(window_starts_pd)
+                
+                try:
+                    elapsed = [(t - global_start).total_seconds() for t in window_starts_pd]
+                except AttributeError:
+                    elapsed = [(pd.Timestamp(t) - pd.Timestamp(global_start)).total_seconds() 
+                              for t in window_starts_pd]
+                
                 label = f"{source} → {target}"
-                ax.plot(df['window_start'], df[value_col], '-o', 
+                ax.plot(elapsed, df[value_col], '-o', 
                        markersize=4, linewidth=2, alpha=0.8,
                        color=pair_colors[i % len(pair_colors)],
                        label=label)
@@ -655,10 +767,6 @@ class SlidingWindowAnalyzer:
             ax.axhline(y=threshold, color='red', linestyle='--', 
                       linewidth=1.5, alpha=0.7, label=threshold_label)
             
-            # Formata o eixo de tempo
-            ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
-            plt.gcf().autofmt_xdate()
-            
             # Títulos e formatação
             title = f'Comparativo de Causalidade Deslizante - Top Pares'
             subtitle = f'Métrica: {metric} | Fase: {phase} | Round: {round_id}'
@@ -666,7 +774,7 @@ class SlidingWindowAnalyzer:
             plt.suptitle(subtitle, fontsize=12)
             
             # Configurações dos eixos
-            ax.set_xlabel('Tempo (início da janela)', fontsize=12) 
+            ax.set_xlabel('Segundos desde início da fase (janela)', fontsize=12) 
             ax.set_ylabel(y_label, fontsize=12)
             ax.grid(True, alpha=0.3)
             
@@ -776,8 +884,8 @@ class SlidingWindowStage:
                         metric=metric,
                         phase=phase,
                         round_id=round_id,
-                        window_size='5min',  # Parâmetros configuráveis
-                        step_size='1min',
+                        window_size='300s',  # 5min convertido para segundos
+                        step_size='60s',    # 1min convertido para segundos
                         method='pearson',
                         min_periods=3
                     )
@@ -807,8 +915,8 @@ class SlidingWindowStage:
                         metric=metric,
                         phase=phase,
                         round_id=round_id,
-                        window_size='8min',  # Aumentado para capturar mais pontos
-                        step_size='2min',    # Aumentado para melhorar a performance
+                        window_size='480s',  # 8min convertido para segundos
+                        step_size='120s',    # 2min convertido para segundos
                         method='granger',
                         max_lag=2,           # Reduzido para minimizar erros em séries curtas
                         min_periods=5        # Reduzido para permitir mais janelas válidas
@@ -841,8 +949,8 @@ class SlidingWindowStage:
                         metric=metric,
                         phase=phase,
                         round_id=round_id,
-                        window_size='12min',  # Aumentado ainda mais para garantir pontos suficientes
-                        step_size='4min',     # Passos maiores para melhor performance
+                        window_size='720s',  # 12min convertido para segundos
+                        step_size='240s',     # 4min convertido para segundos
                         method='transfer_entropy',
                         min_periods=8,        # Mantido em 8 pontos mínimos
                         bins=5                # Reduzido o número de bins para melhor estimação com menos pontos

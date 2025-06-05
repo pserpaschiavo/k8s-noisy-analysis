@@ -513,6 +513,7 @@ class CausalityAnalysisStage(PipelineStage):
             Contexto atualizado com resultados e caminhos dos plots.
         """
         from src.analysis_causality import CausalityAnalyzer, plot_causality_graph
+        from src.improved_causality_graph import plot_improved_causality_graph, plot_consolidated_causality_graph
         from tqdm import tqdm
         
         df_long = context.get('df_long')
@@ -594,6 +595,7 @@ class CausalityAnalysisStage(PipelineStage):
                                     out_dir, 
                                     f"causality_graph_granger_{metric}_{phase}_{round_id}.png"
                                 )
+                                # Visualização original
                                 plot_causality_graph(
                                     granger_matrix, 
                                     granger_out_path,
@@ -601,6 +603,21 @@ class CausalityAnalysisStage(PipelineStage):
                                     directed=True,
                                     metric=metric
                                 )
+                                
+                                # Visualização melhorada
+                                improved_granger_out_path = os.path.join(
+                                    os.path.join(out_dir, 'improved'), 
+                                    f"improved_granger_{metric}_{phase}_{round_id}.png"
+                                )
+                                os.makedirs(os.path.dirname(improved_granger_out_path), exist_ok=True)
+                                plot_improved_causality_graph(
+                                    granger_matrix, 
+                                    improved_granger_out_path,
+                                    threshold=granger_threshold, 
+                                    directed=True,
+                                    metric=metric
+                                )
+                                plot_paths.append(improved_granger_out_path)
                                 plot_paths.append(granger_out_path)
                                 
                             # Gerar visualizações para Transfer Entropy
@@ -616,6 +633,7 @@ class CausalityAnalysisStage(PipelineStage):
                                 # (que espera valores menores = mais causalidade)
                                 te_viz_matrix = 1.0 / (te_matrix + 1.0)
                                 
+                                # Visualização original
                                 plot_causality_graph(
                                     te_viz_matrix,
                                     te_out_path,
@@ -623,9 +641,63 @@ class CausalityAnalysisStage(PipelineStage):
                                     directed=True,
                                     metric=f"{metric} (TE)"
                                 )
+                                
+                                # Visualização melhorada
+                                improved_te_out_path = os.path.join(
+                                    os.path.join(out_dir, 'improved'), 
+                                    f"improved_te_{metric}_{phase}_{round_id}.png"
+                                )
+                                os.makedirs(os.path.dirname(improved_te_out_path), exist_ok=True)
+                                plot_improved_causality_graph(
+                                    te_viz_matrix,
+                                    improved_te_out_path,
+                                    threshold=0.9,  # Threshold para visualização (menores valores = mais causalidade)
+                                    directed=True,
+                                    metric=f"{metric} (TE)"
+                                )
+                                plot_paths.append(improved_te_out_path)
                                 plot_paths.append(te_out_path)
                         except Exception as e:
                             self.logger.error(f"Erro ao processar causalidade para {metric}, {phase}, {round_id}: {e}")
+        
+        # Gerar visualizações consolidadas multi-métrica
+        try:
+            # Agrupar matrizes por experimento, round e fase
+            metrics_by_group = {}
+            for key, matrix in granger_matrices.items():
+                parts = key.split(':')
+                if len(parts) == 4:
+                    experiment_id, round_id, phase, metric = parts
+                    group_key = f"{experiment_id}:{round_id}:{phase}"
+                    if group_key not in metrics_by_group:
+                        metrics_by_group[group_key] = {}
+                    metrics_by_group[group_key][metric] = matrix
+            
+            # Gerar um grafo consolidado para cada grupo
+            for group_key, metric_matrices in metrics_by_group.items():
+                if len(metric_matrices) > 1:  # Só vale a pena consolidar se tiver mais de uma métrica
+                    parts = group_key.split(':')
+                    if len(parts) == 3:
+                        experiment_id, round_id, phase = parts
+                        consolidated_out_path = os.path.join(
+                            os.path.join(out_dir, 'consolidated'), 
+                            f"consolidated_{phase}_{round_id}.png"
+                        )
+                        os.makedirs(os.path.dirname(consolidated_out_path), exist_ok=True)
+                        
+                        plot_consolidated_causality_graph(
+                            metric_matrices,
+                            consolidated_out_path,
+                            threshold=granger_threshold,
+                            directed=True,
+                            phase=phase,
+                            round_id=round_id,
+                            title_prefix=f'Análise de Causalidade Multi-Métrica'
+                        )
+                        plot_paths.append(consolidated_out_path)
+                        self.logger.info(f"Grafo consolidado gerado para {phase} {round_id}")
+        except Exception as e:
+            self.logger.error(f"Erro ao gerar grafos consolidados: {e}")
         
         # Atualizar contexto
         context['granger_matrices'] = granger_matrices

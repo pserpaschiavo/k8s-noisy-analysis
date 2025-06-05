@@ -4,16 +4,17 @@
 data_root: /home/phil/Projects/k8s-noisy-analysis/demo-data
 experiment_folder: demo-experiment-1-round
 processed_data_dir: /home/phil/Projects/k8s-noisy-analysis/data/processed
-output_dir: /home/phil/Projects/k8s-noisy-analysis/outputs/demo-experiment-1-round
+output_dir: /home/phil/Projects/k8s-noisy-analysis/outputs/demo-experiment-1-round-final
 
 # Configuração de ingestão de dados
-output_parquet_name: /home/phil/Projects/k8s-noisy-analysis/data/processed/demo_exp_1_round.parquet
-# Usar um arquivo parquet existente diretamente
-input_parquet_path: /home/phil/Projects/k8s-noisy-analysis/data/processed/demo_exp_1_round.parquet
+output_parquet_name: /home/phil/Projects/k8s-noisy-analysis/data/processed/final_demo_exp_1_round.parquet
+# Comentando para forçar reprocessamento dos dados
+# input_parquet_path: /home/phil/Projects/k8s-noisy-analysis/data/processed/final_demo_exp_1_round.parquet
 
 # Seleção de dados
 selected_metrics:
-  - cpu_usage_variability
+  - cpu_usage
+  - memory_usage
   
 selected_tenants:
   - tenant-a

@@ -18,13 +18,17 @@ O pipeline é organizado em estágios sequenciais, facilmente extensíveis:
 
 - **src/**: Código-fonte do projeto
   - **pipeline.py**: Sistema principal de orquestração do pipeline
+  - **run_unified_pipeline.py**: Versão unificada do pipeline com todas as visualizações
   - **data_ingestion.py**: Módulo para ingestão e consolidação de dados
   - **data_export.py**: Módulo para exportação e carregamento de DataFrames
   - **data_segment.py**: Utilitários para segmentação e transformação de dados
-  - **analysis_descriptive.py**: Análises descritivas e visualizações
+  - **analysis_descriptive.py**: Análises descritivas e visualizações (com tempo relativo)
   - **analysis_correlation.py**: Análises de correlação e covariância
   - **analysis_causality.py**: Análises de causalidade (Granger e Transfer Entropy)
+  - **analysis_anomaly.py**: Detecção de anomalias em séries temporais (com tempo relativo)
+  - **analysis_sliding_window.py**: Análises em janelas deslizantes (com tempo relativo)
   - **analysis_phase_comparison.py**: Análises comparativas entre fases experimentais
+  - **experiment_folder_support.py**: Suporte à seleção flexível de pastas de experimentos
   - **report_generation.py**: Geração de relatórios consolidados e identificação de tenants "barulhentos"
   - **test_*.py**: Testes unitários dos componentes
 - **config/**: Arquivos de configuração
@@ -99,6 +103,9 @@ Exemplos de uso:
 
 # Pular estágios específicos
 ./run_pipeline.py --skip-stages data_ingestion data_segmentation
+
+# Executar o pipeline unificado com todos os estágios (incluindo visualizações com tempo relativo)
+python -m src.run_unified_pipeline --config config/pipeline_config_3rounds.yaml
 
 # Carregar dados previamente processados
 ./run_pipeline.py --load-data --data-path data/processed/consolidated_long.parquet

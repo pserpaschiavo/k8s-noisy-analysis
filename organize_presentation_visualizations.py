@@ -84,13 +84,40 @@ def organize_visualizations(output_dir: str, presentation_dir: str) -> None:
     correlation_src = Path(output_dir) / "plots" / "correlation"
     if correlation_src.exists():
         # Select a representative correlation heatmap for each phase
-        for phase in ["1 - Baseline", "2 - Attack", "3 - Recovery"]:
+        for phase, phase_name in [("1 - Baseline", "baseline"), ("2 - Attack", "attack"), ("3 - Recovery", "recovery")]:
             # Find a CPU usage correlation heatmap for this phase
+            found = False
             for source_file in correlation_src.glob(f"correlation_heatmap_cpu_usage_{phase}*.png"):
-                dest_file = os.path.join(correlation_dir, f"correlation_{phase.split(' - ')[1].lower()}.png")
+                dest_file = os.path.join(correlation_dir, f"correlation_{phase_name}.png")
                 shutil.copy2(source_file, dest_file)
                 logger.info(f"Copied {source_file} to {dest_file}")
+                found = True
                 break
+                
+            # If not found, try any correlation heatmap for this phase
+            if not found:
+                for source_file in correlation_src.glob(f"correlation_heatmap_*_{phase}*.png"):
+                    dest_file = os.path.join(correlation_dir, f"correlation_{phase_name}.png")
+                    shutil.copy2(source_file, dest_file)
+                    logger.info(f"Copied {source_file} to {dest_file}")
+                    found = True
+                    break
+                    
+            # If still not found, create a placeholder
+            if not found:
+                logger.warning(f"No correlation heatmap found for phase {phase}. Creating placeholder.")
+                dest_file = os.path.join(correlation_dir, f"correlation_{phase_name}.png")
+                
+                # Create a simple placeholder image with text
+                import matplotlib.pyplot as plt
+                import numpy as np
+                plt.figure(figsize=(8, 6))
+                plt.text(0.5, 0.5, f"No correlation heatmap available for {phase}",
+                        horizontalalignment='center', verticalalignment='center', fontsize=14)
+                plt.axis('off')
+                plt.savefig(dest_file)
+                plt.close()
+                logger.info(f"Created placeholder for {dest_file}")
                 
         # Create a subdirectory for cross-correlation plots
         ccf_dir = os.path.join(correlation_dir, "cross_correlation")

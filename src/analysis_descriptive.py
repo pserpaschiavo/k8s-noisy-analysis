@@ -59,16 +59,28 @@ def plot_metric_timeseries_multi_tenant(df: pd.DataFrame, metric: str, phase: st
         return None
     if not pd.api.types.is_datetime64_any_dtype(subset['timestamp']):
         subset['timestamp'] = pd.to_datetime(subset['timestamp'], errors='coerce')
+    
+    # Encontrar o timestamp inicial da fase
+    phase_start = subset['timestamp'].min()
+    
+    # Calcular a duração total da fase em segundos
+    total_duration = (subset['timestamp'].max() - phase_start).total_seconds()
+    
+    # Sempre usar segundos para consistência
+    time_unit = 1  # Usar sempre segundos
+    x_label = "Segundos desde o início da fase"
+    
     plt.figure(figsize=(12, 5))
     for tenant, group in subset.groupby('tenant_id'):
         group = group.sort_values('timestamp')
-        t0 = group['timestamp'].iloc[0]
-        elapsed = (group['timestamp'] - t0).dt.total_seconds()
+        # Calcular o tempo relativo desde o início da fase (não apenas do tenant)
+        elapsed = (group['timestamp'] - phase_start).dt.total_seconds() / time_unit
         plt.plot(elapsed, group['metric_value'], marker='o', markersize=3, linestyle='-', label=tenant)
     plt.title(f"Série temporal - {metric} - {phase} - {round_id}")
-    plt.xlabel("Segundos desde o início da fase/round")
+    plt.xlabel(x_label)
     plt.ylabel(metric)
     plt.legend(title='Tenant')
+    plt.grid(True, alpha=0.3)
     plt.tight_layout()
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, f"timeseries_multi_{metric}_{phase}_{round_id}.png")
@@ -124,6 +136,15 @@ def plot_metric_timeseries_multi_tenant_all_phases(df: pd.DataFrame, metric: str
         return None
     if not pd.api.types.is_datetime64_any_dtype(subset['timestamp']):
         subset['timestamp'] = pd.to_datetime(subset['timestamp'], errors='coerce')
+    
+    # Calcular a duração total do round em segundos
+    round_start = subset['timestamp'].min()
+    total_duration = (subset['timestamp'].max() - round_start).total_seconds()
+    
+    # Sempre usar segundos para consistência
+    time_unit = 1  # Usar sempre segundos
+    x_label = "Segundos desde o início do round (fases em sequência)"
+        
     # Ordenar por fase e timestamp
     phase_order = sorted(subset['experimental_phase'].unique())
     subset['phase_order'] = pd.Categorical(subset['experimental_phase'], categories=phase_order, ordered=True)
@@ -150,7 +171,8 @@ def plot_metric_timeseries_multi_tenant_all_phases(df: pd.DataFrame, metric: str
             group = phase_data[phase_data['tenant_id'] == tenant].sort_values('timestamp')
             if group.empty:
                 continue
-            elapsed = (group['timestamp'] - t0).dt.total_seconds() + t_offset
+            # Calcular tempo relativo em segundos
+            elapsed = (group['timestamp'] - t0).dt.total_seconds() / time_unit + t_offset
             plt.plot(elapsed, group['metric_value'], marker='o', markersize=3, linestyle='-', label=tenant if i == 0 else "_nolegend_", color=color_map(j))
             if i == 0:
                 legend_handles.append(mpatches.Patch(color=color_map(j), label=tenant))
@@ -166,7 +188,7 @@ def plot_metric_timeseries_multi_tenant_all_phases(df: pd.DataFrame, metric: str
                 ha='center', va='bottom', fontsize=11, color='gray', alpha=0.8, fontweight='bold'
             )
         t_offset = t_max
-    plt.xlabel('Segundos desde o início do round (fases em sequência)')
+    plt.xlabel(x_label)
     plt.ylabel(metric)
     plt.title(f'Série temporal multi-tenant - {metric} - {round_id} (todas as fases)')
     plt.legend(handles=legend_handles, title='Tenant', loc='best')
@@ -297,28 +319,38 @@ def plot_anomalies(df: pd.DataFrame, anomalies: pd.DataFrame, metric: str, phase
     if not pd.api.types.is_datetime64_any_dtype(subset['timestamp']):
         subset['timestamp'] = pd.to_datetime(subset['timestamp'], errors='coerce')
     
+    # Encontrar o timestamp inicial da fase
+    phase_start = subset['timestamp'].min()
+    
+    # Calcular a duração total da fase em segundos
+    total_duration = (subset['timestamp'].max() - phase_start).total_seconds()
+    
+    # Sempre usar segundos para consistência
+    time_unit = 1  # Usar sempre segundos
+    x_label = "Segundos desde o início da fase"
+    
     plt.figure(figsize=(14, 7))
     color_map = cm.get_cmap('tab10')
     
     # Plotar séries temporais normais
     for i, (tenant, group) in enumerate(subset.groupby('tenant_id')):
         group = group.sort_values('timestamp')
-        t0 = group['timestamp'].iloc[0]
-        elapsed = (group['timestamp'] - t0).dt.total_seconds()
+        # Calcular o tempo relativo desde o início da fase
+        elapsed = (group['timestamp'] - phase_start).dt.total_seconds() / time_unit
         plt.plot(elapsed, group['metric_value'], marker='o', markersize=3, linestyle='-', 
                 label=tenant, color=color_map(i), alpha=0.7)
     
     # Destacar anomalias
     for i, (tenant, group) in enumerate(anomalies.groupby('tenant_id')):
-        t0 = subset[subset['tenant_id'] == tenant]['timestamp'].iloc[0]
-        elapsed = (group['timestamp'] - t0).dt.total_seconds()
+        # Usar o mesmo timestamp de início da fase para calcular o tempo relativo
+        elapsed = (group['timestamp'] - phase_start).dt.total_seconds() / time_unit
         plt.scatter(elapsed, group['metric_value'], color='red', s=100, marker='X', 
                    label=f"{tenant} (anomalias)" if i == 0 else "_nolegend_", zorder=10)
     
     plt.title(f"Série temporal com anomalias - {metric} - {phase} - {round_id}")
-    plt.xlabel("Segundos desde o início da fase")
+    plt.xlabel(x_label)
     plt.ylabel(metric)
-    plt.grid(True)
+    plt.grid(True, alpha=0.3)
     plt.legend(title='Tenant')
     plt.tight_layout()
     

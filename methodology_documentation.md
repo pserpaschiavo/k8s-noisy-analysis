@@ -12,13 +12,19 @@ Este documento detalha as escolhas metodológicas e parâmetros técnicos utiliz
   - Tratamento de dados faltantes: Interpolação linear
 
 - **Cross-Correlation (CCF)**:
-  - Defasagem máxima (`max_lag`): 20 períodos
+  - Defasagem máxima (`max_lag`): 20 observações
   - Normalização: Z-score (média = 0, desvio padrão = 1)
   - Intervalo de confiança: 95% (1.96/sqrt(N))
+  
+- **Representação Temporal**:
+  - Visualizações: Tempo relativo (segundos desde o início da fase)
+  - Vantagem: Facilita comparação entre diferentes fases e experimentos
+  - Implementação: Conversão de timestamp para segundos em todas funções de visualização
+  - Unidades: Todos os eixos X mostram tempo em segundos
 
 - **Detecção de Anomalias**:
   - Método: Z-score com janela móvel
-  - Tamanho da janela (`window_size`): 10 períodos
+  - Tamanho da janela (`window_size`): 10 observações
   - Limiar para anomalias (`threshold`): 2.0 desvios padrão 
 
 - **Causalidade de Granger**:
@@ -29,7 +35,7 @@ Este documento detalha as escolhas metodológicas e parâmetros técnicos utiliz
 - **Transfer Entropy (TE)**:
   - Biblioteca: pyinform
   - Discretização: 8 bins (valor padrão)
-  - Histórico considerado (k): 1 período
+  - Histórico considerado (k): 1 observação
   - Normalização antes da discretização
 
 ## Justificativa das Escolhas Metodológicas
@@ -90,7 +96,7 @@ Esta metodologia avalia a consistência dos comportamentos observados entre dife
 Esta metodologia examina a consistência das relações causais identificadas em diferentes rounds, distinguindo relações causais robustas de correlações espúrias.
 
 - **Meta-análise de Transfer Entropy (TE)**: Combinação dos resultados de TE entre diferentes rounds
-  - Período de observação: Todos os rounds disponíveis do experimento
+  - Duração da observação: Todos os rounds disponíveis do experimento
   - Limiar de significância: 0.05 (padrão)
 
 - **Métrica de Robustez**: R = N_significativo / N_total

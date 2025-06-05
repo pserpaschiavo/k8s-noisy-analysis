@@ -1,0 +1,67 @@
+{
+  "phase_comparisons": {
+    "cpu_usage_variability": [
+      {
+        "tenant": "tenant-b",
+        "description": "tenant-b's cpu_usage_variability increased by 66.6% during the recovery phase.",
+        "significance": 66.56499869572805
+      },
+      {
+        "tenant": "tenant-d",
+        "description": "tenant-d's cpu_usage_variability decreased by 64.5% during the attack phase.",
+        "significance": 64.51855562332341
+      },
+      {
+        "tenant": "tenant-c",
+        "description": "tenant-c's cpu_usage_variability decreased by 58.1% during the attack phase.",
+        "significance": 58.08946534325571
+      },
+      {
+        "tenant": "tenant-a",
+        "description": "tenant-a's cpu_usage_variability decreased by 42.5% during the attack phase.",
+        "significance": 42.48740588371107
+      },
+      {
+        "tenant": "tenant-c",
+        "description": "tenant-c's cpu_usage_variability increased by 17.2% during the recovery phase.",
+        "significance": 17.211286236260662
+      }
+    ]
+  },
+  "anomaly_detections": {
+    "cpu": [
+      {
+        "tenant": "usage_variability",
+        "description": "Anomalies detected in usage_variability's cpu during the attack phase.",
+        "file_name": "/home/phil/Projects/k8s-noisy-analysis/outputs/demo-experiment-1-round/plots/anomaly_detection/anomaly_detection_cpu_usage_variability_tenant_a_2_-_Attack_round-1.png"
+      },
+      {
+        "tenant": "usage_variability",
+        "description": "Anomalies in usage_variability's cpu persisted into recovery phase.",
+        "file_name": "/home/phil/Projects/k8s-noisy-analysis/outputs/demo-experiment-1-round/plots/anomaly_detection/anomaly_detection_cpu_usage_variability_tenant_a_3_-_Recovery_round-1.png"
+      }
+    ]
+  },
+  "tenant_behaviors": {
+    "tenant-d": {
+      "classification": "Highly variable",
+      "description": "tenant-d shows high variability across metrics, suggesting it may be a noisy tenant.",
+      "noisy_score": 1.4590813392900865
+    },
+    "tenant-c": {
+      "classification": "Highly variable",
+      "description": "tenant-c shows high variability across metrics, suggesting it may be a noisy tenant.",
+      "noisy_score": 1.1784513126043332
+    },
+    "tenant-a": {
+      "classification": "Moderately variable",
+      "description": "tenant-a shows moderate variability in its metrics.",
+      "noisy_score": 0.7576503975852091
+    },
+    "tenant-b": {
+      "classification": "Moderately variable",
+      "description": "tenant-b shows moderate variability in its metrics.",
+      "noisy_score": 0.598948213725263
+    }
+  }
+}
