@@ -41,7 +41,7 @@ from src.report_generation import generate_tenant_metrics, generate_tenant_ranki
 from src.insight_aggregation import aggregate_tenant_insights, generate_comparative_table, plot_comparative_metrics
 from src import config
 from src.parse_config import load_parse_config, get_selected_metrics, get_selected_tenants, get_selected_rounds
-from src.parse_config import get_data_root, get_processed_data_dir
+from src.parse_config import get_data_root, get_processed_data_dir, get_experiment_folder, get_experiment_dir
 
 # Configuração de logging
 logging.basicConfig(
@@ -123,6 +123,22 @@ class DataIngestionStage(PipelineStage):
         # Obter configurações
         config_dict = context.get('config', {})
         data_root = context.get('data_root', config.DATA_ROOT)
+        # Verificar se o experiment_folder foi aplicado pelo wrapper ou pelo patch
+        applied_by_wrapper = context.get('experiment_folder_applied', False)
+        
+        # Se tiver experiment_folder definido e não foi aplicado pelo wrapper
+        experiment_folder = config_dict.get('experiment_folder')
+        if experiment_folder and not applied_by_wrapper:
+            # Verificar se o data_root já tem o experiment_folder (evitar duplicação)
+            if not data_root.endswith(experiment_folder):
+                data_root = os.path.join(data_root, experiment_folder)
+                self.logger.info(f"Usando caminho de experimento: {data_root} (data_root + experiment_folder)")
+            else:
+                self.logger.info(f"Experiment folder '{experiment_folder}' já foi aplicado ao data_root: {data_root}")
+        
+        # Propagar o experiment_folder_applied para o contexto para outros estágios
+        context['experiment_folder_applied'] = True
+        
         selected_metrics = config_dict.get('selected_metrics')
         selected_tenants = config_dict.get('selected_tenants')
         selected_rounds = config_dict.get('selected_rounds')

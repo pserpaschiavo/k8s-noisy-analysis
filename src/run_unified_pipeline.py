@@ -14,7 +14,7 @@ import logging
 import argparse
 import warnings
 from datetime import datetime
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Union
 
 # Importação para suprimir avisos
 # Adiciona o diretório atual ao path de importação
@@ -40,6 +40,11 @@ def suppress_statsmodels_warnings():
 # Importação de diferentes versões do pipeline
 from src.pipeline import Pipeline, parse_arguments
 from src.pipeline_with_sliding_window import create_pipeline_with_sliding_window
+from src.analysis_anomaly import AnomalyDetectionStage
+from src.pipeline_experiment_folder import patch_pipeline_run
+
+# Aplicar patch para suporte ao experiment_folder
+patch_pipeline_run()
 
 # Configuração de logging
 log_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'unified_pipeline.log')
@@ -185,7 +190,8 @@ def run_unified_pipeline(config_path: Optional[str] = None,
                         run_sliding_window: bool = True,
                         run_multi_round: bool = True,
                         force_reprocess: bool = False,
-                        input_parquet_path: Optional[str] = None) -> None:
+                        input_parquet_path: Optional[str] = None,
+                        extra_context: Optional[Dict[str, Any]] = None) -> None:
     """
     Executa a versão unificada do pipeline que garante que todas as visualizações sejam geradas.
     
@@ -210,6 +216,10 @@ def run_unified_pipeline(config_path: Optional[str] = None,
         args.output_dir = output_dir
         args.input_parquet_path = input_parquet_path
         
+        # Inicializar contexto adicional
+        if extra_context is None:
+            extra_context = {}
+        
         # Cria diretórios necessários
         if output_dir:
             create_missing_directories(output_dir)
@@ -230,6 +240,11 @@ def run_unified_pipeline(config_path: Optional[str] = None,
                 
                 # Adiciona flag de force_reprocess ao contexto
                 pipeline.context["force_reprocess"] = force_reprocess
+                
+                # Adiciona contexto extra se fornecido
+                if extra_context:
+                    for key, value in extra_context.items():
+                        pipeline.context[key] = value
                     
                 pipeline.run()
             
@@ -279,9 +294,61 @@ def run_unified_pipeline(config_path: Optional[str] = None,
                 else:
                     logger.info(f"Análise multi-round concluída. Resultados salvos em: {multi_round_output}")
             
+            # Executa análise de anomalias se as visualizações não foram encontradas
+            visualization_status = verify_all_visualizations(output_dir or "outputs")
+            if "anomaly_detection" in visualization_status and not any(visualization_status["anomaly_detection"].values()):
+                logger.info("Executando detecção de anomalias independentemente")
+                
+                # Define diretórios de saída
+                output_base = output_dir or "outputs"
+                anomaly_output = os.path.join(output_base, "plots", "anomaly_detection")
+                os.makedirs(anomaly_output, exist_ok=True)
+                
+                # Carrega os dados se ainda não estiverem no contexto
+                context = {'config': {}}
+                if output_dir:
+                    context['config']['output_dir'] = output_dir
+                
+                # Importa e carrega os dados
+                from src.data_ingestion import ingest_experiment_data
+                
+                # Carrega configurações
+                config_dict = {}
+                if config_path:
+                    import yaml
+                    with open(config_path, 'r') as f:
+                        config_dict = yaml.safe_load(f)
+                    
+                    # Define data_root garantindo que seja uma string
+                    data_root_path = ""
+                    if data_root is not None:
+                        data_root_path = data_root
+                    elif config_dict and 'data_root' in config_dict:
+                        data_root_path = config_dict['data_root']
+                    else:
+                        from src import config
+                        data_root_path = config.DATA_ROOT
+                    
+                    # Carrega dados
+                    df_long = ingest_experiment_data(
+                        data_root=data_root_path,
+                        selected_metrics=config_dict.get('selected_metrics'),
+                        selected_tenants=config_dict.get('selected_tenants'),
+                        selected_rounds=config_dict.get('selected_rounds')
+                    )
+                    
+                    # Adiciona ao contexto
+                    pipeline.context['df_long'] = df_long
+                
+                # Executa estágio de detecção de anomalias
+                anomaly_stage = AnomalyDetectionStage(output_dir=output_base)
+                anomaly_stage.execute(pipeline.context)
+                
+                logger.info(f"Detecção de anomalias concluída. Visualizações salvas em: {anomaly_output}")
+            
             # Executa apenas a análise de janelas deslizantes, se não estiver executando o pipeline completo
             # mas queremos gerar as visualizações de janelas deslizantes
-            if not run_sliding_window and "sliding_window" not in verify_all_visualizations(output_dir or "outputs"):
+            if not run_sliding_window and "sliding_window" not in visualization_status:
                 logger.info("Executando análise de janelas deslizantes independentemente")
                 
                 # Define diretórios de saída
@@ -393,7 +460,69 @@ def run_unified_pipeline(config_path: Optional[str] = None,
                                     except Exception as e:
                                         logger.error(f"Erro ao processar janelas deslizantes para {metric}, {phase}, {round_id}: {e}", exc_info=True)
             
-            # Verifica as visualizações geradas
+            # Executa apenas a detecção de anomalias, se necessário
+            current_visualizations = verify_all_visualizations(output_dir or "outputs")
+            if "anomaly_detection" in current_visualizations and not any(current_visualizations["anomaly_detection"].values()):
+                logger.info("Executando detecção de anomalias independentemente")
+                
+                # Define diretórios de saída
+                output_base = output_dir or "outputs"
+                
+                # Carrega os dados se não tivermos acesso direto
+                df_data = None
+                try:
+                    df_data = pipeline.context.get("df_long")
+                except:
+                    # Se não conseguirmos acessar o contexto do pipeline, carregamos novamente
+                    logger.info("Carregando dados para detecção de anomalias")
+                    from src.data_ingestion import ingest_experiment_data
+                    
+                    # Carrega configurações
+                    config_dict = {}
+                    if config_path:
+                        import yaml
+                        with open(config_path, 'r') as f:
+                            config_dict = yaml.safe_load(f)
+                    
+                    # Define data_root garantindo que seja uma string
+                    data_root_path = ""
+                    if data_root is not None:
+                        data_root_path = data_root
+                    elif config_dict and 'data_root' in config_dict:
+                        data_root_path = config_dict['data_root']
+                    else:
+                        from src import config
+                        data_root_path = config.DATA_ROOT
+                    
+                    # Carrega dados
+                    df_data = ingest_experiment_data(
+                        data_root=data_root_path,
+                        selected_metrics=config_dict.get('selected_metrics'),
+                        selected_tenants=config_dict.get('selected_tenants'),
+                        selected_rounds=config_dict.get('selected_rounds')
+                    )
+                
+                if df_data is not None and not df_data.empty:
+                    # Configura contexto para o estágio de detecção
+                    anomaly_context = {
+                        'config': {'output_dir': output_base},
+                        'df_long': df_data
+                    }
+                    
+                    # Executa estágio de detecção de anomalias
+                    anomaly_stage = AnomalyDetectionStage(output_dir=output_base)
+                    anomaly_result = anomaly_stage.execute(anomaly_context)
+                    
+                    logger.info(f"Detecção de anomalias concluída.")
+                    
+                    # Caso o pipeline original exista, atualiza seu contexto
+                    try:
+                        if 'anomaly_metrics' in anomaly_result and anomaly_result['anomaly_metrics']:
+                            pipeline.context['anomaly_metrics'] = anomaly_result['anomaly_metrics']
+                    except:
+                        pass
+            
+            # Verifica as visualizações geradas (incluindo as novas)
             visualization_status = verify_all_visualizations(
                 output_dir or "outputs"
             )
@@ -443,6 +572,7 @@ def main():
     parser = argparse.ArgumentParser(description="Pipeline unificado para análise de séries temporais multi-tenant")
     parser.add_argument("--config", help="Caminho para arquivo de configuração YAML")
     parser.add_argument("--data-root", help="Diretório raiz dos dados de experimento")
+    parser.add_argument("--experiment-folder", help="Nome da pasta do experimento dentro do diretório de dados")
     parser.add_argument("--output-dir", help="Diretório para salvar resultados")
     parser.add_argument("--no-sliding-window", action="store_true", help="Desativa análise com janelas deslizantes")
     parser.add_argument("--no-multi-round", action="store_true", help="Desativa análise multi-round")

@@ -2,11 +2,11 @@
 
 O objetivo é investigar a co-variação, relações causais e flutuações temporais das métricas entre diferentes tenants e fases experimentais (baseline, ataque, recuperação), utilizando ferramentas estatísticas básicas, interpretáveis e confiáveis.
 
-## Status do Projeto (Atualizado em 4 de Junho/2025)
+## Status do Projeto (Atualizado em 10 de Julho/2025)
 
-- ✅ **Concluído**: Estrutura principal do projeto implementada, ingestão de dados (incluindo suporte a carregamento direto de Parquet), segmentação, persistência, componentes de análise descritiva, correlação e causalidade básicos, agregação de insights, análise multi-round, ingestão direta de arquivos parquet com resolução de caminhos relativos e absolutos. Correções de erros no pipeline, incluindo problemas com dict comparisons no teste de Granger, uso obsoleto de Series.fillna no módulo de causalidade e problemas no estágio de agregação de insights.
-- 🔄 **Em andamento**: Refinamento do módulo de Causalidade com Transfer Entropy, testes unitários completos, análises com janelas móveis, documentação detalhada, visualizações ausentes/incompletas.
-- ❌ **Pendente**: Relatórios comparativos entre fases experimentais, integração completa de todos os componentes, documentação para usuários finais.
+- ✅ **Concluído**: Estrutura principal do projeto implementada, ingestão de dados (incluindo suporte a carregamento direto de Parquet), segmentação, persistência, componentes de análise descritiva, correlação e causalidade básicos, agregação de insights, análise multi-round, ingestão direta de arquivos parquet com resolução de caminhos relativos e absolutos. Correções de erros no pipeline, incluindo problemas com dict comparisons no teste de Granger, uso obsoleto de Series.fillna no módulo de causalidade e problemas no estágio de agregação de insights. Implementação do suporte a `experiment_folder` para especificar experimentos específicos dentro de data_root. [Ver detalhes na atualização de Julho/2025](docs/atualizacao_julho_2025.md)
+- 🔄 **Em andamento**: Unificação do pipeline em arquitetura baseada em plugins, correção de visualizações ausentes/incompletas, refinamento do módulo de Causalidade com Transfer Entropy, testes unitários completos.
+- ❌ **Pendente**: Relatórios comparativos entre fases experimentais, sistema de cache para resultados intermediários, paralelização de análises independentes.
 
 ## Diretrizes Gerais para o Desenvolvimento do Pipeline
 
@@ -372,16 +372,18 @@ Cada módulo seguirá a arquitetura `BaseModule`, `BaseAnalyzer`, `BaseVisualize
     - Garantir a consistência dos tipos e valores categóricos durante a ingestão.
 - Essa lógica deve ser implementada no módulo central de ingestão de dados, garantindo flexibilidade para diferentes estruturas de experimentos e rounds.
 
-## Lacunas e Oportunidades de Melhoria (Atualizado em 4 de Junho/2025)
+## Lacunas e Oportunidades de Melhoria (Atualizado em 10 de Julho/2025)
 
 Após análise da implementação atual e comparação com o plano original, foram identificadas as seguintes lacunas e oportunidades de melhoria:
 
 1. **Implementação do Transfer Entropy**:
    - ✅ Estrutura base implementada no módulo `analysis_causality.py`
-   - ❌ Necessidade de refinamento da visualização contextual dos grafos de causalidade
+   - ✅ Biblioteca `pyinform` integrada para cálculos de Transfer Entropy
+   - 🔄 Em andamento: refinamento da visualização contextual dos grafos de causalidade
 
 2. **Completude dos Testes**:
    - 🔄 Arquivos de teste criados (`test_analysis_causality.py`, `test_analysis_correlation.py`, etc.)
+   - 🔄 Implementados testes básicos para o novo parâmetro `experiment_folder`
    - ❌ Falta testes para casos extremos (ausência de dados, inconsistências)
 
 3. **Análises Comparativas entre Fases**:
@@ -389,13 +391,14 @@ Após análise da implementação atual e comparação com o plano original, for
    - ❌ Ausência de visualizações específicas para comparação de baseline/ataque/recuperação
 
 4. **Documentação das Escolhas Metodológicas**:
-   - 🔄 Estrutura básica de arquivos Markdown criada
-   - ❌ Ausência de justificativas para escolhas metodológicas
+   - ✅ Documentação completa criada para o parâmetro `experiment_folder`
+   - 🔄 Estrutura básica de arquivos Markdown criada para outros componentes
+   - ❌ Ausência de justificativas para algumas escolhas metodológicas
 
 5. **Relatórios e Consolidação de Insights**:
    - ✅ Implementação da metodologia de agregação de insights
    - ✅ Estruturação de relatórios automatizados
-   - ✅ Correção de erros críticos no estágio de agregação de insights para lidar com diferentes formatos de dados e evitar erros de tipo
+   - ✅ Correção de erros críticos no estágio de agregação de insights para lidar com diferentes formatos de dados
 
 6. **Janelas Móveis**:
    - ✅ Módulo implementado em `analysis_sliding_window.py` com funcionalidades completas
@@ -421,90 +424,111 @@ Após análise da implementação atual e comparação com o plano original, for
    - 🔄 Visualizações de janelas deslizantes - pipeline executando sem erros, verificar geração
 
 10. **Arquitetura do Pipeline**:
+    - ✅ Suporte a `experiment_folder` para melhor organização de experimentos
     - ❌ Múltiplas implementações de pipeline (`pipeline.py`, `pipeline_new.py`, `pipeline_with_sliding_window.py`)
     - ❌ Falta de sistema unificado para configuração e execução
     - ❌ Ausência de mecanismos de cache para evitar recálculos desnecessários
 
-## Prioridades para Próximos Passos (Atualizado em 4 de Junho/2025)
+11. **Flexibilidade na Configuração**:
+    - ✅ Sistema de configuração YAML implementado e em uso
+    - ✅ Adicionado suporte para parâmetro `experiment_folder`
+    - ❌ Sistema de plugins para estender funcionalidades não implementado
+
+## Prioridades para Próximos Passos (Atualizado em 10 de Julho/2025)
 
 As seguintes prioridades foram identificadas para concluir o projeto com sucesso:
 
-### Prioridade Alta (Imediata)
-1. **Verificar Geração de Visualizações** 🔄:
-   - 🔄 Executar o pipeline unificado com todos os módulos habilitados para verificar a correta geração das visualizações
-   - 🔄 Verificar se os plots de correlação estão sendo gerados corretamente
-   - 🔄 Confirmar a geração de visualizações de séries temporais combinadas de todas as fases
-   - 🔄 Confirmar a integração completa da detecção de anomalias ao fluxo principal do pipeline
+### Prioridade Alta (Julho/2025)
 
-2. **Completar Análise Multi-Round** 🔄:
-   - 🔄 Verificar a integração completa do módulo `analysis_multi_round.py`
-   - 🔄 Validar a geração de visualizações de consistência e robustez entre rounds
-   - 🔄 Documentar resultados e insights gerados por esta análise
+1. **Unificação do Pipeline** ❌:
+   - ❌ Desenvolver uma arquitetura modular baseada em plugins para substituir as múltiplas implementações atuais
+   - ❌ Criar sistema de carregamento dinâmico de estágios do pipeline
+   - ❌ Implementar mecanismo de dependência entre estágios
 
-3. **Correções Críticas no Pipeline** ✅:
-   - ✅ Desenvolver script utilitário para verificação da geração de todas as visualizações esperadas (`src/run_unified_pipeline.py`)
-   - ✅ Corrigir erros críticos no estágio de agregação de insights
-   - ✅ Corrigir erros de comparação de dicionários na análise de janelas deslizantes
-   - ✅ Atualizar uso obsoleto de Series.fillna no módulo de causalidade
+2. **Verificação e Correção de Visualizações** 🔄:
+   - 🔄 Executar o pipeline unificado com todos os módulos habilitados
+   - 🔄 Investigar e corrigir os plots de correlação não gerados
+   - 🔄 Integrar visualizações de janelas deslizantes ao pipeline principal
+   - 🔄 Adicionar visualizações comparativas entre fases (baseline/ataque/recuperação)
 
-### Prioridade Média (Semanas 2-3 de Junho/2025)
-1. **Consolidação da Arquitetura do Pipeline** ❌:
-   - ❌ Unificar os múltiplos arquivos de pipeline em uma implementação modular baseada em plugins
-   - ❌ Implementar sistema de configuração centralizado com validação
-   - ❌ Desenvolver CLI unificada para controle granular da execução
+3. **Integração Completa do Experimento Folder** 🔄:
+   - ✅ Funcionalidade básica implementada e testada
+   - 🔄 Estender suporte para todos os scripts e modos de análise
+   - ❌ Implementar interface mais amigável para seleção de experimentos
 
-2. **Documentação Técnica** ❌:
-   - ❌ Documentar detalhadamente todas as visualizações geradas pelo sistema
-   - ❌ Criar guia técnico sobre como adicionar novos tipos de análise ao pipeline
-   - ❌ Documentar configurações e parâmetros disponíveis
+### Prioridade Média (Agosto/2025)
 
-3. **Refatoração de Código** ❌:
-   - ❌ Padronizar interface dos diferentes módulos de análise
-   - ❌ Melhorar sistema de logging para facilitar depuração
-   - ❌ Remover código duplicado entre as diferentes implementações do pipeline
+1. **Expansão de Testes** ❌:
+   - ❌ Implementar testes unitários abrangentes para todos os módulos
+   - ❌ Desenvolver testes de integração para o pipeline completo
+   - ❌ Criar ambiente de teste automatizado para validação contínua
 
-### Prioridade Baixa (Julho-Agosto/2025)
-1. **Otimizações de Desempenho** ❌:
+2. **Documentação Técnica Completa** ❌:
+   - ❌ Criar documentação detalhada sobre a arquitetura do sistema
+   - ❌ Documentar todos os parâmetros de configuração disponíveis
+   - ❌ Desenvolver guias passo-a-passo para análises comuns
+
+3. **Otimização de Desempenho** ❌:
    - ❌ Implementar sistema de cache para resultados intermediários
-   - ❌ Adicionar suporte para paralelização em estágios computacionalmente intensivos
+   - ❌ Adicionar paralelização para análises independentes
    - ❌ Otimizar uso de memória para conjuntos de dados grandes
 
-2. **Extensibilidade e Interface** ❌:
-   - ❌ Desenvolver sistema de plugins para facilitar adição de novas análises
-   - ❌ Considerar implementação de interface web simples para visualização de resultados
-   - ❌ Criar mecanismos para exportação de resultados em diferentes formatos
+### Prioridade Baixa (Setembro-Outubro/2025)
 
-3. **Testes e CI/CD** ❌:
-   - ❌ Implementar testes unitários e de integração
-   - ❌ Configurar pipeline de CI/CD para validação automática
-   - ❌ Desenvolver casos de teste com diferentes configurações de experimentos
-   - ✅ Estruturar tabela final comparativa
-   - ✅ Implementar visualizações comparativas inter-tenant
+1. **Interface de Usuário Melhorada** ❌:
+   - ❌ Desenvolver CLI unificada e mais intuitiva
+   - ❌ Considerar implementação de interface web simples
+   - ❌ Criar sistema de notificação para anomalias detectadas
 
-3. **Documentar Escolhas Metodológicas** ✅:
-   - ✅ Registrar parâmetros utilizados (ex: `max_lags`, thresholds)
-   - ✅ Justificar escolhas de bibliotecas e métodos
+2. **Extensibilidade Avançada** ❌:
+   - ❌ Implementar sistema completo de plugins
+   - ❌ Criar mecanismo para extensão de visualizações
+   - ❌ Desenvolver API para integração com sistemas externos
 
-### Prioridade Baixa (Após concluir anteriores) 🔄
-1. **Análises com Janelas Móveis** ✅:
-   - ✅ Adaptar módulos para análise temporal dinâmica
-   - ✅ Testar e validar a execução completa do pipeline com janelas móveis
+3. **Relatórios Avançados** ❌:
+   - ❌ Implementar geração automática de relatórios PDF
+   - ❌ Desenvolver dashboards interativos
+   - ❌ Adicionar suporte para exportação em múltiplos formatos
 
-2. **Análise Consolidada para Experimentos Multi-Round** 🔄:
-   - 🔄 Implementar análise de consistência entre rounds
-   - 🔄 Desenvolver metodologia de robustez para causalidade
-   - 🔄 Criar sistema de agregação de consenso entre rounds
-   - 🔄 Implementar visualizações específicas para comparação entre rounds
+## Plano de Implementação (Julho-Outubro/2025)
 
-3. **Refinamentos Estéticos e Usabilidade** 🔄:
-   - ✅ Melhorar formatação de gráficos (estilo tableau-colorblind10)
-   - ✅ Aprimorar mensagens de log e feedback
+### Fase 1: Consolidação e Verificação (Julho/2025)
 
-4. **Documentação para Usuários Finais** 🔄:
-   - 🔄 Tutorial de uso do pipeline
-   - 🔄 Guia de interpretação dos resultados
+1. **Semana 1-2**:
+   - Desenhar a nova arquitetura modular do pipeline
+   - Começar implementação da estrutura de plugins
+   - Verificar e corrigir visualizações ausentes
 
-## Otimizações do Pipeline e Correções de Visualizações (Adicionado em Junho/2025)
+2. **Semana 3-4**:
+   - Concluir primeira versão do pipeline unificado
+   - Integrar completamente o parâmetro `experiment_folder` em todos os modos
+   - Realizar testes iniciais de integração
+
+### Fase 2: Otimização e Extensão (Agosto/2025)
+
+1. **Semana 1-2**:
+   - Implementar sistema de cache para resultados intermediários
+   - Adicionar suporte para paralelização em estágios independentes
+   - Desenvolver testes unitários abrangentes
+
+2. **Semana 3-4**:
+   - Finalizar documentação técnica completa
+   - Otimizar uso de memória para conjuntos de dados grandes
+   - Criar ambiente de teste automatizado
+
+### Fase 3: Usabilidade e Integração (Setembro-Outubro/2025)
+
+1. **Semana 1-2**:
+   - Desenvolver CLI unificada e mais intuitiva
+   - Implementar geração de relatórios avançados
+   - Criar mecanismo para exportação em múltiplos formatos
+
+2. **Semana 3-4**:
+   - Considerar implementação de interface web simples
+   - Desenvolver API para integração com sistemas externos
+   - Finalizar documentação para usuários finais
+
+## Otimizações do Pipeline e Correções de Visualizações (Atualizado em Julho/2025)
 
 Com base na análise do estado atual da implementação e no levantamento de plots não gerados ou incompletos, identificamos as seguintes oportunidades de melhoria organizadas em fases progressivas:
 
@@ -652,3 +676,7 @@ Com base no levantamento realizado em 03/06/2025, identificamos uma série de vi
    - ❌ Implementar dashboard para monitoramento de execuções longas
    - ❌ Adicionar capacidade de salvar e compartilhar configurações
 
+
+## Novas Atualizações
+
+[Ver detalhes completos na atualização de Julho/2025](docs/atualizacao_julho_2025.md)

@@ -6,6 +6,8 @@ import os
 
 # Root directories
 DATA_ROOT = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'demo-data')
+DEFAULT_EXPERIMENT_FOLDER = 'demo-experiment-1-round'
+EXPERIMENT_DIR = os.path.join(DATA_ROOT, DEFAULT_EXPERIMENT_FOLDER)
 PROCESSED_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'processed')
 CONFIG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config')
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'outputs') # Added OUTPUT_DIR

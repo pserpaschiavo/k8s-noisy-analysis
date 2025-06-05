@@ -23,6 +23,7 @@ from src.pipeline import ReportGenerationStage, InsightAggregationStage
 # Importação dos estágios especializados
 from src.analysis_sliding_window import SlidingWindowStage
 from src.analysis_multi_round import MultiRoundAnalysisStage
+from src.analysis_anomaly import AnomalyDetectionStage
 
 # Configuração de logging
 logging.basicConfig(
@@ -49,6 +50,7 @@ def create_pipeline_with_sliding_window() -> Pipeline:
         CorrelationAnalysisStage(),
         CausalityAnalysisStage(),
         SlidingWindowStage(),  # Adiciona o estágio de janelas deslizantes
+        AnomalyDetectionStage(),  # Adiciona o estágio de detecção de anomalias
         MultiRoundAnalysisStage(),  # Adiciona o estágio de análise multi-round
         PhaseComparisonStage(),
         InsightAggregationStage(),  # Adiciona o estágio de agregação de insights

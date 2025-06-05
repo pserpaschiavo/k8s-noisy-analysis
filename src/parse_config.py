@@ -25,6 +25,26 @@ def get_data_root(config: dict) -> Optional[str]:
     """Get the data root directory from config, or return None if not set."""
     return config.get('data_root')
 
+def get_experiment_folder(config: dict) -> Optional[str]:
+    """Get the experiment folder name from config, or return None if not set."""
+    return config.get('experiment_folder')
+
+def get_experiment_dir(config: dict) -> Optional[str]:
+    """
+    Get the full experiment directory path by combining data_root with experiment_folder.
+    If experiment_folder is not set, return data_root as it might already point to an experiment.
+    """
+    data_root = get_data_root(config)
+    experiment_folder = get_experiment_folder(config)
+    
+    if not data_root:
+        from src import config
+        data_root = config.DATA_ROOT
+        
+    if experiment_folder:
+        return os.path.join(data_root, experiment_folder)
+    return data_root
+
 def get_processed_data_dir(config: dict) -> Optional[str]:
     """Get the processed data output directory from config, or return None if not set."""
     return config.get('processed_data_dir')

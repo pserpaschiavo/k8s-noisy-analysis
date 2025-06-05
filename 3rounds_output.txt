@@ -1,0 +1,117 @@
+DEBUG: Tentando abrir arquivo de configuração: config/pipeline_config_3rounds.yaml
+DEBUG: Arquivo existe? True
+DEBUG: Conteúdo do arquivo:
+# Configuração do Pipeline de Análise Multi-Tenant
+
+# Diretórios de entrada/saída
+data_root: /home/phil/Projects/k8s-noisy-analysis/demo-data
+experiment_folder: demo-experiment-3-rounds
+processed_data_dir: /home/phil/Projects/k8s-noisy-analysis/data/processed/demo_exp_3_rounds
+output_dir: /home/phil/Projects/k8s-noisy-analysis/outputs/demo-experiment-3-rounds
+
+# Configuração de ingestão de dados
+output_parquet_name: /home/phil/Projects/k8s-noisy-analysis/data/processed/demo_exp_3_rounds.parquet
+# Usar um arquivo parquet existente diretamente
+input_parquet_path: /home/phil/Projects/k8s-noisy-analysis/data/processed/demo_exp_3_rounds.parquet
+
+# Seleção de dados
+selected_metrics:
+  - cpu_usage
+  - memory_usage
+  - disk_io_total
+  - network_total_bandwidth
+  
+selected_tenants:
+  - tenant-a
+  - tenant-b
+  - tenant-c
+  - tenant-d
+  
+selected_rounds:
+  - round-1
+  - round-2
+  - round-3
+
+# Parâmetros de análise
+correlation:
+  methods:
+    - pearson
+    - spearman
+  
+causality:
+  granger_max_lag: 5
+  granger_threshold: 0.05
+  transfer_entropy_bins: 8
+  
+# Opções de visualização
+plots:
+  figure_size: [10, 6]
+  style: tableau-colorblind10
+  dpi: 300
+
+DEBUG: Config carregada: {'data_root': '/home/phil/Projects/k8s-noisy-analysis/demo-data', 'experiment_folder': 'demo-experiment-3-rounds', 'processed_data_dir': '/home/phil/Projects/k8s-noisy-analysis/data/processed/demo_exp_3_rounds', 'output_dir': '/home/phil/Projects/k8s-noisy-analysis/outputs/demo-experiment-3-rounds', 'output_parquet_name': '/home/phil/Projects/k8s-noisy-analysis/data/processed/demo_exp_3_rounds.parquet', 'input_parquet_path': '/home/phil/Projects/k8s-noisy-analysis/data/processed/demo_exp_3_rounds.parquet', 'selected_metrics': ['cpu_usage', 'memory_usage', 'disk_io_total', 'network_total_bandwidth'], 'selected_tenants': ['tenant-a', 'tenant-b', 'tenant-c', 'tenant-d'], 'selected_rounds': ['round-1', 'round-2', 'round-3'], 'correlation': {'methods': ['pearson', 'spearman']}, 'causality': {'granger_max_lag': 5, 'granger_threshold': 0.05, 'transfer_entropy_bins': 8}, 'plots': {'figure_size': [10, 6], 'style': 'tableau-colorblind10', 'dpi': 300}}
+DEBUG: data_root = /home/phil/Projects/k8s-noisy-analysis/demo-data
+DEBUG: experiment_folder = demo-experiment-3-rounds
+DEBUG: Caminho completo = /home/phil/Projects/k8s-noisy-analysis/demo-data/demo-experiment-3-rounds
+2025-06-04 21:42:51,909 - pipeline_with_experiment - INFO - Caminho completo do experimento: /home/phil/Projects/k8s-noisy-analysis/demo-data/demo-experiment-3-rounds (data_root + experiment_folder)
+2025-06-04 21:42:53,299 - src.analysis_causality - INFO - pyinform disponível. Usando implementação otimizada para Transfer Entropy.
+2025-06-04 21:42:53,419 - pipeline_experiment_folder - INFO - Pipeline.run foi modificada para suportar o parâmetro experiment_folder
+Logging to /home/phil/Projects/k8s-noisy-analysis/unified_pipeline.log
+2025-06-04 21:42:53,420 - pipeline_with_experiment - INFO - Executando pipeline com data_root=/home/phil/Projects/k8s-noisy-analysis/demo-data/demo-experiment-3-rounds
+2025-06-04 21:42:53,420 - unified_pipeline - INFO - Iniciando execução unificada do pipeline
+2025-06-04 21:42:53,420 - unified_pipeline - INFO - Executando pipeline com janelas deslizantes
+2025-06-04 21:42:53,420 - pipeline.Pipeline - INFO - Carregando configuração padrão do pipeline.
+2025-06-04 21:42:53,422 - pipeline.Pipeline - INFO - Configuração carregada de: config/pipeline_config_3rounds.yaml
+2025-06-04 21:42:53,422 - pipeline_experiment_folder - INFO - Usando experiment_folder: demo-experiment-3-rounds
+2025-06-04 21:42:53,422 - pipeline_experiment_folder - INFO - Caminho completo do experimento: /home/phil/Projects/k8s-noisy-analysis/demo-data/demo-experiment-3-rounds/demo-experiment-3-rounds
+2025-06-04 21:42:53,422 - pipeline.Pipeline - INFO - Iniciando execução do pipeline
+2025-06-04 21:42:53,422 - pipeline.Pipeline - INFO - Executando estágio: data_ingestion
+2025-06-04 21:42:53,422 - pipeline.data_ingestion - INFO - Iniciando estágio: data_ingestion
+2025-06-04 21:42:53,422 - pipeline.data_ingestion - INFO - Usando caminho de experimento: /home/phil/Projects/k8s-noisy-analysis/demo-data/demo-experiment-3-rounds/demo-experiment-3-rounds/demo-experiment-3-rounds (data_root + experiment_folder)
+2025-06-04 21:42:53,422 - pipeline.data_ingestion - INFO - Iniciando ingestão de dados de: /home/phil/Projects/k8s-noisy-analysis/demo-data/demo-experiment-3-rounds/demo-experiment-3-rounds/demo-experiment-3-rounds
+2025-06-04 21:42:53,422 - pipeline.Pipeline - ERROR - Erro inesperado durante execução do pipeline: [Errno 2] No such file or directory: '/home/phil/Projects/k8s-noisy-analysis/demo-data/demo-experiment-3-rounds/demo-experiment-3-rounds/demo-experiment-3-rounds'
+Traceback (most recent call last):
+  File "/home/phil/Projects/k8s-noisy-analysis/src/pipeline.py", line 1025, in run
+    context = stage.execute(context)
+  File "/home/phil/Projects/k8s-noisy-analysis/src/pipeline.py", line 87, in execute
+    result = self._execute_implementation(context)
+  File "/home/phil/Projects/k8s-noisy-analysis/src/pipeline.py", line 196, in _execute_implementation
+    df_long = ingest_experiment_data(
+        data_root=data_root,
+    ...<2 lines>...
+        selected_rounds=selected_rounds
+    )
+  File "/home/phil/Projects/k8s-noisy-analysis/src/data_ingestion.py", line 76, in ingest_experiment_data
+    for experiment_path in list_experiments(data_root):
+                           ~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "/home/phil/Projects/k8s-noisy-analysis/src/data_ingestion.py", line 20, in list_experiments
+    has_rounds = any(d.startswith("round-") for d in os.listdir(data_root)
+                                                     ~~~~~~~~~~^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/home/phil/Projects/k8s-noisy-analysis/demo-data/demo-experiment-3-rounds/demo-experiment-3-rounds/demo-experiment-3-rounds'
+2025-06-04 21:42:53,424 - unified_pipeline - ERROR - Erro durante a execução do pipeline: [Errno 2] No such file or directory: '/home/phil/Projects/k8s-noisy-analysis/demo-data/demo-experiment-3-rounds/demo-experiment-3-rounds/demo-experiment-3-rounds'
+Traceback (most recent call last):
+  File "/home/phil/Projects/k8s-noisy-analysis/src/run_unified_pipeline.py", line 239, in run_unified_pipeline
+    pipeline.run()
+    ~~~~~~~~~~~~^^
+  File "/home/phil/Projects/k8s-noisy-analysis/src/pipeline_experiment_folder.py", line 71, in patched_run
+    return original_run(self)
+  File "/home/phil/Projects/k8s-noisy-analysis/src/pipeline.py", line 1025, in run
+    context = stage.execute(context)
+  File "/home/phil/Projects/k8s-noisy-analysis/src/pipeline.py", line 87, in execute
+    result = self._execute_implementation(context)
+  File "/home/phil/Projects/k8s-noisy-analysis/src/pipeline.py", line 196, in _execute_implementation
+    df_long = ingest_experiment_data(
+        data_root=data_root,
+    ...<2 lines>...
+        selected_rounds=selected_rounds
+    )
+  File "/home/phil/Projects/k8s-noisy-analysis/src/data_ingestion.py", line 76, in ingest_experiment_data
+    for experiment_path in list_experiments(data_root):
+                           ~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "/home/phil/Projects/k8s-noisy-analysis/src/data_ingestion.py", line 20, in list_experiments
+    has_rounds = any(d.startswith("round-") for d in os.listdir(data_root)
+                                                     ~~~~~~~~~~^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/home/phil/Projects/k8s-noisy-analysis/demo-data/demo-experiment-3-rounds/demo-experiment-3-rounds/demo-experiment-3-rounds'
+2025-06-04 21:42:53,425 - unified_pipeline - INFO - Execução concluída em 0.00 segundos
+2025-06-04 21:42:53,425 - pipeline_with_experiment - INFO - Pipeline concluído.
+2025-06-04 21:42:53,425 - pipeline_with_experiment - INFO - Execução total concluída em 1.52 segundos

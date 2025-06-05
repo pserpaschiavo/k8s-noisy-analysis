@@ -40,8 +40,8 @@ O pipeline é organizado em estágios sequenciais, facilmente extensíveis:
 
 ```bash
 # Clonar repositório
-git clone https://github.com/seu-usuario/gpt-nn-analysis.git
-cd gpt-nn-analysis
+git clone https://github.com/pserpaschiavo/k8s-noisy-analysis.git
+cd k8s-noisy-analysis
 
 # Configurar ambiente virtual (recomendado)
 python -m venv venv
@@ -94,6 +94,9 @@ Exemplos de uso:
 # Executar apenas para tenants específicos
 ./run_pipeline.py --tenants tenant-a tenant-b
 
+# Especificar uma pasta de experimento dentro do data_root
+./run_pipeline_with_experiment.py --config config/pipeline_config_3rounds.yaml
+
 # Pular estágios específicos
 ./run_pipeline.py --skip-stages data_ingestion data_segmentation
 
@@ -111,6 +114,7 @@ O comportamento do pipeline é controlado através do arquivo `config/pipeline_c
 ```yaml
 # Diretórios de entrada/saída
 data_root: /path/to/data
+experiment_folder: demo-experiment-1-round  # Pasta específica do experimento dentro de data_root
 processed_data_dir: /path/to/processed
 output_dir: /path/to/outputs
 
@@ -154,6 +158,36 @@ O sistema utiliza um DataFrame "long" como fonte única de verdade, com as segui
 - `experimental_phase`: Fase experimental - Baseline, Attack, Recovery (string) 
 - `round_id`: Identificador do round (string)
 - `experiment_id`: Identificador do experimento (string)
+
+## Organização de Experimentos
+
+O sistema suporta organização flexível dos dados experimentais:
+
+- **data_root**: Diretório raiz que contém dados experimentais
+- **experiment_folder**: Pasta específica de experimento dentro do data_root
+  - Útil para analisar um experimento específico (ex: `demo-experiment-3-rounds`)
+  - Pode ser definido no arquivo de configuração ou pela linha de comando
+  - Use `run_pipeline_with_experiment.py` para garantir a aplicação correta do parâmetro
+
+### Estrutura de Diretórios Esperada
+
+```
+data_root/
+├── experiment_folder_1/
+│   ├── round-1/
+│   │   ├── Baseline/
+│   │   │   ├── tenant-a/
+│   │   │   │   ├── cpu_usage.csv
+│   │   │   │   └── memory_usage.csv
+│   │   │   └── tenant-b/
+│   │   │       └── ...
+│   │   └── Attack/
+│   │       └── ...
+│   └── round-2/
+│       └── ...
+└── experiment_folder_2/
+    └── ...
+```
 
 ## Análises Implementadas
 
@@ -215,3 +249,8 @@ Este relatório é ideal para entender quais tenants têm maior impacto no ambie
 ## Relatórios
 
 Após a execução, um relatório HTML será gerado em `outputs/reports/` com links para todas as visualizações e resultados.
+
+## Documentação Adicional
+
+- [Guia de Uso do Parâmetro experiment_folder](docs/experiment_folder_guide.md)
+- [README do Parâmetro experiment_folder](docs/README_experiment_folder.md)
