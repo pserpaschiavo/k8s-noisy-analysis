@@ -3,7 +3,7 @@
 # Diretórios de entrada/saída
 data_root: /home/phil/Projects/k8s-noisy-analysis/demo-data
 experiment_folder: demo-experiment-1-round
-processed_data_dir: /home/phil/Projects/k8s-noisy-analysis/data/processed/demo_exp_1_round
+processed_data_dir: /home/phil/Projects/k8s-noisy-analysis/data/processed
 output_dir: /home/phil/Projects/k8s-noisy-analysis/outputs/demo-experiment-1-round
 
 # Configuração de ingestão de dados
@@ -13,10 +13,7 @@ input_parquet_path: /home/phil/Projects/k8s-noisy-analysis/data/processed/demo_e
 
 # Seleção de dados
 selected_metrics:
-  - cpu_usage
-  - memory_usage
-  - disk_io_total
-  - network_total_bandwidth
+  - cpu_usage_variability
   
 selected_tenants:
   - tenant-a

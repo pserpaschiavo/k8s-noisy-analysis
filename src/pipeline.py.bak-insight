@@ -831,11 +831,6 @@ class InsightAggregationStage(PipelineStage):
         Returns:
             Contexto atualizado com os resultados da agregação de insights
         """
-        import pandas as pd
-        import numpy as np
-        from src.insight_aggregation import aggregate_tenant_insights, generate_comparative_table, plot_comparative_metrics
-        from datetime import datetime
-        
         self.logger.info("Iniciando agregação de insights inter-tenant")
         
         if 'error' in context:
@@ -851,13 +846,9 @@ class InsightAggregationStage(PipelineStage):
         insights_dir = os.path.join(output_dir, 'insights')
         os.makedirs(insights_dir, exist_ok=True)
         
-        # Obter dados necessários do contexto
+        # Verificar se temos os dados necessários
         tenant_metrics = None
         phase_comparison_results = context.get('phase_comparison_results')
-        granger_matrices = context.get('granger_matrices', {})
-        te_matrices = context.get('te_matrices', {})
-        correlation_matrices = context.get('correlation_matrices', {})
-        anomaly_metrics = context.get('anomaly_metrics', {})
         
         # Tentar obter tenant_metrics diretamente do contexto
         if 'tenant_metrics' in context:
@@ -875,53 +866,11 @@ class InsightAggregationStage(PipelineStage):
             else:
                 self.logger.info(f"Tipo de tenant_metrics inesperado: {type(tenant_metrics)}")
         
-        # Se não encontrou métricas, tente criar um DataFrame básico
+        # Se não encontrou métricas, retorna erro
         if tenant_metrics is None:
-            self.logger.warning("tenant_metrics não disponível. Tentando criar dados básicos...")
-            
-            # Tentar extrair lista de tenants de outras matrizes
-            tenants = set()                # Tentar extrair de matrizes de correlação
-            if correlation_matrices:
-                for method, matrices in correlation_matrices.items():
-                    for matrix_key, matrix in matrices.items():
-                        if hasattr(matrix, 'empty') and not matrix.empty:
-                            tenants.update(matrix.index)
-            
-            # Tentar extrair de matrizes de causalidade
-            if granger_matrices:
-                for key, matrix in granger_matrices.items():
-                    if hasattr(matrix, 'empty') and not matrix.empty:
-                        tenants.update(matrix.index)
-                        
-            # Tentar extrair de matrizes de TE
-            if te_matrices:
-                for key, matrix in te_matrices.items():
-                    if hasattr(matrix, 'empty') and not matrix.empty:
-                        tenants.update(matrix.index)
-                        
-            # Tentar extrair tenants diretamente do DataFrame de dados
-            df_long = context.get('df_long')
-            if df_long is not None and not df_long.empty and 'tenant_id' in df_long.columns:
-                tenants.update(df_long['tenant_id'].unique())
-            
-            # Se encontramos algum tenant, criar DataFrame básico
-            if tenants:
-                self.logger.info(f"Criando DataFrame básico com {len(tenants)} tenants: {tenants}")
-                import pandas as pd
-                import numpy as np
-                
-                tenant_metrics = pd.DataFrame({
-                    'tenant_id': list(tenants),
-                    'noisy_score': np.random.uniform(0.3, 0.7, size=len(tenants)),  # Valores simulados
-                    'impact_score': np.random.uniform(0.3, 0.7, size=len(tenants)),
-                    'isolation_score': np.random.uniform(0.3, 0.7, size=len(tenants))
-                })
-                
-                self.logger.info(f"Criado DataFrame básico com colunas: {list(tenant_metrics.columns)}")
-            else:
-                self.logger.error("Não foi possível extrair lista de tenants de nenhum dos dados disponíveis")
-                context['error'] = "Dados necessários para agregação de insights não disponíveis"
-                return context
+            self.logger.error("Não foi possível obter dados necessários para agregação de insights")
+            context['error'] = "Dados necessários para agregação de insights não disponíveis"
+            return context
             
         granger_matrices = context.get('granger_matrices', {})
         te_matrices = context.get('te_matrices', {})
@@ -972,7 +921,7 @@ class InsightAggregationStage(PipelineStage):
             serializable_insights = {}
             for tenant, data in tenant_insights.items():
                 serializable_insights[tenant] = {
-                    k: (float(v) if hasattr(v, 'dtype') and ('float' in str(v.dtype) or 'int' in str(v.dtype)) else v)
+                    k: (float(v) if isinstance(v, np.float32) or isinstance(v, np.float64) else v)
                     for k, v in data.items() 
                     if k != 'rank'  # Excluir rank por ser incompatível
                 }

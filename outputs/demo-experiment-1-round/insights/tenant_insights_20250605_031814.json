@@ -1,0 +1,267 @@
+{
+  "tenant-b": {
+    "name": "tenant-b",
+    "noisy_score": 0.307134567115043,
+    "is_noisy_tenant": false,
+    "is_victim_tenant": true,
+    "main_impacted_tenants": [
+      {
+        "tenant": "tenant-c",
+        "score": 0.14533454612254723,
+        "metric": "demo-experiment-1-round:round-1:2 - Attack:cpu_usage_variability"
+      },
+      {
+        "tenant": "tenant-a",
+        "score": 0.12804259451204783,
+        "metric": "demo-experiment-1-round:round-1:2 - Attack:cpu_usage_variability"
+      },
+      {
+        "tenant": "tenant-a",
+        "score": 0.07860043634996738,
+        "metric": "demo-experiment-1-round:round-1:3 - Recovery:cpu_usage_variability"
+      },
+      {
+        "tenant": "tenant-d",
+        "score": 0.05158218586948262,
+        "metric": "demo-experiment-1-round:round-1:3 - Recovery:cpu_usage_variability"
+      }
+    ],
+    "main_impact_sources": [
+      {
+        "tenant": "tenant-a",
+        "score": 0.07358601893745866,
+        "metric": "demo-experiment-1-round:round-1:2 - Attack:cpu_usage_variability"
+      },
+      {
+        "tenant": "tenant-d",
+        "score": 0.11986375275126218,
+        "metric": "demo-experiment-1-round:round-1:2 - Attack:cpu_usage_variability"
+      }
+    ],
+    "anomalous_metrics": [
+      {
+        "metric": "cpu_usage_variability",
+        "anomaly_count": 4,
+        "max_zscore": -3.2069263880621555
+      }
+    ],
+    "attack_phase_patterns": [
+      {
+        "metric": "demo-experiment-1-round:round-1:cpu_usage_variability",
+        "variation_pct": 310.7470382577995,
+        "direction": "increase"
+      }
+    ],
+    "correlation_patterns": [],
+    "recommendations": [
+      "Considerar isolamento de tenant-b dos tenants que o impactam: tenant-a, tenant-d.",
+      "Monitorar em tempo real as m\u00e9tricas que mostraram maior sensibilidade durante ataque: demo-experiment-1-round:round-1:cpu_usage_variability."
+    ]
+  },
+  "tenant-a": {
+    "name": "tenant-a",
+    "noisy_score": 0.33742931631527934,
+    "is_noisy_tenant": false,
+    "is_victim_tenant": true,
+    "main_impacted_tenants": [
+      {
+        "tenant": "tenant-c",
+        "score": 0.09648246334875825,
+        "metric": "demo-experiment-1-round:round-1:2 - Attack:cpu_usage_variability"
+      },
+      {
+        "tenant": "tenant-b",
+        "score": 0.07358601893745866,
+        "metric": "demo-experiment-1-round:round-1:2 - Attack:cpu_usage_variability"
+      },
+      {
+        "tenant": "tenant-c",
+        "score": 0.11020494222072547,
+        "metric": "demo-experiment-1-round:round-1:3 - Recovery:cpu_usage_variability"
+      },
+      {
+        "tenant": "tenant-d",
+        "score": 0.09193518131320758,
+        "metric": "demo-experiment-1-round:round-1:3 - Recovery:cpu_usage_variability"
+      }
+    ],
+    "main_impact_sources": [
+      {
+        "tenant": "tenant-b",
+        "score": 0.12804259451204783,
+        "metric": "demo-experiment-1-round:round-1:2 - Attack:cpu_usage_variability"
+      },
+      {
+        "tenant": "tenant-c",
+        "score": 0.08856770822317366,
+        "metric": "demo-experiment-1-round:round-1:2 - Attack:cpu_usage_variability"
+      },
+      {
+        "tenant": "tenant-b",
+        "score": 0.07860043634996738,
+        "metric": "demo-experiment-1-round:round-1:3 - Recovery:cpu_usage_variability"
+      },
+      {
+        "tenant": "tenant-d",
+        "score": 0.09359150980940269,
+        "metric": "demo-experiment-1-round:round-1:3 - Recovery:cpu_usage_variability"
+      },
+      {
+        "tenant": "tenant-c",
+        "score": 0.11576781128289562,
+        "metric": "demo-experiment-1-round:round-1:3 - Recovery:cpu_usage_variability"
+      }
+    ],
+    "anomalous_metrics": [
+      {
+        "metric": "cpu_usage_variability",
+        "anomaly_count": 1,
+        "max_zscore": 6.22629382329479
+      }
+    ],
+    "attack_phase_patterns": [
+      {
+        "metric": "demo-experiment-1-round:round-1:cpu_usage_variability",
+        "variation_pct": -42.48740588371107,
+        "direction": "decrease"
+      }
+    ],
+    "correlation_patterns": [],
+    "recommendations": [
+      "Considerar isolamento de tenant-a dos tenants que o impactam: tenant-b, tenant-c, tenant-b, tenant-d, tenant-c.",
+      "Monitorar em tempo real as m\u00e9tricas que mostraram maior sensibilidade durante ataque: demo-experiment-1-round:round-1:cpu_usage_variability."
+    ]
+  },
+  "tenant-d": {
+    "name": "tenant-d",
+    "noisy_score": 0.6434568950144826,
+    "is_noisy_tenant": true,
+    "is_victim_tenant": true,
+    "main_impacted_tenants": [
+      {
+        "tenant": "tenant-b",
+        "score": 0.11986375275126218,
+        "metric": "demo-experiment-1-round:round-1:2 - Attack:cpu_usage_variability"
+      },
+      {
+        "tenant": "tenant-c",
+        "score": 0.11616342322633219,
+        "metric": "demo-experiment-1-round:round-1:2 - Attack:cpu_usage_variability"
+      },
+      {
+        "tenant": "tenant-c",
+        "score": 0.12732131798809063,
+        "metric": "demo-experiment-1-round:round-1:3 - Recovery:cpu_usage_variability"
+      },
+      {
+        "tenant": "tenant-a",
+        "score": 0.09359150980940269,
+        "metric": "demo-experiment-1-round:round-1:3 - Recovery:cpu_usage_variability"
+      }
+    ],
+    "main_impact_sources": [
+      {
+        "tenant": "tenant-c",
+        "score": 0.09458723645714902,
+        "metric": "demo-experiment-1-round:round-1:2 - Attack:cpu_usage_variability"
+      },
+      {
+        "tenant": "tenant-b",
+        "score": 0.05158218586948262,
+        "metric": "demo-experiment-1-round:round-1:3 - Recovery:cpu_usage_variability"
+      },
+      {
+        "tenant": "tenant-a",
+        "score": 0.09193518131320758,
+        "metric": "demo-experiment-1-round:round-1:3 - Recovery:cpu_usage_variability"
+      },
+      {
+        "tenant": "tenant-c",
+        "score": 0.07472332505830336,
+        "metric": "demo-experiment-1-round:round-1:3 - Recovery:cpu_usage_variability"
+      }
+    ],
+    "anomalous_metrics": [],
+    "attack_phase_patterns": [
+      {
+        "metric": "demo-experiment-1-round:round-1:cpu_usage_variability",
+        "variation_pct": -64.51855562332341,
+        "direction": "decrease"
+      }
+    ],
+    "correlation_patterns": [],
+    "recommendations": [
+      "Considerar ajuste de limites de recursos para evitar impacto nos outros tenants.",
+      "Considerar isolamento de tenant-d dos tenants que o impactam: tenant-c, tenant-b, tenant-a, tenant-c.",
+      "Monitorar em tempo real as m\u00e9tricas que mostraram maior sensibilidade durante ataque: demo-experiment-1-round:round-1:cpu_usage_variability."
+    ]
+  },
+  "tenant-c": {
+    "name": "tenant-c",
+    "noisy_score": 0.3859316257143549,
+    "is_noisy_tenant": false,
+    "is_victim_tenant": true,
+    "main_impacted_tenants": [
+      {
+        "tenant": "tenant-d",
+        "score": 0.09458723645714902,
+        "metric": "demo-experiment-1-round:round-1:2 - Attack:cpu_usage_variability"
+      },
+      {
+        "tenant": "tenant-a",
+        "score": 0.08856770822317366,
+        "metric": "demo-experiment-1-round:round-1:2 - Attack:cpu_usage_variability"
+      },
+      {
+        "tenant": "tenant-a",
+        "score": 0.11576781128289562,
+        "metric": "demo-experiment-1-round:round-1:3 - Recovery:cpu_usage_variability"
+      },
+      {
+        "tenant": "tenant-d",
+        "score": 0.07472332505830336,
+        "metric": "demo-experiment-1-round:round-1:3 - Recovery:cpu_usage_variability"
+      }
+    ],
+    "main_impact_sources": [
+      {
+        "tenant": "tenant-b",
+        "score": 0.14533454612254723,
+        "metric": "demo-experiment-1-round:round-1:2 - Attack:cpu_usage_variability"
+      },
+      {
+        "tenant": "tenant-a",
+        "score": 0.09648246334875825,
+        "metric": "demo-experiment-1-round:round-1:2 - Attack:cpu_usage_variability"
+      },
+      {
+        "tenant": "tenant-d",
+        "score": 0.11616342322633219,
+        "metric": "demo-experiment-1-round:round-1:2 - Attack:cpu_usage_variability"
+      },
+      {
+        "tenant": "tenant-a",
+        "score": 0.11020494222072547,
+        "metric": "demo-experiment-1-round:round-1:3 - Recovery:cpu_usage_variability"
+      },
+      {
+        "tenant": "tenant-d",
+        "score": 0.12732131798809063,
+        "metric": "demo-experiment-1-round:round-1:3 - Recovery:cpu_usage_variability"
+      }
+    ],
+    "anomalous_metrics": [],
+    "attack_phase_patterns": [
+      {
+        "metric": "demo-experiment-1-round:round-1:cpu_usage_variability",
+        "variation_pct": -58.08946534325571,
+        "direction": "decrease"
+      }
+    ],
+    "correlation_patterns": [],
+    "recommendations": [
+      "Considerar isolamento de tenant-c dos tenants que o impactam: tenant-b, tenant-a, tenant-d, tenant-a, tenant-d.",
+      "Monitorar em tempo real as m\u00e9tricas que mostraram maior sensibilidade durante ataque: demo-experiment-1-round:round-1:cpu_usage_variability."
+    ]
+  }
+}

@@ -23,6 +23,7 @@ from datetime import datetime
 from typing import List, Dict, Optional, Any, Callable, Union, Tuple
 
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import yaml
 import networkx as nx
@@ -374,6 +375,37 @@ class CorrelationAnalysisStage(PipelineStage):
                                 plot_paths.append(path)
                         except Exception as e:
                             self.logger.error(f"Erro ao calcular covariância para {metric}, {phase}, {round_id}: {e}")
+                            
+                        # Calcular correlação cruzada (CCF)
+                        try:
+                            self.logger.info(f"Calculando correlação cruzada (CCF) para metric: {metric}, phase: {phase}, round_id: {round_id}")
+                            
+                            # Filtrar DataFrame para a fase específica
+                            phase_specific_df_ccf = round_df[round_df['experimental_phase'] == phase]
+                            
+                            # Verificar se temos dados suficientes
+                            if not phase_specific_df_ccf.empty:
+                                # Diretório específico para plots de CCF
+                                ccf_dir = os.path.join(out_dir, "cross_correlation")
+                                os.makedirs(ccf_dir, exist_ok=True)
+                                
+                                # Calcular CCF
+                                from src.analysis_correlation import compute_cross_correlation, plot_ccf
+                                ccf_results = compute_cross_correlation(phase_specific_df_ccf, metric, phase, round_id, max_lag=20)
+                                
+                                if ccf_results:
+                                    # Gerar plots de CCF
+                                    ccf_paths = plot_ccf(ccf_results, metric, phase, round_id, ccf_dir, max_lag=20)
+                                    if ccf_paths:
+                                        plot_paths.extend(ccf_paths)
+                                        self.logger.info(f"Gerados {len(ccf_paths)} plots de correlação cruzada para {metric}, {phase}, {round_id}")
+                                else:
+                                    self.logger.warning(f"Sem dados de correlação cruzada para {metric}, {phase}, {round_id}")
+                            else:
+                                self.logger.warning(f"DataFrame vazio para {metric}, {phase}, {round_id}. Pulando correlação cruzada.")
+                                
+                        except Exception as e_ccf:
+                            self.logger.error(f"Erro ao calcular correlação cruzada para {metric}, {phase}, {round_id}: {e_ccf}", exc_info=True)
         
         # Atualizar contexto
         context['correlation_matrices'] = correlation_matrices
