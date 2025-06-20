@@ -14,10 +14,10 @@ def filter_long_df(
     experiment_id: Optional[str] = None
 ) -> pd.DataFrame:
     """Filter the long DataFrame by phase, tenant, metric, round, and/or experiment."""
-    # Criar uma cópia para evitar SettingWithCopyWarning e outros problemas de visualização
+    # Create a copy to avoid SettingWithCopyWarning and other display issues
     filtered_df = df.copy()
     
-    # Aplicar filtros sequencialmente em vez de usar operadores bit a bit com máscaras
+    # Apply filters sequentially instead of using bitwise operators with masks
     if phase:
         filtered_df = filtered_df[filtered_df['experimental_phase'] == phase]
     if tenant:

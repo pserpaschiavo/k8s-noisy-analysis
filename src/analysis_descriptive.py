@@ -14,11 +14,13 @@ import seaborn as sns
 from functools import lru_cache
 import logging
 
+from src.visualization_config import PUBLICATION_CONFIG
+
 # Setup logging
 logger = logging.getLogger(__name__)
 
 # Use the style from config
-plt.style.use('tableau-colorblind10')
+# plt.style.use('tableau-colorblind10') # Removed to use centralized config
 
 
 def compute_descriptive_stats(df, groupby_cols=None) -> pd.DataFrame:
@@ -50,183 +52,302 @@ def compute_descriptive_stats(df, groupby_cols=None) -> pd.DataFrame:
 
 def plot_metric_timeseries_multi_tenant(df: pd.DataFrame, metric: str, phase: str, round_id: str, out_dir: str):
     """
-    Plota séries temporais para todos os tenants de uma métrica, fase e round, cada tenant com uma cor.
-    Eixo X: tempo relativo em segundos; Y: valor da métrica; Cores: tenants.
+    Plots time series for all tenants for a given metric, phase, and round,
+    using the centralized academic publication configuration.
+    X-axis: relative time in seconds; Y-axis: metric value; Colors: tenants.
     """
     subset = df[(df['metric_name'] == metric) & (df['experimental_phase'] == phase) & (df['round_id'] == round_id)]
     if subset.empty:
-        logger.warning(f"Sem dados para {metric}, {phase}, {round_id}")
+        logger.warning(f"No data for {metric}, {phase}, {round_id}")
         return None
     if not pd.api.types.is_datetime64_any_dtype(subset['timestamp']):
         subset['timestamp'] = pd.to_datetime(subset['timestamp'], errors='coerce')
     
-    # Encontrar o timestamp inicial da fase
+    # Apply centralized figure style
+    plt.rcParams.update(PUBLICATION_CONFIG['figure_style'])
+
+    # Get standardized names, units, and colors
+    metric_info = PUBLICATION_CONFIG['metric_display_names'].get(metric, {'name': metric, 'unit': ''})
+    metric_name = metric_info['name']
+    metric_unit = metric_info['unit']
+    phase_display = PUBLICATION_CONFIG['phase_display_names'].get(phase, phase)
+    tenant_colors = PUBLICATION_CONFIG['tenant_colors']
+    tenant_display_names = PUBLICATION_CONFIG['tenant_display_names']
+
+    # Find the start timestamp of the phase
     phase_start = subset['timestamp'].min()
     
-    # Calcular a duração total da fase em segundos
-    total_duration = (subset['timestamp'].max() - phase_start).total_seconds()
+    plt.figure(figsize=(14, 7))
+    ax = plt.gca()
+
+    tenants = sorted(subset['tenant_id'].unique())
+
+    for tenant_id in tenants:
+        group = subset[subset['tenant_id'] == tenant_id].sort_values('timestamp')
+        if group.empty:
+            continue
+        
+        # Calculate elapsed time in seconds from the phase start
+        elapsed = (group['timestamp'] - phase_start).dt.total_seconds()
+        
+        display_name = tenant_display_names.get(tenant_id, tenant_id)
+        color = tenant_colors.get(tenant_id, tenant_colors['default'])
+        
+        ax.plot(elapsed, group['metric_value'], marker='o', markersize=3, linestyle='-', label=display_name, color=color)
     
-    # Sempre usar segundos para consistência
-    time_unit = 1  # Usar sempre segundos
-    x_label = "Segundos desde o início da fase"
+    ax.set_title(f'Time Series - {metric_name} - {phase_display} (Round {round_id})')
+    ax.set_xlabel("Time (seconds from phase start)")
+    ax.set_ylabel(f'{metric_name} ({metric_unit})' if metric_unit else metric_name)
+    ax.legend(title='Tenant', bbox_to_anchor=(1.05, 1), loc='upper left')
+    ax.grid(True, which='both', linestyle='--', linewidth=0.5)
     
-    plt.figure(figsize=(12, 5))
-    for tenant, group in subset.groupby('tenant_id'):
-        group = group.sort_values('timestamp')
-        # Calcular o tempo relativo desde o início da fase (não apenas do tenant)
-        elapsed = (group['timestamp'] - phase_start).dt.total_seconds() / time_unit
-        plt.plot(elapsed, group['metric_value'], marker='o', markersize=3, linestyle='-', label=tenant)
-    plt.title(f"Série temporal - {metric} - {phase} - {round_id}")
-    plt.xlabel(x_label)
-    plt.ylabel(metric)
-    plt.legend(title='Tenant')
-    plt.grid(True, alpha=0.3)
-    plt.tight_layout()
+    plt.tight_layout(rect=(0, 0, 0.85, 1)) # Adjust for legend
     os.makedirs(out_dir, exist_ok=True)
-    out_path = os.path.join(out_dir, f"timeseries_multi_{metric}_{phase}_{round_id}.png")
-    plt.savefig(out_path)
+    out_path = os.path.join(out_dir, f"timeseries_multi_{metric}_{phase.replace(' ', '_')}_{round_id}.png")
+    plt.savefig(out_path, bbox_inches='tight')
     plt.close()
+    
+    logger.info(f"Multi-tenant time series plot saved to {out_path}")
     return out_path
 
 
 def plot_metric_barplot_by_phase(df: pd.DataFrame, metric: str, round_id: str, out_dir: str):
     """
-    Barplot: eixo X = fases, barras = média da métrica, cores = tenants, erro = desvio padrão.
+    Generates a bar plot of a metric, grouped by phase and tenant,
+    using the centralized academic publication configuration.
+
+    Args:
+        df: DataFrame with the data to be analyzed.
+        metric: Name of the metric to plot.
+        round_id: ID of the round to analyze.
+        out_dir: Directory to save the plot.
     """
-    import numpy as np
     subset = df[(df['metric_name'] == metric) & (df['round_id'] == round_id)]
     if subset.empty:
-        logger.warning(f"Sem dados para {metric} em {round_id}")
+        logger.warning(f"No data for bar plot of {metric} in {round_id}")
         return None
-    phases = subset['experimental_phase'].unique()
-    tenants = subset['tenant_id'].unique()
-    means = {tenant: [] for tenant in tenants}
-    stds = {tenant: [] for tenant in tenants}
-    for phase in phases:
-        for tenant in tenants:
-            vals = subset[(subset['experimental_phase'] == phase) & (subset['tenant_id'] == tenant)]['metric_value']
-            means[tenant].append(vals.mean())
-            stds[tenant].append(vals.std())
-    x = np.arange(len(phases))
-    width = 0.8 / len(tenants)
-    plt.figure(figsize=(10, 6))
-    for i, tenant in enumerate(tenants):
-        plt.bar(x + i*width, means[tenant], width, yerr=stds[tenant], label=tenant, capsize=5)
-    plt.xticks(x + width*(len(tenants)-1)/2, phases.tolist() if isinstance(phases, np.ndarray) else phases) # Convert to list
-    plt.xlabel('Fase experimental')
-    plt.ylabel(f'{metric} (média ± desvio padrão)')
-    plt.title(f'Comparação de {metric} por fase e tenant - {round_id}')
-    plt.legend(title='Tenant')
-    plt.tight_layout()
+
+    # Apply centralized figure style
+    plt.rcParams.update(PUBLICATION_CONFIG['figure_style'])
+
+    # Get standardized names, units, and colors
+    metric_info = PUBLICATION_CONFIG['metric_display_names'].get(metric, {'name': metric, 'unit': ''})
+    metric_name = metric_info['name']
+    metric_unit = metric_info['unit']
+    tenant_colors = PUBLICATION_CONFIG['tenant_colors']
+    tenant_display_names = PUBLICATION_CONFIG['tenant_display_names']
+    phase_display_names = PUBLICATION_CONFIG['phase_display_names']
+
+    # Map internal names to display names for plotting
+    plot_df = subset.copy()
+    plot_df['tenant_id'] = plot_df['tenant_id'].map(tenant_display_names).fillna(plot_df['tenant_id'])
+    plot_df['experimental_phase'] = plot_df['experimental_phase'].map(phase_display_names).fillna(plot_df['experimental_phase'])
+
+    # Define order for plotting
+    phase_order = [phase_display_names[p] for p in PUBLICATION_CONFIG['phase_display_names'] if phase_display_names[p] in plot_df['experimental_phase'].unique()]
+    tenant_order = [tenant_display_names[t] for t in PUBLICATION_CONFIG['tenant_display_names'] if tenant_displayNames[t] in plot_df['tenant_id'].unique()]
+
+    plt.figure(figsize=(14, 7))
+    ax = sns.barplot(
+        data=plot_df,
+        x='experimental_phase',
+        y='metric_value',
+        hue='tenant_id',
+        palette=tenant_colors,
+        order=phase_order,
+        hue_order=tenant_order,
+        errorbar='sd',  # Show standard deviation
+        capsize=0.1
+    )
+
+    ax.set_title(f'Mean {metric_name} by Phase and Tenant (Round {round_id})')
+    ax.set_xlabel('Experimental Phase')
+    ax.set_ylabel(f'Mean {metric_name} ({metric_unit})' if metric_unit else f'Mean {metric_name}')
+    ax.tick_params(axis='x', rotation=45)
+    for label in ax.get_xticklabels():
+        label.set_horizontalalignment("right")
+    ax.legend(title='Tenant', bbox_to_anchor=(1.05, 1), loc='upper left')
+    ax.grid(True, axis='y', linestyle='--', linewidth=0.5)
+
+    plt.tight_layout(rect=(0, 0, 0.85, 1)) # Adjust for legend
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, f"barplot_{metric}_{round_id}.png")
-    plt.savefig(out_path)
+    plt.savefig(out_path, bbox_inches='tight')
     plt.close()
+    
+    logger.info(f"Bar plot saved to {out_path}")
     return out_path
 
 
 def plot_metric_timeseries_multi_tenant_all_phases(df: pd.DataFrame, metric: str, round_id: str, out_dir: str):
     """
-    Plota séries temporais para todos os tenants e todas as fases em um único plot, separando as fases com cores de fundo e anotações.
-    Eixo X: tempo relativo (segundos desde início do round, fases em sequência); Y: valor da métrica; Cores: tenants.
+    Plots time series for all tenants across all phases in a single plot,
+    using the centralized academic publication configuration. Phases are
+    distinguished by background colors and annotations.
+
+    Args:
+        df: DataFrame with the data.
+        metric: Name of the metric to plot.
+        round_id: ID of the round to analyze.
+        out_dir: Directory to save the plot.
     """
     subset = df[(df['metric_name'] == metric) & (df['round_id'] == round_id)].copy()
     if subset.empty:
-        logger.warning(f"Sem dados para {metric} em {round_id}")
+        logger.warning(f"No data for all-phases time series of {metric} in {round_id}")
         return None
     if not pd.api.types.is_datetime64_any_dtype(subset['timestamp']):
         subset['timestamp'] = pd.to_datetime(subset['timestamp'], errors='coerce')
-    
-    # Calcular a duração total do round em segundos
-    round_start = subset['timestamp'].min()
-    total_duration = (subset['timestamp'].max() - round_start).total_seconds()
-    
-    # Sempre usar segundos para consistência
-    time_unit = 1  # Usar sempre segundos
-    x_label = "Segundos desde o início do round (fases em sequência)"
-        
-    # Ordenar por fase e timestamp
-    phase_order = sorted(subset['experimental_phase'].unique())
+
+    # Apply centralized figure style
+    plt.rcParams.update(PUBLICATION_CONFIG['figure_style'])
+
+    # Get standardized names, units, and colors
+    metric_info = PUBLICATION_CONFIG['metric_display_names'].get(metric, {'name': metric, 'unit': ''})
+    metric_name = metric_info['name']
+    metric_unit = metric_info['unit']
+    tenant_colors = PUBLICATION_CONFIG['tenant_colors']
+    tenant_display_names = PUBLICATION_CONFIG['tenant_display_names']
+    phase_colors = PUBLICATION_CONFIG['phase_colors']
+    phase_display_names = PUBLICATION_CONFIG['phase_display_names']
+
+    # Sort by phase order and timestamp
+    phase_order = list(phase_display_names.keys())
     subset['phase_order'] = pd.Categorical(subset['experimental_phase'], categories=phase_order, ordered=True)
     subset = subset.sort_values(['phase_order', 'timestamp'])
-    phases = phase_order
-    tenants = subset['tenant_id'].unique()
-    color_map = cm.get_cmap('tab10')
-    plt.figure(figsize=(14, 6))
-    # Gera cores de fundo para fases dinamicamente
-    if len(phases) > 3:
-        phase_colors = sns.color_palette('pastel', len(phases)).as_hex()
-    else:
-        phase_colors = ['#f0f0f0', '#ffcccc', '#e0e0ff']
-    legend_handles = []
-    t_offset = 0
+    
+    tenants = sorted(subset['tenant_id'].unique())
+    
+    plt.figure(figsize=(18, 8))
     ax = plt.gca()
-    for i, phase in enumerate(phases):
-        phase_data = subset[subset['experimental_phase'] == phase]
+    
+    legend_handles = []
+    time_offset = 0
+    last_time = 0
+
+    # Create legend handles first
+    for tenant_id in tenants:
+        display_name = tenant_display_names.get(tenant_id, tenant_id)
+        color = tenant_colors.get(tenant_id, tenant_colors['default'])
+        legend_handles.append(mpatches.Patch(color=color, label=display_name))
+
+    for phase_key in phase_order:
+        phase_data = subset[subset['experimental_phase'] == phase_key]
         if phase_data.empty:
             continue
-        t0 = phase_data.groupby('tenant_id')['timestamp'].min().min()
-        t_max = 0
-        for j, tenant in enumerate(tenants):
-            group = phase_data[phase_data['tenant_id'] == tenant].sort_values('timestamp')
+
+        phase_start_time = phase_data['timestamp'].min()
+        phase_end_time = phase_data['timestamp'].max()
+        phase_duration = (phase_end_time - phase_start_time).total_seconds()
+
+        for tenant_id in tenants:
+            group = phase_data[phase_data['tenant_id'] == tenant_id].sort_values('timestamp')
             if group.empty:
                 continue
-            # Calcular tempo relativo em segundos
-            elapsed = (group['timestamp'] - t0).dt.total_seconds() / time_unit + t_offset
-            plt.plot(elapsed, group['metric_value'], marker='o', markersize=3, linestyle='-', label=tenant if i == 0 else "_nolegend_", color=color_map(j))
-            if i == 0:
-                legend_handles.append(mpatches.Patch(color=color_map(j), label=tenant))
-            t_max = max(t_max, elapsed.max() if not elapsed.empty else 0)
-        # shade da fase
-        if t_max > t_offset:
-            plt.axvspan(t_offset, t_max, color=phase_colors[i % len(phase_colors)], alpha=0.25 if i != 1 else 0.45, zorder=0)
-            # Anotação de fase em coordenadas de eixos (sempre topo)
-            ax.annotate(
-                phase,
-                xy=((t_offset + t_max)/2, 1.01),
-                xycoords=("data", "axes fraction"),
-                ha='center', va='bottom', fontsize=11, color='gray', alpha=0.8, fontweight='bold'
-            )
-        t_offset = t_max
-    plt.xlabel(x_label)
-    plt.ylabel(metric)
-    plt.title(f'Série temporal multi-tenant - {metric} - {round_id} (todas as fases)')
-    plt.legend(handles=legend_handles, title='Tenant', loc='best')
-    plt.grid(True, axis='both')
-    plt.tight_layout()
+            
+            elapsed = (group['timestamp'] - phase_start_time).dt.total_seconds() + time_offset
+            color = tenant_colors.get(tenant_id, tenant_colors['default'])
+            ax.plot(elapsed, group['metric_value'], marker='o', markersize=2.5, linestyle='-', color=color, alpha=0.8)
+        
+        # Add phase background shading and annotation
+        current_phase_end = time_offset + phase_duration
+        ax.axvspan(time_offset, current_phase_end, color=phase_colors.get(phase_key, '#f0f0f0'), alpha=0.2, zorder=0)
+        
+        # Annotate phase name
+        phase_display = phase_display_names.get(phase_key, phase_key)
+        ax.annotate(
+            phase_display,
+            xy=((time_offset + current_phase_end) / 2, 1.01),
+            xycoords=("data", "axes fraction"),
+            ha='center', va='bottom', fontsize=11, color='black', fontweight='bold'
+        )
+        
+        time_offset = current_phase_end
+        last_time = max(last_time, time_offset)
+
+    ax.set_xlim(0, last_time)
+    ax.set_title(f'Time Series - {metric_name} (All Phases, Round {round_id})')
+    ax.set_xlabel("Time (seconds, phases concatenated)")
+    ax.set_ylabel(f'{metric_name} ({metric_unit})' if metric_unit else metric_name)
+    ax.legend(handles=legend_handles, title='Tenant', bbox_to_anchor=(1.05, 1), loc='upper left')
+    ax.grid(True, which='both', linestyle='--', linewidth=0.5)
+
+    plt.tight_layout(rect=(0, 0, 0.85, 1)) # Adjust for legend
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, f"timeseries_multi_{metric}_allphases_{round_id}.png")
-    plt.savefig(out_path)
+    plt.savefig(out_path, bbox_inches='tight')
     plt.close()
+    
+    logger.info(f"All-phases time series plot saved to {out_path}")
     return out_path
 
 
 def plot_metric_boxplot(df: pd.DataFrame, metric: str, round_id: str, out_dir: str):
     """
-    Grouped boxplot: eixo X = fase, cada box = tenant (hue), y = valor da métrica.
+    Generates a grouped box plot of a metric by phase and tenant,
+    using the centralized academic publication configuration.
+
+    Args:
+        df: DataFrame with the data.
+        metric: Name of the metric to plot.
+        round_id: ID of the round to analyze.
+        out_dir: Directory to save the plot.
     """
     subset = df[(df['metric_name'] == metric) & (df['round_id'] == round_id)]
     if subset.empty:
+        logger.warning(f"No data for box plot of {metric} in {round_id}")
         return None
-    plt.figure(figsize=(12, 6))
+
+    # Apply centralized figure style
+    plt.rcParams.update(PUBLICATION_CONFIG['figure_style'])
+
+    # Get standardized names, units, and colors
+    metric_info = PUBLICATION_CONFIG['metric_display_names'].get(metric, {'name': metric, 'unit': ''})
+    metric_name = metric_info['name']
+    metric_unit = metric_info['unit']
+    tenant_colors = PUBLICATION_CONFIG['tenant_colors']
+    tenant_display_names = PUBLICATION_CONFIG['tenant_display_names']
+    phase_display_names = PUBLICATION_CONFIG['phase_display_names']
+
+    # Map internal names to display names for plotting
+    plot_df = subset.copy()
+    plot_df['tenant_id'] = plot_df['tenant_id'].map(tenant_display_names).fillna(plot_df['tenant_id'])
+    plot_df['experimental_phase'] = plot_df['experimental_phase'].map(phase_display_names).fillna(plot_df['experimental_phase'])
+
+    # Define order for plotting from the config, if available
+    phase_order = PUBLICATION_CONFIG.get('phase_order', [])
+    phase_order = [phase_display_names.get(p, p) for p in phase_order]
+    
+    tenant_order = PUBLICATION_CONFIG.get('tenant_order', [])
+    tenant_order = [tenant_display_names.get(t, t) for t in tenant_order]
+
+    plt.figure(figsize=(16, 8))
     ax = sns.boxplot(
-        data=subset,
+        data=plot_df,
         x='experimental_phase',
         y='metric_value',
         hue='tenant_id',
-        palette='tab10',
+        palette=tenant_colors,
+        order=phase_order if phase_order else sorted(plot_df['experimental_phase'].unique()),
+        hue_order=tenant_order if tenant_order else sorted(plot_df['tenant_id'].unique()),
         showfliers=False
     )
-    plt.xlabel('Fase experimental')
-    plt.ylabel(metric)
-    plt.title(f'Boxplot de {metric} por fase e tenant - {round_id}')
-    plt.legend(title='Tenant', loc='best')
-    plt.grid(True, axis='y')
-    plt.tight_layout()
+
+    ax.set_title(f'Box Plot of {metric_name} by Phase and Tenant (Round {round_id})')
+    ax.set_xlabel('Experimental Phase')
+    ax.set_ylabel(f'{metric_name} ({metric_unit})' if metric_unit else metric_name)
+    ax.tick_params(axis='x', rotation=45, ha="right")
+    
+    ax.legend(title='Tenant', bbox_to_anchor=(1.05, 1), loc='upper left')
+    
+    ax.grid(True, axis='y', linestyle='--', linewidth=0.5)
+
+    plt.tight_layout(rect=(0, 0, 0.85, 1)) # Adjust for legend
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, f"boxplot_{metric}_{round_id}.png")
-    plt.savefig(out_path)
+    plt.savefig(out_path, bbox_inches='tight')
     plt.close()
+    
+    logger.info(f"Box plot saved to {out_path}")
     return out_path
 
 
@@ -294,70 +415,95 @@ def detect_anomalies(df: pd.DataFrame, metric: str, phase: str, round_id: str, w
 
 def plot_anomalies(df: pd.DataFrame, anomalies: pd.DataFrame, metric: str, phase: str, round_id: str, out_dir: str) -> str | None:
     """
-    Plota série temporal com anomalias destacadas.
-    
+    Plots time series with highlighted anomalies, using the centralized
+    academic publication configuration.
+
     Args:
-        df: DataFrame completo em formato long
-        anomalies: DataFrame com anomalias detectadas
-        metric: Nome da métrica
-        phase: Fase experimental
-        round_id: ID do round
-        out_dir: Diretório de saída para o gráfico
-        
+        df: Complete long-format DataFrame.
+        anomalies: DataFrame with detected anomalies.
+        metric: Name of the metric.
+        phase: Experimental phase.
+        round_id: ID of the round.
+        out_dir: Output directory for the plot.
+
     Returns:
-        Caminho para o gráfico gerado ou None se não houver dados/anomalias
+        Path to the generated plot or None if no data/anomalies.
     """
     if anomalies.empty:
-        logger.info(f"Sem anomalias para plotar: {metric}, {phase}, {round_id}")
+        logger.info(f"No anomalies to plot for: {metric}, {phase}, {round_id}")
         return None
-    
+
     subset = df[(df['metric_name'] == metric) & (df['experimental_phase'] == phase) & (df['round_id'] == round_id)]
     if subset.empty:
-        logger.warning(f"Sem dados para plotar anomalias: {metric}, {phase}, {round_id}")
+        logger.warning(f"No data to plot anomalies for: {metric}, {phase}, {round_id}")
         return None
-    
+
     if not pd.api.types.is_datetime64_any_dtype(subset['timestamp']):
         subset['timestamp'] = pd.to_datetime(subset['timestamp'], errors='coerce')
-    
-    # Encontrar o timestamp inicial da fase
+    if not pd.api.types.is_datetime64_any_dtype(anomalies['timestamp']):
+        anomalies['timestamp'] = pd.to_datetime(anomalies['timestamp'], errors='coerce')
+
+    # Apply centralized figure style
+    plt.rcParams.update(PUBLICATION_CONFIG['figure_style'])
+
+    # Get standardized names, units, and colors
+    metric_info = PUBLICATION_CONFIG['metric_display_names'].get(metric, {'name': metric, 'unit': ''})
+    metric_name = metric_info['name']
+    metric_unit = metric_info['unit']
+    phase_display = PUBLICATION_CONFIG['phase_display_names'].get(phase, phase)
+    tenant_colors = PUBLICATION_CONFIG['tenant_colors']
+    tenant_display_names = PUBLICATION_CONFIG['tenant_display_names']
+
+    # Find the start timestamp of the phase
     phase_start = subset['timestamp'].min()
-    
-    # Calcular a duração total da fase em segundos
-    total_duration = (subset['timestamp'].max() - phase_start).total_seconds()
-    
-    # Sempre usar segundos para consistência
-    time_unit = 1  # Usar sempre segundos
-    x_label = "Segundos desde o início da fase"
-    
+
     plt.figure(figsize=(14, 7))
-    color_map = cm.get_cmap('tab10')
-    
-    # Plotar séries temporais normais
-    for i, (tenant, group) in enumerate(subset.groupby('tenant_id')):
-        group = group.sort_values('timestamp')
-        # Calcular o tempo relativo desde o início da fase
-        elapsed = (group['timestamp'] - phase_start).dt.total_seconds() / time_unit
-        plt.plot(elapsed, group['metric_value'], marker='o', markersize=3, linestyle='-', 
-                label=tenant, color=color_map(i), alpha=0.7)
-    
-    # Destacar anomalias
-    for i, (tenant, group) in enumerate(anomalies.groupby('tenant_id')):
-        # Usar o mesmo timestamp de início da fase para calcular o tempo relativo
-        elapsed = (group['timestamp'] - phase_start).dt.total_seconds() / time_unit
-        plt.scatter(elapsed, group['metric_value'], color='red', s=100, marker='X', 
-                   label=f"{tenant} (anomalias)" if i == 0 else "_nolegend_", zorder=10)
-    
-    plt.title(f"Série temporal com anomalias - {metric} - {phase} - {round_id}")
-    plt.xlabel(x_label)
-    plt.ylabel(metric)
-    plt.grid(True, alpha=0.3)
-    plt.legend(title='Tenant')
-    plt.tight_layout()
-    
+    ax = plt.gca()
+
+    tenants = sorted(subset['tenant_id'].unique())
+
+    # Plot normal time series
+    for tenant_id in tenants:
+        group = subset[subset['tenant_id'] == tenant_id].sort_values('timestamp')
+        if group.empty:
+            continue
+        
+        elapsed = (group['timestamp'] - phase_start).dt.total_seconds()
+        display_name = tenant_display_names.get(tenant_id, tenant_id)
+        color = tenant_colors.get(tenant_id, tenant_colors['default'])
+        
+        ax.plot(elapsed, group['metric_value'], marker='o', markersize=3, linestyle='-', 
+                label=display_name, color=color, alpha=0.7)
+
+    # Highlight anomalies
+    anomaly_handles = []
+    for tenant_id in tenants:
+        anomaly_group = anomalies[anomalies['tenant_id'] == tenant_id]
+        if anomaly_group.empty:
+            continue
+
+        elapsed = (anomaly_group['timestamp'] - phase_start).dt.total_seconds()
+        color = tenant_colors.get(tenant_id, tenant_colors['default'])
+        
+        ax.scatter(elapsed, anomaly_group['metric_value'], color='red', s=100, marker='X', 
+                   edgecolors='black', linewidth=1, zorder=10)
+
+    # Create a single legend entry for all anomalies
+    if not anomalies.empty:
+        ax.scatter([], [], color='red', s=100, marker='X', edgecolors='black', 
+                   linewidth=1, label='Anomaly')
+
+    ax.set_title(f'Time Series with Anomalies - {metric_name} - {phase_display} (Round {round_id})')
+    ax.set_xlabel("Time (seconds from phase start)")
+    ax.set_ylabel(f'{metric_name} ({metric_unit})' if metric_unit else metric_name)
+    ax.grid(True, which='both', linestyle='--', linewidth=0.5)
+    ax.legend(title='Tenant / Event', bbox_to_anchor=(1.05, 1), loc='upper left')
+
+    plt.tight_layout(rect=(0, 0, 0.85, 1)) # Adjust for legend
     os.makedirs(out_dir, exist_ok=True)
-    out_path = os.path.join(out_dir, f"anomalies_{metric}_{phase}_{round_id}.png")
-    plt.savefig(out_path)
+    out_path = os.path.join(out_dir, f"anomalies_{metric}_{phase.replace(' ', '_')}_{round_id}.png")
+    plt.savefig(out_path, bbox_inches='tight')
     plt.close()
     
-    logger.info(f"Gráfico de anomalias salvo em {out_path}")
+    logger.info(f"Anomaly plot saved to {out_path}")
     return out_path

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Module: utils.py
-Description: Utilidades gerais para o pipeline de análise.
+Description: General utilities for the analysis pipeline.
 """
 
 import warnings
@@ -13,11 +13,11 @@ logger = logging.getLogger(__name__)
 @contextlib.contextmanager
 def suppress_statsmodels_warnings():
     """
-    Context manager para suprimir avisos repetitivos do statsmodels.
-    Filtra avisos específicos enquanto mantém outros importantes.
+    Context manager to suppress repetitive statsmodels warnings.
+    Filters specific warnings while keeping other important ones.
     """
     with warnings.catch_warnings():
-        # Filtrar avisos comuns do statsmodels
+        # Filter common statsmodels warnings
         warnings.filterwarnings('ignore', 'Non-stationary starting autoregressive parameters')
         warnings.filterwarnings('ignore', 'Value in x_0 detected')
         warnings.filterwarnings('ignore', message='.*flat prior.*')
@@ -25,11 +25,11 @@ def suppress_statsmodels_warnings():
         warnings.filterwarnings('ignore', message='.*divide by zero.*')
         warnings.filterwarnings('ignore', message='.*invalid value.*')
         
-        # Suprimir avisos de convergência
+        # Suppress convergence warnings
         warnings.filterwarnings('ignore', message='.*Maximum Likelihood optimization failed.*')
         warnings.filterwarnings('ignore', message='.*The iteration limit.*')
         
-        # Outros avisos estatísticos comuns
+        # Other common statistical warnings
         warnings.filterwarnings('ignore', message='.*p-value.*')
         
         yield

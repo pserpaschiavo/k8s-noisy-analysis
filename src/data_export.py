@@ -40,7 +40,7 @@ def export_segmented_long(
     phase: str,
     format: str = 'parquet'
 ):
-    """Exporta subconjunto long filtrado para diretório organizado por experimento/round/fase."""
+    """Exports a filtered long subset to a directory organized by experiment/round/phase."""
     subdir = os.path.join(out_dir, experiment_id, round_id, phase)
     os.makedirs(subdir, exist_ok=True)
     out_path = os.path.join(subdir, f"long.{format}")
@@ -56,7 +56,7 @@ def export_segmented_wide(
     metric: str,
     format: str = 'parquet'
 ):
-    """Exporta subconjunto wide para diretório organizado por experimento/round/fase/métrica."""
+    """Exports a wide subset to a directory organized by experiment/round/phase/metric."""
     subdir = os.path.join(out_dir, experiment_id, round_id, phase, metric)
     os.makedirs(subdir, exist_ok=True)
     out_path = os.path.join(subdir, f"wide.{format}")

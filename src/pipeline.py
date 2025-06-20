@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """
 Module: pipeline.py
-Description: Sistema de orquestração do pipeline completo de análise de séries temporais multi-tenant.
+Description: Orchestration system for the complete multi-tenant time series analysis pipeline.
 
-Este módulo implementa classes e funções para a execução ordenada de todo o fluxo de análise:
-1. Ingestão de dados
-2. Processamento e exportação de DataFrames
-3. Análise descritiva
-4. Análise de correlação
-5. Análise de causalidade
-6. Geração de relatórios
+This module implements classes and functions for the ordered execution of the entire analysis flow:
+1. Data Ingestion
+2. DataFrame Processing and Export
+3. Descriptive Analysis
+4. Correlation Analysis
+5. Causality Analysis
+6. Report Generation
 
-A classe Pipeline é o ponto central de orquestração, enquanto PipelineStage serve como 
-base para as diferentes etapas do pipeline.
+The Pipeline class is the central orchestration point, while PipelineStage serves as
+the base for the different pipeline stages.
 """
 import os
 import sys
@@ -28,22 +28,22 @@ import matplotlib.pyplot as plt
 import yaml
 import networkx as nx
 
-# Importações dos módulos do projeto
+# Project module imports
 from src.data_ingestion import ingest_experiment_data
 from src.data_export import save_dataframe, load_dataframe
 from src.data_segment import filter_long_df, get_wide_format_for_analysis
-from src.analysis_descriptive import compute_descriptive_stats, plot_metric_timeseries_multi_tenant
+from src.analysis_descriptive import compute_descriptive_stats, plot_metric_timeseries_multi_tenant, plot_metric_timeseries_multi_tenant_all_phases
 from src.analysis_descriptive import plot_metric_barplot_by_phase, plot_metric_boxplot
 from src.analysis_correlation import compute_correlation_matrix, plot_correlation_heatmap
 from src.analysis_correlation import compute_covariance_matrix, plot_covariance_heatmap
 from src.analysis_causality import plot_causality_graph
 from src.report_generation import generate_tenant_metrics, generate_tenant_ranking_plot, generate_markdown_report
-from src.insight_aggregation import aggregate_tenant_insights, generate_comparative_table, plot_comparative_metrics
+from src.insight_aggregation import aggregate_tenant_insights, generate_comparative_table, plot_insight_matrix
 from src import config
 from src.parse_config import load_parse_config, get_selected_metrics, get_selected_tenants, get_selected_rounds
 from src.parse_config import get_data_root, get_processed_data_dir, get_experiment_folder, get_experiment_dir
 
-# Configuração de logging
+# Logging configuration
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -55,16 +55,79 @@ logging.basicConfig(
 logger = logging.getLogger("pipeline")
 
 
+def validate_data_availability(df: pd.DataFrame, config_dict: Dict[str, Any], min_data_points: int = 10) -> Tuple[bool, Dict[str, List[str]]]:
+    """
+    Validates if there is enough data for the selected metrics, tenants, and rounds.
+
+    Args:
+        df: The long format DataFrame.
+        config_dict: The configuration dictionary.
+        min_data_points: The minimum number of data points required.
+
+    Returns:
+        A tuple containing:
+        - A boolean indicating if the data is valid.
+        - A dictionary with details about missing or insufficient data.
+    """
+    logger.info("Starting data availability validation...")
+    is_valid = True
+    report = {
+        "missing_metrics": [],
+        "insufficient_data_metrics": [],
+        "missing_tenants": [],
+        "available_metrics": list(df['metric_name'].unique()),
+        "available_tenants": list(df['tenant_id'].unique()),
+    }
+
+    selected_metrics = get_selected_metrics(config_dict)
+    selected_tenants = get_selected_tenants(config_dict)
+    
+    # Validate metrics
+    if selected_metrics:
+        for metric in selected_metrics:
+            if metric not in report['available_metrics']:
+                report['missing_metrics'].append(metric)
+                is_valid = False
+            else:
+                # Check for sufficient data points
+                metric_df = df[df['metric_name'] == metric]
+                if len(metric_df) < min_data_points:
+                    report['insufficient_data_metrics'].append(f"{metric} (found {len(metric_df)} points)")
+                    is_valid = False
+
+    # Validate tenants
+    if selected_tenants: # If specific tenants are selected
+        for tenant in selected_tenants:
+            if tenant not in report['available_tenants']:
+                report['missing_tenants'].append(tenant)
+                is_valid = False
+
+    if not is_valid:
+        logger.warning("Data validation failed.")
+        if report['missing_metrics']:
+            logger.warning(f"Missing metrics: {report['missing_metrics']}")
+            logger.warning(f"Available metrics in data: {report['available_metrics']}")
+        if report['insufficient_data_metrics']:
+            logger.warning(f"Insufficient data for metrics: {report['insufficient_data_metrics']}")
+        if report['missing_tenants']:
+            logger.warning(f"Missing tenants: {report['missing_tenants']}")
+            logger.warning(f"Available tenants in data: {report['available_tenants']}")
+    else:
+        logger.info("Data availability validation passed successfully.")
+        
+    return is_valid, report
+
+
 class PipelineStage:
-    """Classe base para estágios do pipeline."""
+    """Base class for pipeline stages."""
     
     def __init__(self, name: str, description: str):
         """
-        Inicializa um estágio do pipeline.
+        Initializes a pipeline stage.
         
         Args:
-            name: Nome do estágio.
-            description: Descrição do propósito do estágio.
+            name: Name of the stage.
+            description: Description of the stage's purpose.
         """
         self.name = name
         self.description = description
@@ -72,71 +135,71 @@ class PipelineStage:
     
     def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Executa este estágio do pipeline.
+        Executes this pipeline stage.
         
         Args:
-            context: Dicionário com o contexto atual do pipeline.
-                     Contém dados compartilhados entre estágios.
+            context: Dictionary with the current pipeline context.
+                     Contains data shared between stages.
         
         Returns:
-            Dicionário atualizado com o resultado deste estágio.
+            Updated dictionary with the result of this stage.
         """
-        self.logger.info(f"Iniciando estágio: {self.name}")
+        self.logger.info(f"Starting stage: {self.name}")
         start_time = time.time()
         
         result = self._execute_implementation(context)
         
         elapsed_time = time.time() - start_time
-        self.logger.info(f"Estágio {self.name} concluído em {elapsed_time:.2f} segundos")
+        self.logger.info(f"Stage {self.name} completed in {elapsed_time:.2f} seconds")
         
         return result
     
     def _execute_implementation(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Implementação específica do estágio. Deve ser sobrescrita por classes derivadas.
+        Specific implementation of the stage. Must be overridden by derived classes.
         
         Args:
-            context: Contexto atual do pipeline.
+            context: Current pipeline context.
             
         Returns:
-            Contexto atualizado após execução do estágio.
+            Updated context after stage execution.
         """
-        raise NotImplementedError("Subclasses devem implementar este método.")
+        raise NotImplementedError("Subclasses must implement this method.")
 
 
 class DataIngestionStage(PipelineStage):
-    """Estágio para ingestão de dados brutos e consolidação em DataFrame long."""
+    """Stage for ingesting raw data and consolidating into a long DataFrame."""
     
     def __init__(self):
-        super().__init__("data_ingestion", "Ingestão e consolidação de dados")
+        super().__init__("data_ingestion", "Data ingestion and consolidation")
         
     def _execute_implementation(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Executa a ingestão de dados conforme configuração.
+        Executes data ingestion according to configuration.
         
         Args:
-            context: Contexto do pipeline com configurações.
+            context: Pipeline context with configurations.
             
         Returns:
-            Contexto atualizado com DataFrame long.
+            Updated context with long DataFrame.
         """
-        # Obter configurações
+        # Get configurations
         config_dict = context.get('config', {})
         data_root = context.get('data_root', config.DATA_ROOT)
-        # Verificar se o experiment_folder foi aplicado pelo wrapper ou pelo patch
+        # Check if experiment_folder was applied by the wrapper or patch
         applied_by_wrapper = context.get('experiment_folder_applied', False)
         
-        # Se tiver experiment_folder definido e não foi aplicado pelo wrapper
+        # If experiment_folder is defined and not applied by the wrapper
         experiment_folder = config_dict.get('experiment_folder')
         if experiment_folder and not applied_by_wrapper:
-            # Verificar se o data_root já tem o experiment_folder (evitar duplicação)
+            # Check if data_root already has experiment_folder (to avoid duplication)
             if not data_root.endswith(experiment_folder):
                 data_root = os.path.join(data_root, experiment_folder)
-                self.logger.info(f"Usando caminho de experimento: {data_root} (data_root + experiment_folder)")
+                self.logger.info(f"Using experiment path: {data_root} (data_root + experiment_folder)")
             else:
-                self.logger.info(f"Experiment folder '{experiment_folder}' já foi aplicado ao data_root: {data_root}")
+                self.logger.info(f"Experiment folder '{experiment_folder}' has already been applied to data_root: {data_root}")
         
-        # Propagar o experiment_folder_applied para o contexto para outros estágios
+        # Propagate experiment_folder_applied to the context for other stages
         context['experiment_folder_applied'] = True
         
         selected_metrics = config_dict.get('selected_metrics')
@@ -148,61 +211,61 @@ class DataIngestionStage(PipelineStage):
         if processed_data_dir is None:
             processed_data_dir = config_dict.get('processed_data_dir', config.PROCESSED_DATA_DIR)
         
-        # Verificar se há um caminho de parquet de entrada especificado no config
+        # Check for a specified input parquet path in the config
         input_parquet_path = config_dict.get('input_parquet_path')
         
-        # Determinar o nome do arquivo parquet de saída
+        # Determine the output parquet file name
         output_parquet_name = config_dict.get('output_parquet_name', 'consolidated_long.parquet')
         
-        # Garantir que o diretório exista antes de usar
+        # Ensure the directory exists before use
         os.makedirs(processed_data_dir, exist_ok=True)
         
-        # Se output_parquet_name já é um caminho absoluto, usar como consolidated_long_path
+        # If output_parquet_name is already an absolute path, use it as consolidated_long_path
         if os.path.isabs(output_parquet_name):
             consolidated_long_path = output_parquet_name
         else:
             consolidated_long_path = os.path.join(processed_data_dir, output_parquet_name)
         
-        # Caso 1: Arquivo de entrada parquet especificado - carrega diretamente
+        # Case 1: Specified input parquet file - load directly
         if input_parquet_path and os.path.exists(input_parquet_path) and not force_reprocess:
-            self.logger.info(f"Usando parquet específico de entrada: {input_parquet_path}")
+            self.logger.info(f"Using specific input parquet: {input_parquet_path}")
             
             try:
                 from src.data_ingestion import load_from_parquet
                 df_long = load_from_parquet(input_parquet_path)
-                self.logger.info(f"Dados carregados com sucesso. Total de registros: {len(df_long)}")
+                self.logger.info(f"Data loaded successfully. Total records: {len(df_long)}")
                 
-                # Adicionar ao contexto
+                # Add to context
                 context['df_long'] = df_long
                 context['consolidated_long_path'] = input_parquet_path
                 
                 return context
             except Exception as e:
-                self.logger.error(f"Erro ao carregar arquivo parquet de entrada: {e}")
-                self.logger.info("Continuando com a verificação de dados consolidados ou reprocessamento...")
+                self.logger.error(f"Error loading input parquet file: {e}")
+                self.logger.info("Continuing with check for consolidated data or reprocessing...")
         
-        # Caso 2: Verificar se já existe um arquivo parquet consolidado e se não estamos forçando reprocessamento
+        # Case 2: Check if a consolidated parquet file already exists and we are not forcing reprocessing
         if os.path.exists(consolidated_long_path) and not force_reprocess:
-            self.logger.info(f"Arquivo de dados consolidados encontrado: {consolidated_long_path}")
-            self.logger.info("Carregando dados já processados... (use --force-reprocess para reprocessar)")
+            self.logger.info(f"Consolidated data file found: {consolidated_long_path}")
+            self.logger.info("Loading already processed data... (use --force-reprocess to reprocess)")
             
             try:
                 df_long = load_dataframe(consolidated_long_path)
-                self.logger.info(f"Dados carregados com sucesso. Total de registros: {len(df_long)}")
+                self.logger.info(f"Data loaded successfully. Total records: {len(df_long)}")
                 
-                # Adicionar ao contexto
+                # Add to context
                 context['df_long'] = df_long
                 context['consolidated_long_path'] = consolidated_long_path
                 
                 return context
             except Exception as e:
-                self.logger.error(f"Erro ao carregar arquivo existente: {e}")
-                self.logger.info("Continuando com reprocessamento dos dados...")
+                self.logger.error(f"Error loading existing file: {e}")
+                self.logger.info("Continuing with data reprocessing...")
         
-        # Caso 3: Processar dados brutos
-        self.logger.info(f"Iniciando ingestão de dados de: {data_root}")
+        # Case 3: Process raw data
+        self.logger.info(f"Starting data ingestion from: {data_root}")
         
-        # Ingerir dados
+        # Ingest data
         df_long = ingest_experiment_data(
             data_root=data_root,
             selected_metrics=selected_metrics,
@@ -210,98 +273,128 @@ class DataIngestionStage(PipelineStage):
             selected_rounds=selected_rounds
         )
         
-        self.logger.info(f"Ingestão concluída. Total de registros: {len(df_long)}")
+        self.logger.info(f"Ingestion completed. Total records: {len(df_long)}")
         
-        # Adicionar ao contexto
+        # Add to context
         context['df_long'] = df_long
         context['consolidated_long_path'] = consolidated_long_path
         
         return context
 
 
-class DataExportStage(PipelineStage):
-    """Estágio para exportação do DataFrame consolidado."""
-    
+class DataValidationStage(PipelineStage):
+    """Stage for validating data availability before analysis."""
+
     def __init__(self):
-        super().__init__("data_export", "Exportação do DataFrame consolidado")
-        
+        super().__init__("data_validation", "Data availability validation")
+
     def _execute_implementation(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Exporta o DataFrame long para arquivo.
-        
-        Args:
-            context: Contexto com DataFrame long.
-            
-        Returns:
-            Contexto atualizado.
+        Executes the data validation.
         """
         df_long = context.get('df_long')
         if df_long is None or df_long.empty:
-            self.logger.error("DataFrame não disponível para exportação.")
+            self.logger.error("DataFrame not available for validation. Halting pipeline.")
+            context['pipeline_halted'] = True
+            context['data_validation_report'] = "DataFrame is empty or not available."
+            return context
+
+        config_dict = context.get('config', {})
+        
+        is_valid, validation_report = validate_data_availability(df_long, config_dict)
+        
+        context['data_validation_report'] = validation_report
+        
+        if not is_valid:
+            self.logger.error("Data validation failed. Halting pipeline.")
+            context['pipeline_halted'] = True
+        
+        return context
+
+
+class DataExportStage(PipelineStage):
+    """Stage for exporting the consolidated DataFrame."""
+    
+    def __init__(self):
+        super().__init__("data_export", "Export of the consolidated DataFrame")
+        
+    def _execute_implementation(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Exports the long DataFrame to a file.
+        
+        Args:
+            context: Context with long DataFrame.
+            
+        Returns:
+            Updated context.
+        """
+        df_long = context.get('df_long')
+        if df_long is None or df_long.empty:
+            self.logger.error("DataFrame not available for export.")
             return context
             
-        # Obter configurações
+        # Get configurations
         config_dict = context.get('config', {})
         processed_data_dir = context.get('processed_data_dir', config.PROCESSED_DATA_DIR)
         
-        # Usar nome do arquivo de saída definido na configuração
+        # Use output file name defined in the configuration
         output_parquet_name = config_dict.get('output_parquet_name', 'consolidated_long.parquet')
         consolidated_long_path = os.path.join(processed_data_dir, output_parquet_name)
         
-        # Verificar se estamos usando um arquivo de entrada específico
+        # Check if we are using a specific input file
         input_parquet_path = config_dict.get('input_parquet_path')
         if input_parquet_path and os.path.exists(input_parquet_path) and context.get('consolidated_long_path') == input_parquet_path:
-            self.logger.info(f"Usando arquivo parquet de entrada existente: {input_parquet_path}")
-            # Não precisamos salvar novamente se estamos usando o arquivo de entrada diretamente
+            self.logger.info(f"Using existing input parquet file: {input_parquet_path}")
+            # We don't need to save again if we are using the input file directly
             return context
         
-        # Criar diretório se não existir
+        # Create directory if it doesn't exist
         os.makedirs(os.path.dirname(consolidated_long_path), exist_ok=True)
         
-        # Exportar
+        # Export
         save_dataframe(df_long, consolidated_long_path, format='parquet')
-        self.logger.info(f"DataFrame exportado para: {consolidated_long_path}")
+        self.logger.info(f"DataFrame exported to: {consolidated_long_path}")
         
-        # Atualizar contexto
+        # Update context
         context['consolidated_long_path'] = consolidated_long_path
         
         return context
 
 
 class DescriptiveAnalysisStage(PipelineStage):
-    """Estágio para análise descritiva."""
+    """Stage for descriptive analysis."""
     
     def __init__(self):
-        super().__init__("descriptive_analysis", "Análise descritiva das métricas")
+        super().__init__("descriptive_analysis", "Descriptive analysis of metrics")
         
     def _execute_implementation(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Executa análise descritiva e gera visualizações.
+        Executes descriptive analysis and generates visualizations.
         
         Args:
-            context: Contexto com DataFrame long.
+            context: Context with long DataFrame.
             
         Returns:
-            Contexto atualizado com resultados e caminhos dos plots.
+            Updated context with results and plot paths.
         """
         df_long = context.get('df_long')
         if df_long is None or df_long.empty:
-            self.logger.error("DataFrame não disponível para análise descritiva.")
+            self.logger.error("DataFrame not available for descriptive analysis.")
             return context
             
-        # Configurar diretório de saída
+        # Configure output directory
         out_dir = os.path.join(context.get('output_dir', 'outputs'), 'plots', 'descriptive')
         os.makedirs(out_dir, exist_ok=True)
         
-        # Calcular estatísticas descritivas
-        self.logger.info("Calculando estatísticas descritivas...")
+        # Calculate descriptive statistics
+        self.logger.info("Calculating descriptive statistics...")
         stats = compute_descriptive_stats(df_long)
         context['descriptive_stats'] = stats
         
-        # Gerar plots para cada combinação de métrica/round/fase
-        self.logger.info("Gerando visualizações...")
+        # Generate plots for each metric/round/phase combination
+        self.logger.info("Generating visualizations...")
         
-        # Obter combinações únicas de experimento/round/fase/métrica
+        # Get unique combinations of experiment/round/phase/metric
         experiments = df_long['experiment_id'].unique()
         
         plot_paths = []
@@ -311,17 +404,21 @@ class DescriptiveAnalysisStage(PipelineStage):
             for round_id in exp_df['round_id'].unique():
                 round_df = exp_df[exp_df['round_id'] == round_id]
                 for metric in round_df['metric_name'].unique():
-                    # Gerar plots agregados por fase
+                    # Generate aggregated plots by phase and the consolidated plot of all phases
                     try:
                         path = plot_metric_barplot_by_phase(round_df, metric, round_id, out_dir)
                         plot_paths.append(path)
                         
                         path = plot_metric_boxplot(round_df, metric, round_id, out_dir)
                         plot_paths.append(path)
+
+                        path = plot_metric_timeseries_multi_tenant_all_phases(round_df, metric, round_id, out_dir)
+                        plot_paths.append(path)
+
                     except Exception as e:
-                        self.logger.error(f"Erro ao gerar plots agregados para {metric}, {round_id}: {e}")
+                        self.logger.error(f"Error generating aggregated plots for {metric}, {round_id}: {e}")
                     
-                    # Gerar plots por fase
+                    # Generate plots per individual phase
                     for phase in round_df['experimental_phase'].unique():
                         try:
                             path = plot_metric_timeseries_multi_tenant(
@@ -329,108 +426,111 @@ class DescriptiveAnalysisStage(PipelineStage):
                             )
                             plot_paths.append(path)
                         except Exception as e:
-                            self.logger.error(f"Erro ao gerar plot para {metric}, {phase}, {round_id}: {e}")
+                            self.logger.error(f"Error generating plot for {metric}, {phase}, {round_id}: {e}")
         
-        # Atualizar contexto
+        # Update context
         context['descriptive_plot_paths'] = plot_paths
         
         return context
 
 
 class CorrelationAnalysisStage(PipelineStage):
-    """Estágio para análise de correlação e covariância."""
+    """Stage for correlation and covariance analysis."""
     
     def __init__(self):
-        super().__init__("correlation_analysis", "Análise de correlação entre tenants")
-        # Adicionando um logger específico para este estágio para facilitar o debug
+        super().__init__("correlation_analysis", "Correlation analysis between tenants")
+        # Adding a specific logger for this stage to facilitate debugging
         self.stage_logger = logging.getLogger(f"pipeline.CorrelationAnalysisStage")
 
     def _execute_implementation(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Executa análise de correlação e gera visualizações.
+        Executes correlation analysis and generates visualizations.
 
         Args:
-            context: Contexto com DataFrame long.
+            context: Context with long DataFrame.
 
         Returns:
-            Contexto atualizado com resultados e caminhos dos plots.
+            Updated context with results and plot paths.
         """
         df_long = context.get('df_long')
         if df_long is None or df_long.empty:
-            self.stage_logger.error("DataFrame não disponível para análise de correlação.")
+            self.stage_logger.error("DataFrame not available for correlation analysis.")
             return context
 
-        # Configurar diretório de saída
+        # Configure output directory
         out_dir = os.path.join(context.get('output_dir', 'outputs'), 'plots', 'correlation')
         os.makedirs(out_dir, exist_ok=True)
 
-        # Estruturas para armazenar resultados
+        # Structures to store results
         correlation_matrices = {}
         covariance_matrices = {}
         plot_paths = []
 
-        # Obter combinações únicas de experimento/round/fase/métrica
+        # Get unique combinations of experiment/round/phase/metric
         experiments = df_long['experiment_id'].unique()
-        self.stage_logger.debug(f"Experimentos encontrados: {experiments}")
+        self.stage_logger.debug(f"Experiments found: {experiments}")
 
         for experiment_id in experiments:
             exp_df = df_long[df_long['experiment_id'] == experiment_id]
-            self.stage_logger.debug(f"Processando experiment_id: {experiment_id}")
+            self.stage_logger.debug(f"Processing experiment_id: {experiment_id}")
             for round_id in exp_df['round_id'].unique():
                 round_df = exp_df[exp_df['round_id'] == round_id]
-                self.stage_logger.debug(f"Processando round_id: {round_id} para o experimento {experiment_id}")
+                self.stage_logger.debug(f"Processing round_id: {round_id} for experiment {experiment_id}")
                 for metric in round_df['metric_name'].unique():
-                    self.stage_logger.debug(f"Processando metric: {metric} para o round {round_id}")
+                    self.stage_logger.debug(f"Processing metric: {metric} for round {round_id}")
                     metric_key = f"{experiment_id}:{round_id}:{metric}"
                     correlation_matrices[metric_key] = {}
                     covariance_matrices[metric_key] = {}
 
                     for phase in round_df['experimental_phase'].unique():
-                        self.stage_logger.debug(f"Processando phase: {phase} para a métrica {metric}")
+                        self.stage_logger.debug(f"Processing phase: {phase} for metric {metric}")
                         phase_key = f"{metric_key}:{phase}"
 
-                        # Calcular correlação
+                        # Calculate correlation
                         try:
-                            # Log antes de chamar a função que pode causar o erro
-                            self.stage_logger.info(f"Calculando correlação para metric: {metric}, phase: {phase}, round_id: {round_id}")
+                            # Log before calling the function that might cause the error
+                            self.stage_logger.info(f"Calculating correlation for metric: {metric}, phase: {phase}, round_id: {round_id}")
                             
-                            # Filtrar DataFrame para a fase específica
+                            # Filter DataFrame for the specific phase
                             phase_specific_df = round_df[round_df['experimental_phase'] == phase]
 
                             if phase_specific_df.empty:
-                                self.stage_logger.warning(f"DataFrame vazio para {metric}, {phase}, {round_id} após filtrar por fase. Pulando correlação.")
+                                self.stage_logger.warning(f"Empty DataFrame for {metric}, {phase}, {round_id} after filtering by phase. Skipping correlation.")
                                 continue
+                            
+                            self.stage_logger.info(f"Tenants for correlation analysis: {phase_specific_df['tenant_id'].unique()}")
+                            self.stage_logger.info(f"Data points for correlation analysis: {len(phase_specific_df)}")
 
-                            # Calcular correlação e gerar visualização
+                            # Calculate correlation and generate visualization
                             corr = compute_correlation_matrix(phase_specific_df, metric, phase, round_id)
                             correlation_matrices[metric_key][phase] = corr
 
-                            # Verificar resultado e gerar plot de correlação
+                            # Check result and generate correlation plot
                             if corr is not None and not corr.empty:
                                 try:
-                                    self.stage_logger.info(f"Gerando plot de correlação para {metric}, {phase}, {round_id}")
+                                    self.stage_logger.info(f"Generating correlation plot for {metric}, {phase}, {round_id}")
                                     path = plot_correlation_heatmap(corr, metric, phase, round_id, out_dir)
                                     if path:
                                         plot_paths.append(path)
-                                        self.stage_logger.info(f"Plot de correlação gerado com sucesso: {path}")
+                                        self.stage_logger.info(f"Correlation plot generated successfully: {path}")
                                     else:
-                                        self.stage_logger.warning(f"Falha ao gerar plot de correlação para {metric}, {phase}, {round_id}")
+                                        self.stage_logger.warning(f"Failed to generate correlation plot for {metric}, {phase}, {round_id}")
                                 except Exception as plot_err:
-                                    self.stage_logger.error(f"Erro ao gerar plot de correlação para {metric}, {phase}, {round_id}: {plot_err}", exc_info=True)
+                                    self.stage_logger.error(f"Error generating correlation plot for {metric}, {phase}, {round_id}: {plot_err}", exc_info=True)
                             elif corr is None:
-                                self.stage_logger.warning(f"Matriz de correlação retornou None para {metric}, {phase}, {round_id}")
-                            else: # corr.empty é True
-                                self.stage_logger.warning(f"Matriz de correlação vazia para {metric}, {phase}, {round_id}")
+                                self.stage_logger.warning(f"Correlation matrix returned None for {metric}, {phase}, {round_id}")
+                            else: # corr.empty is True
+                                self.stage_logger.warning(f"Empty correlation matrix for {metric}, {phase}, {round_id}")
 
                         except Exception as e:
-                            self.stage_logger.error(f"Erro inesperado ao calcular correlação para {metric}, {phase}, {round_id}: {e}", exc_info=True)
+                            self.stage_logger.error(f"Unexpected error calculating correlation for {metric}, {phase}, {round_id}: {e}", exc_info=True)
 
-                        # Calcular covariância
+                        # Calculate covariance
                         try:
-                            self.stage_logger.info(f"Calculando covariância para metric: {metric}, phase: {phase}, round_id: {round_id}.")
+                            self.stage_logger.info(f"Calculating covariance for metric: {metric}, phase: {phase}, round_id: {round_id}.")
                             phase_specific_df_cov = round_df[round_df['experimental_phase'] == phase]
                             if phase_specific_df_cov.empty:
-                                self.stage_logger.warning(f"DataFrame vazio para {metric}, {phase}, {round_id} após filtrar por fase. Pulando covariância.")
+                                self.stage_logger.warning(f"Empty DataFrame for {metric}, {phase}, {round_id} after filtering by phase. Skipping covariance.")
                                 continue
 
                             cov = compute_covariance_matrix(phase_specific_df_cov, metric, phase, round_id)
@@ -440,122 +540,121 @@ class CorrelationAnalysisStage(PipelineStage):
                                 path = plot_covariance_heatmap(cov, metric, phase, round_id, out_dir)
                                 plot_paths.append(path)
                             elif cov is None:
-                                self.stage_logger.warning(f"Matriz de covariância retornou None para {metric}, {phase}, {round_id}")
+                                self.stage_logger.warning(f"Covariance matrix returned None for {metric}, {phase}, {round_id}")
                             else:
-                                self.stage_logger.warning(f"Matriz de covariância vazia para {metric}, {phase}, {round_id}")
+                                self.stage_logger.warning(f"Empty covariance matrix for {metric}, {phase}, {round_id}")
                         except Exception as e_cov:
-                            self.stage_logger.error(f"Erro inesperado ao calcular covariância para {metric}, {phase}, {round_id}: {e_cov}", exc_info=True)
+                            self.stage_logger.error(f"Unexpected error calculating covariance for {metric}, {phase}, {round_id}: {e_cov}", exc_info=True)
                         
-                        # Calcular correlação cruzada (CCF)
+                        # Calculate cross-correlation (CCF)
                         try:
-                            self.stage_logger.info(f"Calculando correlação cruzada (CCF) para metric: {metric}, phase: {phase}, round_id: {round_id}")
+                            self.stage_logger.info(f"Calculating cross-correlation (CCF) for metric: {metric}, phase: {phase}, round_id: {round_id}")
                             
-                            # Filtrar DataFrame para a fase específica
+                            # Filter DataFrame for the specific phase
                             phase_specific_df_ccf = round_df[round_df['experimental_phase'] == phase]
                             
-                            # Verificar se temos dados suficientes
+                            # Check if we have enough data
                             if not phase_specific_df_ccf.empty:
-                                # Diretório específico para plots de CCF
+                                # Specific directory for CCF plots
                                 ccf_dir = os.path.join(out_dir, "cross_correlation")
                                 os.makedirs(ccf_dir, exist_ok=True)
                                 
-                                # Calcular CCF
+                                # Calculate CCF
                                 from src.analysis_correlation import compute_cross_correlation, plot_ccf
                                 ccf_results = compute_cross_correlation(phase_specific_df_ccf, metric, phase, round_id, max_lag=20)
                                 
                                 if ccf_results:
-                                    # Gerar plots de CCF
+                                    # Generate CCF plots
                                     ccf_paths = plot_ccf(ccf_results, metric, phase, round_id, ccf_dir, max_lag=20)
                                     if ccf_paths:
                                         plot_paths.extend(ccf_paths)
-                                        self.stage_logger.info(f"Gerados {len(ccf_paths)} plots de correlação cruzada para {metric}, {phase}, {round_id}")
+                                        self.stage_logger.info(f"Generated {len(ccf_paths)} cross-correlation plots for {metric}, {phase}, {round_id}")
                                 else:
-                                    self.stage_logger.warning(f"Sem dados de correlação cruzada para {metric}, {phase}, {round_id}")
+                                    self.stage_logger.warning(f"No cross-correlation data for {metric}, {phase}, {round_id}")
                             else:
-                                self.stage_logger.warning(f"DataFrame vazio para {metric}, {phase}, {round_id}. Pulando correlação cruzada.")
+                                self.stage_logger.warning(f"Empty DataFrame for {metric}, {phase}, {round_id}. Skipping cross-correlation.")
                                 
                         except Exception as e_ccf:
-                            self.stage_logger.error(f"Erro ao calcular correlação cruzada para {metric}, {phase}, {round_id}: {e_ccf}", exc_info=True)
+                            self.stage_logger.error(f"Error calculating cross-correlation for {metric}, {phase}, {round_id}: {e_ccf}", exc_info=True)
         
-        # Atualizar contexto
+        # Update context
         context['correlation_matrices'] = correlation_matrices
         context['covariance_matrices'] = covariance_matrices
         context['correlation_plot_paths'] = plot_paths
         
-        self.stage_logger.info(f"Análise de correlação concluída. Gerados {len(plot_paths)} plots.")
+        self.stage_logger.info(f"Correlation analysis completed. Generated {len(plot_paths)} plots.")
         
         return context
 
 
 class CausalityAnalysisStage(PipelineStage):
     """
-    Estágio para análise de causalidade entre séries temporais de diferentes tenants.
+    Stage for causality analysis between time series of different tenants.
     
-    Implementa análises de causalidade usando:
-    - Teste de causalidade de Granger
+    Implements causality analyses using:
+    - Granger causality test
     - Transfer Entropy (TE)
     
-    A análise é realizada para cada combinação de métrica, fase experimental e round,
-    gerando matrizes de causalidade e visualizações em formato de grafo.
+    The analysis is performed for each combination of metric, experimental phase, and round,
+    generating causality matrices and graph visualizations.
     """
     
     def __init__(self):
-        super().__init__("causality_analysis", "Análise de causalidade (Granger e Transfer Entropy)")
+        super().__init__("causality_analysis", "Causality analysis (Granger and Transfer Entropy)")
         
     def _execute_implementation(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Executa análise de causalidade e gera visualizações.
+        Executes causality analysis and generates visualizations.
         
         Args:
-            context: Contexto com DataFrame long.
+            context: Context with long DataFrame.
             
         Returns:
-            Contexto atualizado com resultados e caminhos dos plots.
+            Updated context with results and plot paths.
         """
         from src.analysis_causality import CausalityAnalyzer, plot_causality_graph
-        from src.improved_causality_graph import plot_improved_causality_graph, plot_consolidated_causality_graph
         from tqdm import tqdm
         
         df_long = context.get('df_long')
         if df_long is None or df_long.empty:
-            self.logger.error("DataFrame não disponível para análise de causalidade.")
+            self.logger.error("DataFrame not available for causality analysis.")
             return context
             
-        # Configurar diretório de saída
+        # Configure output directory
         out_dir = os.path.join(context.get('output_dir', 'outputs'), 'plots', 'causality')
         os.makedirs(out_dir, exist_ok=True)
         
-        # Parâmetros da configuração
+        # Configuration parameters
         config = context.get('config', {})
         causality_config = config.get('causality', {})
         granger_max_lag = causality_config.get('granger_max_lag', 5)
         granger_threshold = causality_config.get('granger_threshold', 0.05)
         te_bins = causality_config.get('transfer_entropy_bins', 8)
         
-        # Estruturas para armazenar resultados
+        # Structures to store results
         granger_matrices = {}
         te_matrices = {}
         plot_paths = []
         
-        # Inicializa analisador de causalidade
+        # Initialize causality analyzer
         analyzer = CausalityAnalyzer(df_long)
         
-        # Processa cada combinação de experimento, round, métrica e fase
+        # Process each combination of experiment, round, metric, and phase
         experiments = df_long['experiment_id'].unique()
         
         for experiment_id in experiments:
-            self.logger.info(f"Processando experimento: {experiment_id}")
+            self.logger.info(f"Processing experiment: {experiment_id}")
             exp_df = df_long[df_long['experiment_id'] == experiment_id]
             
             for round_id in exp_df['round_id'].unique():
-                # Filtra para o round específico
+                # Filter for the specific round
                 round_df = exp_df[exp_df['round_id'] == round_id]
                 
-                for metric in tqdm(round_df['metric_name'].unique(), desc=f"Métricas em {round_id}"):
+                for metric in tqdm(round_df['metric_name'].unique(), desc=f"Metrics in {round_id}"):
                     for phase in round_df['experimental_phase'].unique():
-                        self.logger.info(f"Calculando causalidade para {metric}, {phase}, {round_id}")
+                        self.logger.info(f"Calculating causality for {metric}, {phase}, {round_id}")
                         try:
-                            # Filtrar dados para essa fase/métrica/round
+                            # Filter data for this phase/metric/round
                             phase_df = filter_long_df(
                                 round_df,
                                 phase=phase,
@@ -563,12 +662,12 @@ class CausalityAnalysisStage(PipelineStage):
                                 round_id=round_id
                             )
                             
-                            # Verificar se há dados suficientes
+                            # Check if there is enough data
                             if phase_df.empty or phase_df['tenant_id'].nunique() < 2:
-                                self.logger.warning(f"Dados insuficientes para {metric}, {phase}, {round_id}")
+                                self.logger.warning(f"Insufficient data for {metric}, {phase}, {round_id}")
                                 continue
                                 
-                            # Calcular causalidade de Granger
+                            # Calculate Granger causality
                             granger_matrix = analyzer.compute_granger_matrix(
                                 metric=metric, 
                                 phase=phase, 
@@ -576,7 +675,7 @@ class CausalityAnalysisStage(PipelineStage):
                                 maxlag=granger_max_lag
                             )
                             
-                            # Calcular Transfer Entropy
+                            # Calculate Transfer Entropy
                             te_matrix = analyzer.compute_transfer_entropy_matrix(
                                 metric=metric,
                                 phase=phase,
@@ -584,18 +683,18 @@ class CausalityAnalysisStage(PipelineStage):
                                 bins=te_bins
                             )
                             
-                            # Armazenar resultados
+                            # Store results
                             result_key = f"{experiment_id}:{round_id}:{phase}:{metric}"
                             granger_matrices[result_key] = granger_matrix
                             te_matrices[result_key] = te_matrix
                             
-                            # Gerar visualizações para causalidade de Granger
+                            # Generate visualizations for Granger causality
                             if not granger_matrix.empty and not granger_matrix.isna().all().all():
                                 granger_out_path = os.path.join(
                                     out_dir, 
                                     f"causality_graph_granger_{metric}_{phase}_{round_id}.png"
                                 )
-                                # Visualização original
+                                # Original visualization
                                 plot_causality_graph(
                                     granger_matrix, 
                                     granger_out_path,
@@ -603,152 +702,84 @@ class CausalityAnalysisStage(PipelineStage):
                                     directed=True,
                                     metric=metric
                                 )
-                                
-                                # Visualização melhorada
-                                improved_granger_out_path = os.path.join(
-                                    os.path.join(out_dir, 'improved'), 
-                                    f"improved_granger_{metric}_{phase}_{round_id}.png"
-                                )
-                                os.makedirs(os.path.dirname(improved_granger_out_path), exist_ok=True)
-                                plot_improved_causality_graph(
-                                    granger_matrix, 
-                                    improved_granger_out_path,
-                                    threshold=granger_threshold, 
-                                    directed=True,
-                                    metric=metric
-                                )
-                                plot_paths.append(improved_granger_out_path)
                                 plot_paths.append(granger_out_path)
                                 
-                            # Gerar visualizações para Transfer Entropy
+                            # Generate visualizations for Transfer Entropy
                             if not te_matrix.empty and not te_matrix.isna().all().all():
-                                # Para TE, valores mais altos = mais causalidade, então usamos threshold inverso
-                                te_threshold = 0.1  # Limiar mínimo para considerar relação causal via TE
+                                # For TE, higher values = more causality, so we use an inverse threshold
+                                te_threshold = 0.1  # Minimum threshold to consider a causal relationship via TE
                                 te_out_path = os.path.join(
                                     out_dir, 
                                     f"causality_graph_te_{metric}_{phase}_{round_id}.png"
                                 )
                                 
-                                # Para visualização, invertemos para formato compatível com plot_causality_graph
-                                # (que espera valores menores = mais causalidade)
+                                # For visualization, we invert to a format compatible with plot_causality_graph
+                                # (which expects smaller values = more causality)
                                 te_viz_matrix = 1.0 / (te_matrix + 1.0)
                                 
-                                # Visualização original
+                                # Original visualization
                                 plot_causality_graph(
                                     te_viz_matrix,
                                     te_out_path,
-                                    threshold=0.9,  # Threshold para visualização (menores valores = mais causalidade)
+                                    threshold=0.9,  # Threshold for visualization (smaller values = more causality)
                                     directed=True,
                                     metric=f"{metric} (TE)"
                                 )
-                                
-                                # Visualização melhorada
-                                improved_te_out_path = os.path.join(
-                                    os.path.join(out_dir, 'improved'), 
-                                    f"improved_te_{metric}_{phase}_{round_id}.png"
-                                )
-                                os.makedirs(os.path.dirname(improved_te_out_path), exist_ok=True)
-                                plot_improved_causality_graph(
-                                    te_viz_matrix,
-                                    improved_te_out_path,
-                                    threshold=0.9,  # Threshold para visualização (menores valores = mais causalidade)
-                                    directed=True,
-                                    metric=f"{metric} (TE)"
-                                )
-                                plot_paths.append(improved_te_out_path)
                                 plot_paths.append(te_out_path)
                         except Exception as e:
-                            self.logger.error(f"Erro ao processar causalidade para {metric}, {phase}, {round_id}: {e}")
+                            self.logger.error(f"Error processing causality for {metric}, {phase}, {round_id}: {e}")
         
-        # Gerar visualizações consolidadas multi-métrica
-        try:
-            # Agrupar matrizes por experimento, round e fase
-            metrics_by_group = {}
-            for key, matrix in granger_matrices.items():
-                parts = key.split(':')
-                if len(parts) == 4:
-                    experiment_id, round_id, phase, metric = parts
-                    group_key = f"{experiment_id}:{round_id}:{phase}"
-                    if group_key not in metrics_by_group:
-                        metrics_by_group[group_key] = {}
-                    metrics_by_group[group_key][metric] = matrix
-            
-            # Gerar um grafo consolidado para cada grupo
-            for group_key, metric_matrices in metrics_by_group.items():
-                if len(metric_matrices) > 1:  # Só vale a pena consolidar se tiver mais de uma métrica
-                    parts = group_key.split(':')
-                    if len(parts) == 3:
-                        experiment_id, round_id, phase = parts
-                        consolidated_out_path = os.path.join(
-                            os.path.join(out_dir, 'consolidated'), 
-                            f"consolidated_{phase}_{round_id}.png"
-                        )
-                        os.makedirs(os.path.dirname(consolidated_out_path), exist_ok=True)
-                        
-                        plot_consolidated_causality_graph(
-                            metric_matrices,
-                            consolidated_out_path,
-                            threshold=granger_threshold,
-                            directed=True,
-                            phase=phase,
-                            round_id=round_id,
-                            title_prefix=f'Análise de Causalidade Multi-Métrica'
-                        )
-                        plot_paths.append(consolidated_out_path)
-                        self.logger.info(f"Grafo consolidado gerado para {phase} {round_id}")
-        except Exception as e:
-            self.logger.error(f"Erro ao gerar grafos consolidados: {e}")
-        
-        # Atualizar contexto
+        # Update context
         context['granger_matrices'] = granger_matrices
         context['te_matrices'] = te_matrices
         context['causality_plot_paths'] = plot_paths
         
+        self.logger.info(f"Causality analysis completed. Generated {len(plot_paths)} plots.")
         return context
 
 
 class PhaseComparisonStage(PipelineStage):
     """
-    Estágio para análise comparativa entre diferentes fases experimentais.
+    Stage for comparative analysis between different experimental phases.
     
-    Este estágio implementa:
-    1. Comparação de métricas entre fases (baseline, ataque, recuperação)
-    2. Identificação de mudanças significativas
-    3. Visualizações comparativas
+    This stage implements:
+    1. Comparison of metrics between phases (baseline, attack, recovery)
+    2. Identification of significant changes
+    3. Comparative visualizations
     """
     
     def __init__(self):
-        super().__init__("phase_comparison", "Análise comparativa entre fases experimentais")
+        super().__init__("phase_comparison", "Comparative analysis between experimental phases")
     
     def _execute_implementation(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Executa análise comparativa entre fases experimentais.
+        Executes comparative analysis between experimental phases.
         
         Args:
-            context: Contexto com DataFrame long e resultados de estágios anteriores
+            context: Context with long DataFrame and results from previous stages
             
         Returns:
-            Contexto atualizado com resultados comparativos
+            Updated context with comparative results
         """
         from src.analysis_phase_comparison import PhaseComparisonAnalyzer
         
         df_long = context.get('df_long')
         if df_long is None or df_long.empty:
-            self.logger.error("DataFrame não disponível para análise comparativa de fases.")
+            self.logger.error("DataFrame not available for comparative phase analysis.")
             return context
         
-        # Configurar diretório de saída
+        # Configure output directory
         out_dir = os.path.join(context.get('output_dir', 'outputs'), 'plots', 'phase_comparison')
         os.makedirs(out_dir, exist_ok=True)
         
-        # Inicializar analisador de comparação de fases
+        # Initialize phase comparison analyzer
         analyzer = PhaseComparisonAnalyzer(df_long)
         
-        # Estruturas para armazenar resultados
+        # Structures to store results
         phase_comparison_results = {}
         plot_paths = []
         
-        # Processar cada experimento e round
+        # Process each experiment and round
         experiments = df_long['experiment_id'].unique()
         for experiment_id in experiments:
             exp_df = df_long[df_long['experiment_id'] == experiment_id]
@@ -756,17 +787,17 @@ class PhaseComparisonStage(PipelineStage):
             for round_id in exp_df['round_id'].unique():
                 round_df = exp_df[exp_df['round_id'] == round_id]
                 
-                # Verificar se há pelo menos 2 fases para comparação
+                # Check if there are at least 2 phases for comparison
                 phases = round_df['experimental_phase'].unique()
                 if len(phases) < 2:
-                    self.logger.warning(f"Menos de 2 fases disponíveis para {experiment_id}, {round_id}. Pulando comparação.")
+                    self.logger.warning(f"Fewer than 2 phases available for {experiment_id}, {round_id}. Skipping comparison.")
                     continue
                 
-                # Processar cada métrica
+                # Process each metric
                 for metric in round_df['metric_name'].unique():
                     try:
-                        # Realizar análise comparativa
-                        self.logger.info(f"Comparando fases para {metric}, {round_id}")
+                        # Perform comparative analysis
+                        self.logger.info(f"Comparing phases for {metric}, {round_id}")
                         
                         stats_df = analyzer.analyze_metric_across_phases(
                             metric=metric,
@@ -774,20 +805,20 @@ class PhaseComparisonStage(PipelineStage):
                             output_dir=out_dir
                         )
                         
-                        # Armazenar resultados
+                        # Store results
                         result_key = f"{experiment_id}:{round_id}:{metric}"
                         phase_comparison_results[result_key] = stats_df
                         
-                        # Adicionar caminho do plot gerado
+                        # Add path of the generated plot
                         plot_path = os.path.join(out_dir, f'phase_comparison_{metric}_{round_id}.png')
                         if os.path.exists(plot_path):
                             plot_paths.append(plot_path)
                             
                     except Exception as e:
-                        self.logger.error(f"Erro ao comparar fases para {metric}, {round_id}: {e}", exc_info=True)
+                        self.logger.error(f"Error comparing phases for {metric}, {round_id}: {e}", exc_info=True)
         
-        # Atualizar contexto
-        context['phase_comparison_results'] = phase_comparison_results
+        # Update context
+        context['phase_comparison_results'] = {'stats_by_metric': phase_comparison_results}
         context['phase_comparison_plot_paths'] = plot_paths
         
         return context
@@ -795,509 +826,301 @@ class PhaseComparisonStage(PipelineStage):
 
 class ReportGenerationStage(PipelineStage):
     """
-    Estágio para geração de relatório final consolidado.
+    Stage for generating the final consolidated report.
     
-    Agrega insights de todos os estágios anteriores e gera:
-    1. Relatório textual com principais descobertas
-    2. Tabela comparativa inter-tenant
-    3. Identificação de "tenants barulhentos" baseado em critérios objetivos
+    Aggregates insights from all previous stages and generates:
+    1. Textual report with main findings
+    2. Inter-tenant comparative table
+    3. Identification of "noisy tenants" based on objective criteria
     """
     
     def __init__(self):
-        super().__init__("report_generation", "Geração de relatório final")
+        super().__init__("report_generation", "Final report generation")
         
     def _execute_implementation(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Gera relatório final com insights consolidados.
+        Generates the final report with consolidated insights.
         
         Args:
-            context: Contexto com resultados de todos os estágios anteriores.
+            context: Context with results from all previous stages.
             
         Returns:
-            Contexto atualizado com caminho do relatório e tabela comparativa.
+            Updated context with the report path and comparative table.
         """
         from src.report_generation import (
             generate_tenant_metrics,
             generate_markdown_report,
-            generate_tenant_ranking_plot
+            generate_tenant_ranking_plot,
+            generate_phase_variation_plot
         )
         
         df_long = context.get('df_long')
         if df_long is None or df_long.empty:
-            self.logger.error("DataFrame não disponível para geração de relatório.")
+            self.logger.error("DataFrame not available for report generation.")
             return context
         
-        # Configurar diretório de saída
+        # Configure output directory
         report_dir = os.path.join(context.get('output_dir', 'outputs'), 'reports')
         os.makedirs(report_dir, exist_ok=True)
         
         report_filename = f"report_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         
-        # Recupera informações relevantes do contexto
+        # Retrieve relevant information from the context
         granger_matrices = context.get('granger_matrices', {})
         te_matrices = context.get('te_matrices', {})
         correlation_matrices = context.get('correlation_matrices', {})
         phase_comparison_results = context.get('phase_comparison_results', {})
         
-        # Gerar métricas e ranking de tenants
-        self.logger.info("Gerando métricas e ranking de tenants...")
+        # Generate tenant metrics and ranking
+        self.logger.info("Generating tenant metrics and ranking...")
         tenant_metrics = generate_tenant_metrics(
             granger_matrices,
             te_matrices, 
             correlation_matrices,
-            phase_comparison_results
+            phase_comparison_results.get('stats_by_metric', {})
         )
         
-        # Log sobre o que foi gerado
-        self.logger.info(f"Métricas de tenant geradas: tipo={type(tenant_metrics)}")
+        # Log what was generated
+        self.logger.info(f"Tenant metrics generated: type={type(tenant_metrics)}")
         if isinstance(tenant_metrics, pd.DataFrame):
-            self.logger.info(f"Colunas disponíveis: {list(tenant_metrics.columns)}")
-            self.logger.info(f"Número de tenants: {len(tenant_metrics)}")
+            self.logger.info(f"Available columns: {list(tenant_metrics.columns)}")
+            self.logger.info(f"Number of tenants: {len(tenant_metrics)}")
         
-        # Salvar a tabela de métricas
+        # Save the metrics table
         metrics_table_path = os.path.join(report_dir, f"{report_filename}_tenant_metrics.csv")
         tenant_metrics.to_csv(metrics_table_path, index=False)
         
-        # Criar visualização do ranking de tenants
+        # Create tenant ranking visualization
         rank_plot_path = os.path.join(report_dir, f"{report_filename}_tenant_ranking.png")
         generate_tenant_ranking_plot(tenant_metrics, rank_plot_path)
         
-        # Gerar relatório final em markdown
-        self.logger.info("Gerando relatório markdown...")
+        # Create phase variation visualization
+        phase_variation_plot_path = os.path.join(report_dir, f"{report_filename}_phase_variation.png")
+        generate_phase_variation_plot(tenant_metrics, phase_variation_plot_path)
+        
+        # Generate final markdown report
+        self.logger.info("Generating markdown report...")
         report_path = generate_markdown_report(
             tenant_metrics=tenant_metrics,
             context=context,
             rank_plot_path=rank_plot_path,
             metrics_table_path=metrics_table_path,
+            phase_variation_plot_path=phase_variation_plot_path,
             out_dir=report_dir
         )
         
-        # Atualizar contexto
+        # Update context
         context['report_path'] = report_path
         context['tenant_metrics'] = tenant_metrics
         context['tenant_metrics_path'] = metrics_table_path
         context['tenant_ranking_path'] = rank_plot_path
+        context['phase_variation_plot_path'] = phase_variation_plot_path
         
-        self.logger.info(f"Relatório completo gerado em: {report_path}")
+        self.logger.info(f"Full report generated at: {report_path}")
         
         return context
 
 
 class InsightAggregationStage(PipelineStage):
     """
-    Estágio para agregação de insights e geração de tabela comparativa inter-tenant.
-    Implementa as funcionalidades da Fase 3 do plano de trabalho.
+    Stage for aggregating insights and generating an inter-tenant comparative table.
+    Implements the functionalities of Phase 3 of the work plan.
     """
     
     def __init__(self, output_dir: Optional[str] = None):
-        super().__init__(name="Insight Aggregation", description="Agregação de insights e comparativos inter-tenant")
+        super().__init__(name="Insight Aggregation", description="Aggregation of insights and inter-tenant comparisons")
         self.output_dir = output_dir
     
     def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Agrega insights de todos os tenants e gera tabela comparativa.
+        Aggregates insights from all tenants and generates a comparative table.
         
         Args:
-            context: Contexto com resultados dos estágios anteriores
+            context: Context with results from previous stages
             
         Returns:
-            Contexto atualizado com os resultados da agregação de insights
+            Updated context with the results of insight aggregation
         """
         import pandas as pd
         import numpy as np
-        from src.insight_aggregation import aggregate_tenant_insights, generate_comparative_table, plot_comparative_metrics
+        from src.insight_aggregation import aggregate_tenant_insights, generate_comparative_table, plot_insight_matrix
         from datetime import datetime
+        import json
         
-        self.logger.info("Iniciando agregação de insights inter-tenant")
+        self.logger.info("Starting inter-tenant insight aggregation")
         
-        if 'error' in context:
-            self.logger.error(f"Erro em estágio anterior: {context['error']}")
+        if 'error' in context and context['error'] is not None:
+            self.logger.error(f"Error in previous stage: {context['error']}")
             return context
             
-        # Diretório de saída
+        # Output directory
         output_dir = self.output_dir or context.get('output_dir')
         if not output_dir:
-            output_dir = os.path.join(os.getcwd(), 'outputs', 'insights')
+            output_dir = os.path.join(os.getcwd(), 'outputs')
         
-        # Específico para insights    
         insights_dir = os.path.join(output_dir, 'insights')
         os.makedirs(insights_dir, exist_ok=True)
         
-        # Obter dados necessários do contexto
-        tenant_metrics = None
-        phase_comparison_results = context.get('phase_comparison_results')
+        # Get necessary data from the context
+        tenant_metrics = context.get('tenant_metrics')
+        phase_comparison_results_raw = context.get('phase_comparison_results', {})
+        phase_comparison_stats = phase_comparison_results_raw.get('stats_by_metric', {})
         granger_matrices = context.get('granger_matrices', {})
         te_matrices = context.get('te_matrices', {})
         correlation_matrices = context.get('correlation_matrices', {})
         anomaly_metrics = context.get('anomaly_metrics', {})
         
-        # Tentar obter tenant_metrics diretamente do contexto
-        if 'tenant_metrics' in context:
-            tenant_metrics = context.get('tenant_metrics')
-            self.logger.info(f"Encontradas métricas de tenant no contexto: {type(tenant_metrics)}")
-        # Tentar obter do relatório se disponível
-        elif 'report_context' in context and 'tenant_metrics' in context['report_context']:
-            tenant_metrics = context['report_context'].get('tenant_metrics')
-            self.logger.info(f"Encontradas métricas de tenant no report_context: {type(tenant_metrics)}")
-        
-        # Log detalhado das métricas encontradas
-        if tenant_metrics is not None:
-            if hasattr(tenant_metrics, 'columns'):  # Verifica se é DataFrame-like
-                self.logger.info(f"DataFrame de tenant_metrics com colunas: {list(tenant_metrics.columns)}")
-            else:
-                self.logger.info(f"Tipo de tenant_metrics inesperado: {type(tenant_metrics)}")
-        
-        # Se não encontrou métricas, tente criar um DataFrame básico
         if tenant_metrics is None:
-            self.logger.warning("tenant_metrics não disponível. Tentando criar dados básicos...")
-            
-            # Tentar extrair lista de tenants de outras matrizes
-            tenants = set()                # Tentar extrair de matrizes de correlação
-            if correlation_matrices:
-                for method, matrices in correlation_matrices.items():
-                    for matrix_key, matrix in matrices.items():
-                        if hasattr(matrix, 'empty') and not matrix.empty:
-                            tenants.update(matrix.index)
-            
-            # Tentar extrair de matrizes de causalidade
-            if granger_matrices:
-                for key, matrix in granger_matrices.items():
-                    if hasattr(matrix, 'empty') and not matrix.empty:
-                        tenants.update(matrix.index)
-                        
-            # Tentar extrair de matrizes de TE
-            if te_matrices:
-                for key, matrix in te_matrices.items():
-                    if hasattr(matrix, 'empty') and not matrix.empty:
-                        tenants.update(matrix.index)
-                        
-            # Tentar extrair tenants diretamente do DataFrame de dados
-            df_long = context.get('df_long')
-            if df_long is not None and not df_long.empty and 'tenant_id' in df_long.columns:
-                tenants.update(df_long['tenant_id'].unique())
-            
-            # Se encontramos algum tenant, criar DataFrame básico
-            if tenants:
-                self.logger.info(f"Criando DataFrame básico com {len(tenants)} tenants: {tenants}")
-                import pandas as pd
-                import numpy as np
-                
-                tenant_metrics = pd.DataFrame({
-                    'tenant_id': list(tenants),
-                    'noisy_score': np.random.uniform(0.3, 0.7, size=len(tenants)),  # Valores simulados
-                    'impact_score': np.random.uniform(0.3, 0.7, size=len(tenants)),
-                    'isolation_score': np.random.uniform(0.3, 0.7, size=len(tenants))
-                })
-                
-                self.logger.info(f"Criado DataFrame básico com colunas: {list(tenant_metrics.columns)}")
-            else:
-                self.logger.error("Não foi possível extrair lista de tenants de nenhum dos dados disponíveis")
-                context['error'] = "Dados necessários para agregação de insights não disponíveis"
-                return context
-            
-        granger_matrices = context.get('granger_matrices', {})
-        te_matrices = context.get('te_matrices', {})
-        correlation_matrices = context.get('correlation_matrices', {})
-        anomaly_metrics = context.get('anomaly_metrics', {})
-        
+            self.logger.error("tenant_metrics not found in context. Cannot proceed with insight aggregation.")
+            context['error'] = "tenant_metrics not available for insight aggregation"
+            return context
+
         try:
-            # Agregar insights para cada tenant
-            self.logger.info("Agregando insights para cada tenant")
+            # Aggregate insights for each tenant
+            self.logger.info("Aggregating insights for each tenant")
             tenant_insights = aggregate_tenant_insights(
                 tenant_metrics=tenant_metrics,
-                phase_comparison_results=phase_comparison_results,
+                phase_comparison_results=phase_comparison_stats,
                 granger_matrices=granger_matrices,
                 te_matrices=te_matrices,
                 correlation_matrices=correlation_matrices,
                 anomaly_metrics=anomaly_metrics
             )
             
-            # Verificar se recebemos um erro da função de agregação
             if 'error_message' in tenant_insights:
                 error_msg = tenant_insights['error_message']
-                self.logger.error(f"Falha na agregação de insights: {error_msg}")
+                self.logger.error(f"Failed to aggregate insights: {error_msg}")
                 context['error'] = error_msg
                 return context
                 
             context['tenant_insights'] = tenant_insights
             
-            # Gerar tabela comparativa
-            self.logger.info("Gerando tabela comparativa inter-tenant")
+            # Generate comparative table
+            self.logger.info("Generating inter-tenant comparative table")
             comparative_table = generate_comparative_table(tenant_insights)
             context['comparative_table'] = comparative_table
             
-            # Salvar tabela em CSV
             comparative_table_path = os.path.join(insights_dir, f"comparative_table_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
             comparative_table.to_csv(comparative_table_path, index=False)
             context['comparative_table_path'] = comparative_table_path
             
-            # Gerar visualização comparativa
-            self.logger.info("Gerando visualização comparativa de métricas inter-tenant")
-            comparative_metrics_path = plot_comparative_metrics(comparative_table, insights_dir)
-            context['comparative_metrics_path'] = comparative_metrics_path
+            # Generate insight matrix plot
+            self.logger.info("Generating insight matrix plot")
+            plot_path = os.path.join(insights_dir, f"insight_matrix_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png")
+            plot_insight_matrix(tenant_insights, plot_path)
+            context['insight_matrix_plot_path'] = plot_path
             
-            # Salvar insights detalhados
-            insights_json_file = os.path.join(insights_dir, f"tenant_insights_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
-            import json
+            # Save detailed insights to JSON
+            insights_json_path = os.path.join(insights_dir, f"tenant_insights_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
             
-            # Converter dados para formato JSON serializável
+            # Convert numpy types for JSON serialization
             serializable_insights = {}
             for tenant, data in tenant_insights.items():
-                serializable_insights[tenant] = {
-                    k: (float(v) if hasattr(v, 'dtype') and ('float' in str(v.dtype) or 'int' in str(v.dtype)) else v)
-                    for k, v in data.items() 
-                    if k != 'rank'  # Excluir rank por ser incompatível
-                }
-            
-            with open(insights_json_file, 'w') as f:
-                json.dump(serializable_insights, f, indent=2)
-                
-            context['insights_json_path'] = insights_json_file
-            
-            self.logger.info(f"Agregação de insights concluída. Resultados salvos em {insights_dir}")
-            
+                serializable_data = {}
+                for k, v in data.items():
+                    if isinstance(v, np.generic):
+                        serializable_data[k] = v.item()
+                    elif isinstance(v, (pd.Timestamp, datetime)):
+                        serializable_data[k] = v.isoformat()
+                    else:
+                        serializable_data[k] = v
+                serializable_insights[tenant] = serializable_data
+
+            with open(insights_json_path, 'w') as f:
+                json.dump(serializable_insights, f, indent=4)
+            context['insights_json_path'] = insights_json_path
+
+            self.logger.info(f"Insight aggregation completed successfully. Reports saved in {insights_dir}")
+
         except Exception as e:
-            self.logger.error(f"Erro durante agregação de insights: {str(e)}", exc_info=True)
-            context['error'] = f"Erro na agregação de insights: {str(e)}"
-        
+            self.logger.error(f"An error occurred during insight aggregation: {e}", exc_info=True)
+            context['error'] = str(e)
+
         return context
 
 
 class Pipeline:
-    """Classe principal para orquestração do pipeline de análise."""
-
-    def __init__(self, stages: List[PipelineStage], config_path: Optional[str] = None):
+    """Orchestrates the execution of the analysis pipeline."""
+    
+    def __init__(self, config: Dict[str, Any]):
         """
-        Inicializa o pipeline com uma lista de estágios.
-
+        Initializes the pipeline with a given configuration.
+        
         Args:
-            stages: Lista de objetos PipelineStage a serem executados.
-            config_path: Caminho opcional para o arquivo de configuração YAML.
+            config: Dictionary with pipeline configurations.
         """
-        self.stages = stages
-        self.context: Dict[str, Any] = {}  # Contexto compartilhado entre estágios
+        self.config = config
+        self.context: Dict[str, Any] = {'config': config}
+        self.stages: List[PipelineStage] = []
         self.logger = logging.getLogger("pipeline.Pipeline")
-
-        if config_path:
-            self.configure_from_yaml(config_path)
-        else:
-            # Carregar configuração padrão se nenhum caminho for fornecido
-            self._load_default_config()
-
-    def configure_from_yaml(self, config_path: str) -> None:
+        self._setup_stages()
+        
+    def _setup_stages(self):
+        """Initializes and adds all pipeline stages."""
+        self.stages.append(DataIngestionStage())
+        self.stages.append(DataValidationStage())
+        self.stages.append(DataExportStage())
+        self.stages.append(DescriptiveAnalysisStage())
+        self.stages.append(CorrelationAnalysisStage())
+        self.stages.append(CausalityAnalysisStage())
+        self.stages.append(PhaseComparisonStage())
+        self.stages.append(ReportGenerationStage())
+        self.stages.append(InsightAggregationStage())
+        
+    def run(self, force_reprocess: bool = False):
         """
-        Configura o pipeline a partir de um arquivo YAML.
-
+        Executes all pipeline stages in order.
+        
         Args:
-            config_path: Caminho para o arquivo de configuração YAML.
+            force_reprocess: If True, forces data reprocessing.
         """
-        try:
-            with open(config_path, 'r') as f:
-                config_data = yaml.safe_load(f)
-            
-            # Atualiza o contexto com os dados do arquivo de configuração
-            self.context['config'] = config_data
-            self.logger.info(f"Configuração carregada de: {config_path}")
+        self.logger.info("Starting pipeline execution...")
+        self.context['force_reprocess'] = force_reprocess
+        self.context['output_dir'] = self.config.get('output_dir', 'outputs')
+        self.context['data_root'] = self.config.get('data_root', config.DATA_ROOT)
+        self.context['processed_data_dir'] = self.config.get('processed_data_dir', config.PROCESSED_DATA_DIR)
 
-            # Aplicar configurações específicas, se necessário
-            # Exemplo: self.context['data_root'] = config_data.get('data_root', config.DATA_ROOT)
-
-        except FileNotFoundError:
-            self.logger.error(f"Arquivo de configuração não encontrado: {config_path}")
-            # Considerar levantar uma exceção ou usar configuração padrão
-            self._load_default_config()
-        except yaml.YAMLError as e:
-            self.logger.error(f"Erro ao parsear arquivo YAML de configuração: {e}")
-            # Considerar levantar uma exceção ou usar configuração padrão
-            self._load_default_config()
-
-    def _load_default_config(self) -> None:
-        """Carrega uma configuração padrão para o pipeline."""
-        self.logger.info("Carregando configuração padrão do pipeline.")
-        self.context['config'] = {
-            'data_root': config.DATA_ROOT,
-            'processed_data_dir': config.PROCESSED_DATA_DIR,
-            'output_dir': config.OUTPUT_DIR,
-            'selected_metrics': None, # Ou valores padrão
-            'selected_tenants': None, # Ou valores padrão
-            'selected_rounds': None,  # Ou valores padrão
-            'causality': {
-                'granger_max_lag': 5,
-                'granger_threshold': 0.05,
-                'transfer_entropy_bins': 8
-            }
-        }
-
-    def run(self) -> Dict[str, Any]:
-        """
-        Executa o pipeline completo, passando o contexto de um estágio para o próximo.
-        
-        Returns:
-            Contexto final após a execução de todos os estágios.
-        """
-        self.logger.info("Iniciando execução do pipeline")
-        start_time = time.time()
-        
-        try:
-            # Obter configurações do contexto
-            config_dict = self.context.get('config', {})
-            
-            # Resolver caminhos relativos para absolutos
-            pipeline_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            
-            # Obter o data_root do contexto ou da configuração
-            data_root = self.context.get('data_root')
-            if data_root is None:
-                data_root = config_dict.get('data_root')
-                if data_root and not os.path.isabs(data_root):
-                    data_root = os.path.abspath(os.path.join(pipeline_dir, data_root))
-            
-            # Obter o processed_data_dir do contexto ou da configuração
-            processed_data_dir = self.context.get('processed_data_dir')
-            if processed_data_dir is None:
-                processed_data_dir = config_dict.get('processed_data_dir')
-                if processed_data_dir and not os.path.isabs(processed_data_dir):
-                    processed_data_dir = os.path.abspath(os.path.join(pipeline_dir, processed_data_dir))
-            
-            # Obter o output_dir do contexto ou da configuração
-            output_dir = self.context.get('output_dir')
-            if output_dir is None:
-                output_dir = config_dict.get('output_dir')
-                if output_dir and not os.path.isabs(output_dir):
-                    output_dir = os.path.abspath(os.path.join(pipeline_dir, output_dir))
-                    
-            # Criar diretórios se não existirem
-            if processed_data_dir:
-                os.makedirs(processed_data_dir, exist_ok=True)
-            if output_dir:
-                os.makedirs(output_dir, exist_ok=True)
-                
-            # Construir o contexto inicial
-            context = {
-                'config': config_dict,
-                'data_root': data_root,
-                'processed_data_dir': processed_data_dir,
-                'output_dir': output_dir,
-                'force_reprocess': self.context.get('force_reprocess', False),
-                'no_plots': self.context.get('no_plots', False),
-                'no_report': self.context.get('no_report', False)
-            }
-            
-            # Executar cada estágio em sequência
-            for stage in self.stages:
-                self.logger.info(f"Executando estágio: {stage.name}")
-                context = stage.execute(context)
-                
-                # Verificar se houve erro no estágio
-                if 'error' in context:
-                    self.logger.error(f"Erro no estágio {stage.name}: {context['error']}")
+        for stage in self.stages:
+            try:
+                self.context = stage.execute(self.context)
+                if self.context.get('pipeline_halted'):
+                    self.logger.error(f"Pipeline execution halted at stage '{stage.name}'. Reason: {self.context.get('data_validation_report', 'Unknown')}")
                     break
-            
-            elapsed_time = time.time() - start_time
-            self.logger.info(f"Pipeline concluído em {elapsed_time:.2f} segundos")
-            
-            return context
-            
-        except Exception as e:
-            self.logger.error(f"Erro inesperado durante execução do pipeline: {str(e)}", exc_info=True)
-            raise
-
-def parse_arguments():
-    """Parse command-line arguments."""
-    parser = argparse.ArgumentParser(description="Pipeline de análise de séries temporais multi-tenant")
-    
-    # Argumentos básicos
-    parser.add_argument("--config", help="Caminho para arquivo de configuração YAML")
-    parser.add_argument("--data-root", help="Diretório raiz dos dados de experimento")
-    parser.add_argument("--output-dir", help="Diretório para salvar resultados")
-    parser.add_argument("--processed-data-dir", help="Diretório para dados processados")
-    
-    # Filtros de dados
-    parser.add_argument("--selected-metrics", nargs='+', help="Métricas a serem processadas")
-    parser.add_argument("--selected-tenants", nargs='+', help="Tenants a serem processados")
-    parser.add_argument("--selected-rounds", nargs='+', help="Rounds a serem processados")
-    
-    # Controles de processamento
-    parser.add_argument("--force-reprocess", action="store_true", help="Força o reprocessamento dos dados brutos")
-    parser.add_argument("--input-parquet-path", type=str, help="Caminho para um arquivo parquet existente para ser usado diretamente")
-    parser.add_argument("--no-plots", action="store_true", help="Desativa geração de visualizações")
-    parser.add_argument("--no-report", action="store_true", help="Desativa geração de relatório")
-    
-    return parser.parse_args()
+                if self.context.get('error') is not None:
+                    self.logger.error(f"Pipeline stopped at stage '{stage.name}' due to an error: {self.context.get('error')}")
+                    break
+            except Exception as e:
+                self.logger.error(f"An unexpected error occurred in stage '{stage.name}': {e}", exc_info=True)
+                break
+        
+        self.logger.info("Pipeline execution finished.")
 
 def main():
-    """Função principal para execução do pipeline a partir da linha de comando."""
-    args = parse_arguments()
+    """Main function to configure and run the pipeline."""
+    parser = argparse.ArgumentParser(description="Run the multi-tenant time series analysis pipeline.")
+    parser.add_argument("--config", type=str, default="config/pipeline_config.yaml", help="Path to the pipeline configuration file.")
+    parser.add_argument("--force-reprocess", action="store_true", help="Force reprocessing of all data, ignoring existing consolidated files.")
     
-    # Configurar o pipeline
-    config_path = args.config
-    
-    # Determinar os estágios do pipeline
-    stages = [
-        DataIngestionStage(),
-        DataExportStage(),
-        DescriptiveAnalysisStage(),
-        CorrelationAnalysisStage(),
-        CausalityAnalysisStage(),
-        PhaseComparisonStage(),
-        ReportGenerationStage(),
-        InsightAggregationStage()
-    ]
-    
-    # Inicializar o pipeline
-    pipeline = Pipeline(stages, config_path)
-    
-    # Configurar o contexto com argumentos da linha de comando
-    context = {}
-    
-    if args.data_root:
-        context['data_root'] = args.data_root
-        
-    if args.output_dir:
-        context['output_dir'] = args.output_dir
-        
-    if args.processed_data_dir:
-        context['processed_data_dir'] = args.processed_data_dir
-        
-    if args.force_reprocess:
-        context['force_reprocess'] = True
-        
-    if args.input_parquet_path:
-        if not 'config' in pipeline.context:
-            pipeline.context['config'] = {}
-        pipeline.context['config']['input_parquet_path'] = args.input_parquet_path
-        
-    if args.selected_metrics:
-        if not 'config' in pipeline.context:
-            pipeline.context['config'] = {}
-        pipeline.context['config']['selected_metrics'] = args.selected_metrics
-        
-    if args.selected_tenants:
-        if not 'config' in pipeline.context:
-            pipeline.context['config'] = {}
-        pipeline.context['config']['selected_tenants'] = args.selected_tenants
-        
-    if args.selected_rounds:
-        if not 'config' in pipeline.context:
-            pipeline.context['config'] = {}
-        pipeline.context['config']['selected_rounds'] = args.selected_rounds
-        
-    if args.no_plots:
-        context['no_plots'] = True
-        
-    if args.no_report:
-        context['no_report'] = True
-    
-    # Atualizar o contexto do pipeline
-    pipeline.context.update(context)
-    
-    # Executar o pipeline
+    args = parser.parse_args()
+
+    # Load configuration
     try:
-        pipeline.run()
-        return 0
-    except Exception as e:
-        logging.error(f"Erro ao executar o pipeline: {e}", exc_info=True)
+        config_dict = load_parse_config(args.config)
+    except FileNotFoundError:
+        logger.error(f"Configuration file not found: {args.config}")
+        return 1
+    except yaml.YAMLError as e:
+        logger.error(f"Error parsing configuration file: {e}")
         return 1
 
+    # Create and run the pipeline
+    pipeline = Pipeline(config_dict)
+    pipeline.run(force_reprocess=args.force_reprocess)
+
+    logger.info("Pipeline execution finished.")
+    return 0
+
+
 if __name__ == "__main__":
+    # This allows running the pipeline directly from this script
     sys.exit(main())

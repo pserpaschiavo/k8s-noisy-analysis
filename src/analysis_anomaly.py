@@ -1,10 +1,10 @@
 """
 Module: analysis_anomaly.py
-Description: Implementa métodos para detecção de anomalias em séries temporais.
+Description: Implements methods for anomaly detection in time series.
 
-Este módulo define funções para identificar observações anômalas em séries temporais
-usando diferentes técnicas, como detecção baseada em distribuição estatística,
-decomposição temporal e métodos de aprendizado de máquina.
+This module defines functions to identify anomalous observations in time series
+using different techniques, such as statistical distribution-based detection,
+temporal decomposition, and machine learning methods.
 """
 
 import os
@@ -17,52 +17,52 @@ from typing import Dict, List, Tuple, Any, Optional, Union
 from sklearn.ensemble import IsolationForest
 from scipy import stats
 
-# Usando import condicional para evitar dependência circular
+# Using conditional import to avoid circular dependency
 try:
     from src.pipeline import PipelineStage
     pipeline_available = True
 except ImportError:
     pipeline_available = False
-    # Classe base mock para quando pipeline.py não pode ser importado
+    # Mock base class for when pipeline.py cannot be imported
     class PipelineStage:
         def __init__(self, *args, **kwargs):
             pass
 
-# Configuração de logging
+# Logging setup
 logger = logging.getLogger("analysis_anomaly")
 
 class AnomalyDetectionStage(PipelineStage):
     """
-    Estágio do pipeline para detectar anomalias nas séries temporais.
+    Pipeline stage to detect anomalies in time series.
     """
     
     def __init__(self, output_dir: Optional[str] = None):
         super().__init__(
             name="Anomaly Detection", 
-            description="Detecção de anomalias em séries temporais multi-tenant"
+            description="Anomaly detection in multi-tenant time series"
         )
         self.output_dir = output_dir
     
     def _execute_implementation(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Implementação da detecção de anomalias.
+        Implementation of anomaly detection.
         
         Args:
-            context: Contexto atual do pipeline com resultados anteriores.
+            context: Current pipeline context with previous results.
             
         Returns:
-            Contexto atualizado com resultados da detecção de anomalias.
+            Updated context with anomaly detection results.
         """
-        self.logger.info("Iniciando detecção de anomalias")
+        self.logger.info("Starting anomaly detection")
         
-        # Verificar se temos dados para analisar
+        # Check if we have data to analyze
         df_long = context.get('df_long')
         if df_long is None:
-            self.logger.warning("DataFrame principal não encontrado no contexto")
-            context['error'] = "DataFrame principal não disponível para detecção de anomalias"
+            self.logger.warning("Main DataFrame not found in context")
+            context['error'] = "Main DataFrame not available for anomaly detection"
             return context
         
-        # Diretório de saída
+        # Output directory
         output_dir = self.output_dir or context.get('output_dir')
         if not output_dir:
             output_dir = os.path.join(os.getcwd(), 'outputs', 'plots', 'anomaly_detection')
@@ -71,7 +71,7 @@ class AnomalyDetectionStage(PipelineStage):
             
         os.makedirs(output_dir, exist_ok=True)
         
-        # Extrair dados necessários
+        # Extract necessary data
         experiment_id = context.get('experiment_id', df_long['experiment_id'].iloc[0])
         metrics = context.get('selected_metrics', df_long['metric_name'].unique())
         tenants = context.get('selected_tenants', df_long['tenant_id'].unique())
@@ -80,15 +80,15 @@ class AnomalyDetectionStage(PipelineStage):
         anomaly_metrics = {}
         visualization_paths = []
         
-        # Para cada combinação de métrica/round
+        # For each metric/round combination
         for metric in metrics:
             anomalies_df = []
             
             for round_id in rounds:
                 for phase in df_long['experimental_phase'].unique():
-                    # Processar cada tenant
+                    # Process each tenant
                     for tenant in tenants:
-                        # Filtrar dados
+                        # Filter data
                         tenant_data = df_long[(df_long['metric_name'] == metric) & 
                                              (df_long['round_id'] == round_id) & 
                                              (df_long['experimental_phase'] == phase) &
@@ -98,7 +98,7 @@ class AnomalyDetectionStage(PipelineStage):
                             continue
                         
                         try:
-                            # Detectar anomalias usando Z-score
+                            # Detect anomalies using Z-score
                             anomalies = detect_anomalies_zscore(
                                 tenant_data, z_threshold=3.0
                             )
@@ -109,7 +109,7 @@ class AnomalyDetectionStage(PipelineStage):
                                 anomalies['experimental_phase'] = phase
                                 anomalies_df.append(anomalies)
                             
-                            # Gerar visualização
+                            # Generate visualization
                             fig_path = plot_anomalies(
                                 tenant_data, anomalies, 
                                 metric, tenant, round_id, phase,
@@ -118,17 +118,17 @@ class AnomalyDetectionStage(PipelineStage):
                             visualization_paths.append(fig_path)
                             
                         except Exception as e:
-                            self.logger.error(f"Erro ao detectar anomalias para {tenant}, {metric}, {round_id}: {str(e)}")
+                            self.logger.error(f"Error detecting anomalies for {tenant}, {metric}, {round_id}: {str(e)}")
             
-            # Consolida todas as anomalias desta métrica
+            # Consolidate all anomalies for this metric
             if anomalies_df:
                 anomaly_metrics[metric] = pd.concat(anomalies_df, ignore_index=True)
         
-        # Armazenar resultados no contexto
+        # Store results in context
         context['anomaly_metrics'] = anomaly_metrics
         context['anomaly_visualization_paths'] = visualization_paths
         
-        self.logger.info(f"Detecção de anomalias concluída. {len(visualization_paths)} visualizações geradas.")
+        self.logger.info(f"Anomaly detection completed. {len(visualization_paths)} visualizations generated.")
         
         return context
 
@@ -138,33 +138,33 @@ def detect_anomalies_zscore(
     z_threshold: float = 3.0
 ) -> pd.DataFrame:
     """
-    Detecta anomalias usando o método de Z-score.
+    Detects anomalies using the Z-score method.
     
     Args:
-        df: DataFrame com dados de um tenant para uma métrica
-        z_threshold: Limiar de Z-score para considerar um ponto como anomalia
+        df: DataFrame with data for one tenant for one metric
+        z_threshold: Z-score threshold to consider a point as an anomaly
         
     Returns:
-        DataFrame com as anomalias detectadas
+        DataFrame with the detected anomalies
     """
-    # Verifica se há dados suficientes
+    # Check if there is enough data
     if len(df) < 4:
-        logger.warning("Dados insuficientes para detecção de anomalias")
+        logger.warning("Insufficient data for anomaly detection")
         return pd.DataFrame()
     
-    # Calcula estatísticas
+    # Calculate statistics
     mean_val = df['metric_value'].mean()
     std_val = df['metric_value'].std()
     
-    # Evita divisão por zero
+    # Avoid division by zero
     if std_val == 0:
-        logger.warning("Desvio padrão zero detectado, não é possível calcular z-score")
+        logger.warning("Zero standard deviation detected, cannot calculate z-score")
         return pd.DataFrame()
     
-    # Calcula z-score
+    # Calculate z-score
     df['z_score'] = (df['metric_value'] - mean_val) / std_val
     
-    # Identifica anomalias
+    # Identify anomalies
     anomalies = df[abs(df['z_score']) > z_threshold].copy()
     
     return anomalies
@@ -180,74 +180,74 @@ def plot_anomalies(
     output_dir: str
 ) -> str:
     """
-    Gera visualização de série temporal com anomalias destacadas.
+    Generates a time series visualization with highlighted anomalies.
     
     Args:
-        df: DataFrame com série temporal completa
-        anomalies: DataFrame com pontos anômalos
-        metric: Nome da métrica
-        tenant: ID do tenant
-        round_id: ID do round
-        phase: Fase experimental
-        output_dir: Diretório para salvar a visualização
+        df: DataFrame with the complete time series
+        anomalies: DataFrame with anomalous points
+        metric: Metric name
+        tenant: Tenant ID
+        round_id: Round ID
+        phase: Experimental phase
+        output_dir: Directory to save the visualization
         
     Returns:
-        Caminho para o arquivo de imagem gerado
+        Path to the generated image file
     """
     fig, ax = plt.subplots(figsize=(12, 6))
     
-    # Converter timestamp para datetime se necessário
+    # Convert timestamp to datetime if necessary
     if not pd.api.types.is_datetime64_any_dtype(df['timestamp']):
         df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
     
-    # Encontrar o timestamp inicial da fase
+    # Find the initial timestamp of the phase
     phase_start = df['timestamp'].min()
     
-    # Calcular a duração total da fase em segundos
+    # Calculate the total duration of the phase in seconds
     total_duration = (df['timestamp'].max() - phase_start).total_seconds()
     
-    # Sempre usar segundos para consistência
-    time_unit = 1  # Usar sempre segundos
-    x_label = "Segundos desde o início da fase"
+    # Always use seconds for consistency
+    time_unit = 1  # Always use seconds
+    x_label = "Seconds since phase start"
     
-    # Calcular tempos relativos
+    # Calculate relative times
     elapsed = (df['timestamp'] - phase_start).dt.total_seconds() / time_unit
     
-    # Plot da série temporal
-    ax.plot(elapsed, df['metric_value'], 'b-', label='Série Temporal')
+    # Plot the time series
+    ax.plot(elapsed, df['metric_value'], 'b-', label='Time Series')
     
-    # Destaca anomalias
+    # Highlight anomalies
     if not anomalies.empty:
-        # Garantir formato datetime
+        # Ensure datetime format
         if not pd.api.types.is_datetime64_any_dtype(anomalies['timestamp']):
             anomalies['timestamp'] = pd.to_datetime(anomalies['timestamp'], errors='coerce')
         
-        # Calcular tempo relativo para anomalias
+        # Calculate relative time for anomalies
         anomaly_elapsed = (anomalies['timestamp'] - phase_start).dt.total_seconds() / time_unit
-        ax.scatter(anomaly_elapsed, anomalies['metric_value'], color='red', s=80, alpha=0.6, label='Anomalias')
+        ax.scatter(anomaly_elapsed, anomalies['metric_value'], color='red', s=80, alpha=0.6, label='Anomalies')
     
-    # Adiciona linha média e bandas de confiança
+    # Add mean line and confidence bands
     mean_val = df['metric_value'].mean()
     std_val = df['metric_value'].std()
     
-    ax.axhline(y=mean_val, color='green', linestyle='--', alpha=0.7, label='Média')
-    ax.axhline(y=mean_val + 3*std_val, color='orange', linestyle=':', alpha=0.5, label='Limiar (3σ)')
+    ax.axhline(y=mean_val, color='green', linestyle='--', alpha=0.7, label='Mean')
+    ax.axhline(y=mean_val + 3*std_val, color='orange', linestyle=':', alpha=0.5, label='Threshold (3σ)')
     ax.axhline(y=mean_val - 3*std_val, color='orange', linestyle=':', alpha=0.5)
     
-    # Formatação do gráfico
-    ax.set_title(f'Detecção de Anomalias: {metric} - {tenant}', fontweight='bold')
-    plt.suptitle(f'Round: {round_id}, Fase: {phase}', fontsize=10)
+    # Chart formatting
+    ax.set_title(f'Anomaly Detection: {metric} - {tenant}', fontweight='bold')
+    plt.suptitle(f'Round: {round_id}, Phase: {phase}', fontsize=10)
     ax.set_xlabel(x_label)
-    ax.set_ylabel(f'Valor ({metric})')
+    ax.set_ylabel(f'Value ({metric})')
     
-    # Formata timestamps
+    # Format timestamps
     plt.xticks(rotation=45)
     fig.tight_layout()
     
-    # Adiciona legenda
+    # Add legend
     plt.legend(loc='best')
     
-    # Salva o gráfico
+    # Save the chart
     safe_metric = metric.replace('/', '_').replace(' ', '_')
     safe_tenant = tenant.replace('-', '_')
     safe_phase = phase.replace(' ', '_')
@@ -255,6 +255,7 @@ def plot_anomalies(
     fig_path = os.path.join(output_dir, file_name)
     
     plt.savefig(fig_path, dpi=300, bbox_inches='tight')
-    plt.close()
+    # plt.close() # Comentado para permitir a exibição do gráfico
+    plt.show()
     
     return fig_path

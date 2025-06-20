@@ -1,0 +1,42 @@
+# Configuração do Pipeline de Análise para SFI2 Paper
+
+# Diretórios de entrada/saída
+data_root: ./exp_data/sfi2-paper
+processed_data_dir: ./data/processed
+output_dir: ./outputs/sfi2-paper-analysis
+
+# Configuração de ingestão de dados
+output_parquet_name: ./data/processed/sfi2_paper.parquet
+
+# Seleção de dados
+selected_metrics:
+  - cpu_usage
+  - memory_usage
+  
+selected_tenants:
+  - tenant-cpu
+  - tenant-dsk
+  - tenant-mem
+  - tenant-ntk
+  
+selected_rounds:
+  - round-1
+  - round-2
+  - round-3
+
+# Parâmetros de análise
+correlation:
+  methods:
+    - pearson
+    - spearman
+  
+causality:
+  granger_max_lag: 5
+  granger_threshold: 0.05
+  transfer_entropy_bins: 8
+  
+# Opções de visualização
+plots:
+  figure_size: [12, 7]
+  style: tableau-colorblind10
+  dpi: 300

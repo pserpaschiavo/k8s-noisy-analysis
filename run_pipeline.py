@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Script para executar o pipeline de análise de séries temporais multi-tenant.
+Script to run the multi-tenant time series analysis pipeline.
 
-Uso:
+Usage:
     ./run_pipeline.py [--config CONFIG_PATH] 
                      [--data-root DATA_ROOT] 
                      [--output-dir OUTPUT_DIR]
@@ -10,7 +10,7 @@ Uso:
                      [--selected-tenants TENANTS [TENANTS ...]]
                      [--selected-rounds ROUNDS [ROUNDS ...]]
 
-Exemplos:
+Examples:
     ./run_pipeline.py --config config/pipeline_config.yaml
     ./run_pipeline.py --selected-metrics cpu_usage memory_usage --selected-tenants tenant-a tenant-b
 """

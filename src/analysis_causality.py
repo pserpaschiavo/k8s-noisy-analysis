@@ -2,8 +2,8 @@
 Module: analysis_causality.py
 Description: Causality analysis utilities for multi-tenant time series analysis, including graph visualization.
 
-Este módulo implementa métodos para análise de causalidade entre séries temporais de diferentes tenants,
-incluindo causalidade de Granger e Transfer Entropy (TE), além de visualizações em formato de grafo.
+This module implements methods for causality analysis between time series of different tenants,
+including Granger causality and Transfer Entropy (TE), as well as graph visualizations.
 """
 import os
 import logging
@@ -20,29 +20,29 @@ from statsmodels.tools.sm_exceptions import MissingDataError
 from functools import lru_cache
 import warnings
 
-# Importa utilitários para processamento de séries temporais
+# Import utilities for time series processing
 try:
     from src.utils_timeseries import check_and_transform_timeseries, resample_and_align_timeseries
     UTILS_AVAILABLE = True
 except ImportError:
     UTILS_AVAILABLE = False
-    logging.warning("Módulo utils_timeseries não disponível. Algumas otimizações não serão aplicadas.")
+    logging.warning("utils_timeseries module not available. Some optimizations will not be applied.")
 
-# Configurar logging
+# Configure logging
 logger = logging.getLogger(__name__)
 
-# Suprimir avisos específicos de statsmodels
+# Suppress specific statsmodels warnings
 warnings.filterwarnings("ignore", "Maximum Likelihood optimization failed to converge")
 warnings.filterwarnings("ignore", "Unable to solve the eigenvalue problem")
 
-# Importação da biblioteca pyinform para Transfer Entropy mais robusta
+# Import the pyinform library for more robust Transfer Entropy
 try:
     from pyinform.transferentropy import transfer_entropy
     PYINFORM_AVAILABLE = True
-    logger.info("pyinform disponível. Usando implementação otimizada para Transfer Entropy.")
+    logger.info("pyinform available. Using optimized implementation for Transfer Entropy.")
 except ImportError:
     PYINFORM_AVAILABLE = False
-    logger.warning("pyinform não está instalado. Transfer Entropy usará implementação básica. Instale com: pip install pyinform")
+    logger.warning("pyinform is not installed. Transfer Entropy will use a basic implementation. Install with: pip install pyinform")
 
 plt.style.use('tableau-colorblind10')
 
@@ -50,7 +50,7 @@ def plot_causality_graph(causality_matrix: pd.DataFrame, out_path: str, threshol
     """
     Plots a causality graph from a causality matrix (e.g., Granger p-values or scores).
     Edges are drawn where causality_matrix.loc[src, tgt] < threshold.
-    Edge width = intensity (1-p ou score), color = metric.
+    Edge width = intensity (1-p or score), color = metric.
     """
     if causality_matrix.empty:
         return None
@@ -64,7 +64,7 @@ def plot_causality_graph(causality_matrix: pd.DataFrame, out_path: str, threshol
     edges = []
     edge_weights = []
     edge_colors = []
-    # Paleta de cores para métricas
+    # Color palette for metrics
     metric_palette = {
         'cpu_usage': 'tab:blue',
         'memory_usage': 'tab:orange',
@@ -84,56 +84,56 @@ def plot_causality_graph(causality_matrix: pd.DataFrame, out_path: str, threshol
                     edge_colors.append(color)
                     edge_labels[(src, tgt)] = f"{weight:.2f}"
     
-    # Implementa posições fixas para os nós para garantir consistência visual entre diferentes grafos
-    # Primeiro, garante que os tenants estejam em ordem consistente para posicionamento
+    # Implement fixed positions for nodes to ensure visual consistency between different graphs
+    # First, ensure tenants are in a consistent order for positioning
     sorted_tenants = sorted(tenants)
     
-    # Cria dicionário de posições fixas para cada tenant (usando layout circular)
+    # Create a dictionary of fixed positions for each tenant (using circular layout)
     pos = {}
     if len(sorted_tenants) <= 1:
-        pos[sorted_tenants[0]] = np.array([0.0, 0.0])
+        if sorted_tenants:
+            pos[sorted_tenants[0]] = np.array([0.0, 0.0])
     else:
         angles = np.linspace(0, 2 * np.pi, len(sorted_tenants), endpoint=False)
-        # Posiciona os nós em círculo com raio 0.8 para deixar espaço para labels
+        # Position nodes in a circle with radius 0.8 to leave space for labels
         radius = 0.8
         for tenant, angle in zip(sorted_tenants, angles):
             pos[tenant] = np.array([radius * np.cos(angle), radius * np.sin(angle)])
     
-    # Adiciona um pequeno jitter para evitar sobreposição perfeita de arestas bidirecionais
+    # Add a small jitter to avoid perfect overlap of bidirectional edges
     for node in pos:
         pos[node] = pos[node] + np.random.normal(0, 0.02, size=2)
     
-    plt.figure(figsize=(10, 10))  # Aumentar o tamanho da figura
+    plt.figure(figsize=(10, 10))  # Increase figure size
     
-    # Adicionar um fundo claro para melhor visibilidade
+    # Add a light background for better visibility
     ax = plt.gca()
     ax.set_facecolor('#f8f8f8')
     
-    # Desenhar nós maiores e com bordas
+    # Draw larger nodes with borders
     nx.draw_networkx_nodes(G, pos, node_color='skyblue', node_size=1600, 
                           edgecolors='darkblue', linewidths=1.5)
     
-    # Melhorar os rótulos dos nós
+    # Improve node labels
     nx.draw_networkx_labels(G, pos, font_size=13, font_weight='bold', font_color='black')
     
-    # Desenha cada aresta individualmente para aplicar peso e cor
+    # Draw each edge individually to apply weight and color
     for idx, (edge, w, c) in enumerate(zip(edges, edge_weights, edge_colors)):
         nx.draw_networkx_edges(G, pos, edgelist=[edge], arrowstyle='->' if directed else '-', 
                              arrows=directed, width=w, edge_color=c, alpha=0.9,
-                             connectionstyle='arc3,rad=0.2')  # Curva as arestas para melhor visualização
+                             connectionstyle='arc3,rad=0.2')  # Curve edges for better visualization
     
-    # Melhorar os rótulos das arestas
+    # Improve edge labels
     nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, 
                                font_color='darkred', font_size=11, font_weight='bold',
                                bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="gray", alpha=0.7))
     
-    plt.title(f'Causality Graph ({"Directed" if directed else "Undirected"})\nMétrica: {metric if metric else "?"} | Edges: p < {threshold:.2g}',
+    plt.title(f'Causality Graph ({"Directed" if directed else "Undirected"})\nMetric: {metric if metric else "?"} | Edges: p < {threshold:.2g}',
              fontsize=14, fontweight='bold')
     plt.axis('off')
-    # Legenda customizada
-    import matplotlib.lines as mlines
+    # Custom legend
     legend_elements = [
-        mlines.Line2D([0], [0], color=color, lw=3, label=f'{metric if metric else "Métrica"}')
+        mlines.Line2D([0], [0], color=color, lw=3, label=f'{metric if metric else "Metric"}')
     ]
     plt.legend(handles=legend_elements, loc='lower left')
     plt.tight_layout()
@@ -144,65 +144,65 @@ def plot_causality_graph(causality_matrix: pd.DataFrame, out_path: str, threshol
 
 def _transfer_entropy(x, y, bins=5, k=1):
     """
-    Calcula a Transfer Entropy (TE) de y para x (y→x) usando implementação otimizada.
+    Calculates the Transfer Entropy (TE) from y to x (y→x) using an optimized implementation.
     
     Args:
-        x: Array 1D representando a série temporal destino (target)
-        y: Array 1D representando a série temporal fonte (source)
-        bins: Número de bins para discretização (default=5)
-        k: Histórico da série destino a considerar (default=1)
+        x: 1D array representing the target time series
+        y: 1D array representing the source time series
+        bins: Number of bins for discretization (default=5)
+        k: History of the target series to consider (default=1)
         
     Returns:
-        valor escalar de TE (y→x): quanto y ajuda a prever x além da história de x
+        Scalar TE value (y→x): how much y helps predict x beyond the history of x
     """
-    # Verificar dados de entrada
-    min_points = 8  # Reduzido de 10 para permitir mais cálculos
+    # Check input data
+    min_points = 8  # Reduced from 10 to allow more calculations
     if len(x) != len(y):
-        logger.warning(f"Comprimentos desiguais para TE: x={len(x)}, y={len(y)}. Alinhando séries.")
-        # Truncar para o menor comprimento
+        logger.warning(f"Unequal lengths for TE: x={len(x)}, y={len(y)}. Aligning series.")
+        # Truncate to the shorter length
         length = min(len(x), len(y))
         x = x[:length]
         y = y[:length]
     
     if len(x) < min_points:
-        logger.warning(f"Dados insuficientes para TE: {len(x)} pontos disponíveis. Mínimo {min_points} pontos.")
+        logger.warning(f"Insufficient data for TE: {len(x)} points available. Minimum {min_points} points.")
         return 0.0
     
-    # Tratar valores ausentes (NaN)
+    # Handle missing values (NaN)
     x = np.nan_to_num(x, nan=np.nanmean(x))
     y = np.nan_to_num(y, nan=np.nanmean(y))
     
-    # Se pyinform está disponível, use implementação otimizada
+    # If pyinform is available, use the optimized implementation
     if 'transfer_entropy' in globals() and PYINFORM_AVAILABLE:
         try:
-            # Usa a implementação mais robusta da biblioteca pyinform
-            # Normalização e binning automático de séries
-            # Converte para inteiros conforme requisitos do pyinform
+            # Use the more robust implementation from the pyinform library
+            # Automatic normalization and binning of series
+            # Convert to integers as required by pyinform
             x_norm = (x - np.min(x)) / (np.max(x) - np.min(x) + 1e-8)
             y_norm = (y - np.min(y)) / (np.max(y) - np.min(y) + 1e-8)
             
             x_bin = np.floor(x_norm * (bins-1)).astype(int)
             y_bin = np.floor(y_norm * (bins-1)).astype(int)
             
-            # Calcular TE usando pyinform
+            # Calculate TE using pyinform
             from pyinform.transferentropy import transfer_entropy
             te_value = transfer_entropy(y_bin, x_bin, k=k, local=False)
-            return float(te_value)  # Garantir tipo escalar
+            return float(te_value)  # Ensure scalar type
         except Exception as e:
-            logger.warning(f"Erro ao usar pyinform para TE: {e}. Usando implementação básica.")
+            logger.warning(f"Error using pyinform for TE: {e}. Using basic implementation.")
     
-    # Implementação básica fallback usando histogramas numpy
-    # Discretiza as séries
+    # Basic fallback implementation using numpy histograms
+    # Discretize the series
     x_binned = np.digitize(x, np.histogram_bin_edges(x, bins=bins))
     y_binned = np.digitize(y, np.histogram_bin_edges(y, bins=bins))
     
-    # Calcula as probabilidades conjuntas e condicionais
+    # Calculate joint and conditional probabilities
     px = np.histogram(x_binned[1:], bins=bins, density=True)[0]
     pxy = np.histogram2d(x_binned[:-1], x_binned[1:], bins=bins, density=True)[0]
     pxyy = np.histogramdd(np.stack([x_binned[:-1], y_binned[:-1], x_binned[1:]], axis=1), 
                          bins=(bins, bins, bins), density=True)[0]
     
-    # Adiciona regularização para evitar log(0)
+    # Add regularization to avoid log(0)
     pxyy = pxyy + 1e-12
     pxy = pxy + 1e-12
     px = px + 1e-12
@@ -211,106 +211,93 @@ def _transfer_entropy(x, y, bins=5, k=1):
     te = 0.0
     for i in range(bins):
         for j in range(bins):
-            for k in range(bins):
-                pxyz = pxyy[j, k, i]
+            for k_ in range(bins):
+                pxyz = pxyy[j, k_, i]
                 pxz = pxy[j, i]
                 px_i = px[i]
                 if pxyz > 0 and pxz > 0 and px_i > 0:
-                    te += pxyz * np.log((pxyz / (np.sum(pxyy[j, k, :]) + 1e-12)) / 
+                    te += pxyz * np.log((pxyz / (np.sum(pxyy[j, k_, :]) + 1e-12)) / 
                                        (pxz / (np.sum(pxy[j, :]) + 1e-12)))
     return te
 
 class CausalityAnalyzer:
     """
-    Classe responsável por cálculos de causalidade (ex: Granger, Transfer Entropy) entre tenants.
+    Class responsible for causality calculations (e.g., Granger, Transfer Entropy) between tenants.
     """
     def __init__(self, df: pd.DataFrame):
         self.df = df
 
     def _granger_causality_test(self, source_series: np.ndarray, target_series: np.ndarray, max_lag: int = 3) -> dict:
         """
-        Executa um teste de causalidade de Granger entre duas séries temporais.
+        Executes a Granger causality test between two time series.
         
         Args:
-            source_series: Série temporal fonte (possível causa)
-            target_series: Série temporal alvo (possível efeito)
-            max_lag: Número máximo de lags para testar
+            source_series: Source time series (potential cause)
+            target_series: Target time series (potential effect)
+            max_lag: Maximum number of lags to test
             
         Returns:
-            Dicionário com resultados do teste ou dicionário vazio se falhar
+            Dictionary with test results or an empty dictionary if it fails
         """
         try:
-            # Verifica se as séries são constantes (desvio padrão muito baixo)
+            # Check if the series are constant (very low standard deviation)
             if np.std(source_series) < 1e-6 or np.std(target_series) < 1e-6:
-                logger.warning("Série constante detectada - não é possível executar teste de Granger")
+                logger.warning("Constant series detected - cannot run Granger test")
                 return {}
                 
-            # Verifica valores ausentes
+            # Check for missing values
             if np.isnan(source_series).any() or np.isnan(target_series).any():
-                # Tenta interpolar valores faltantes
-                source_series_pd = pd.Series(source_series)
-                target_series_pd = pd.Series(target_series)
+                # Try to interpolate missing values
+                source_series_pd = pd.Series(source_series).interpolate().bfill().ffill()
+                target_series_pd = pd.Series(target_series).interpolate().bfill().ffill()
                 
-                # Usa interpolação seguida de bfill e ffill diretamente (sem uso do parâmetro method)
-                source_series_pd = source_series_pd.interpolate()
-                source_series_pd = source_series_pd.bfill()  # backward fill
-                source_series_pd = source_series_pd.ffill()  # forward fill
+                # Convert back to numpy arrays
+                source_series = source_series_pd.to_numpy()
+                target_series = target_series_pd.to_numpy()
                 
-                target_series_pd = target_series_pd.interpolate()
-                target_series_pd = target_series_pd.bfill()
-                target_series_pd = target_series_pd.ffill()
-                
-                # Converte de volta para arrays numpy
-                source_series_clean = source_series_pd.values
-                target_series_clean = target_series_pd.values
-                
-                # Verifica se ainda há NaNs após a interpolação
-                if np.isnan(source_series_clean).any() or np.isnan(target_series_clean).any():
-                    logger.warning("Valores ausentes não puderam ser corrigidos por interpolação")
+                # Check if NaNs still exist after interpolation
+                if np.isnan(source_series).any() or np.isnan(target_series).any():
+                    logger.warning("Missing values could not be corrected by interpolation")
                     return {}
-                    
-                # Usa as séries limpas
-                source_series = source_series_clean
-                target_series = target_series_clean
             
-            # Ajusta max_lag se a série for muito curta
+            # Adjust max_lag if the series is too short
             if len(source_series) <= max_lag + 2:
                 new_max_lag = max(1, len(source_series) // 3 - 1)
-                logger.warning(f"Série muito curta para max_lag={max_lag}. Ajustando para {new_max_lag}")
+                logger.warning(f"Series too short for max_lag={max_lag}. Adjusting to {new_max_lag}")
                 max_lag = new_max_lag
             
-            # Cria um DataFrame com as duas séries
+            # Create a DataFrame with the two series
             data = pd.DataFrame({
                 'target': target_series,
                 'source': source_series
             })
             
-            # Executa o teste de Granger
+            # Execute the Granger test
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
                 results = grangercausalitytests(data, maxlag=max_lag, verbose=False)
                 
             return results
         except Exception as e:
-            logger.warning(f"Erro no teste de causalidade de Granger: {str(e)}")
+            logger.warning(f"Error in Granger causality test: {str(e)}")
             return {}
 
     @lru_cache(maxsize=32)
     def compute_granger_matrix(self, metric: str, phase: str, round_id: str, maxlag: int = 5) -> pd.DataFrame:
         """
-        Calcula a matriz de p-valores do teste de causalidade de Granger entre todos os tenants para uma métrica específica.
-        Resultados são cacheados para melhorar performance em execuções repetidas.
+        Calculates the matrix of p-values from the Granger causality test between all tenants for a specific metric.
+        Results are cached to improve performance on repeated runs.
         
         Args:
-            metric: Nome da métrica para análise
-            phase: Fase experimental (ex: "1 - Baseline", "2 - Attack")
-            round_id: ID do round (ex: "round-1")
-            maxlag: Número máximo de lags para o teste de Granger
+            metric: Name of the metric for analysis
+            phase: Experimental phase (e.g., "1-Baseline", "2-CPU-Noise")
+            round_id: ID of the round (e.g., "round-1")
+            maxlag: Maximum number of lags for the Granger test
             
         Returns:
-            DataFrame onde mat[i,j] é o menor p-valor de j causando i (considerando lags de 1 a maxlag)
+            DataFrame where mat[i,j] is the lowest p-value of j causing i (considering lags from 1 to maxlag)
         """
-        logger.info(f"Calculando matriz de causalidade Granger para {metric}, {phase}, {round_id}, maxlag={maxlag}")
+        logger.info(f"Calculating Granger causality matrix for {metric}, {phase}, {round_id}, maxlag={maxlag}")
         subset = self.df[(self.df['metric_name'] == metric) & 
                         (self.df['experimental_phase'] == phase) & 
                         (self.df['round_id'] == round_id)]
@@ -318,69 +305,68 @@ class CausalityAnalyzer:
         tenants = subset['tenant_id'].unique()
         mat = pd.DataFrame(np.nan, index=tenants, columns=tenants)
         
-        # Transforma para formato amplo para análise de séries temporais
+        # Transform to wide format for time series analysis
         wide = subset.pivot_table(index='timestamp', columns='tenant_id', values='metric_value')
         
-        # Interpolação e preenchimento para lidar com valores ausentes
+        # Ensure all tenants are present as columns, filling with NaN if necessary
+        wide = wide.reindex(columns=tenants, fill_value=np.nan)
+
+        # Interpolation and filling to handle missing values
         wide = wide.sort_index().interpolate(method='time').ffill().bfill()
         
-        # Testa causalidade de Granger para cada par de tenants
+        # Test Granger causality for each pair of tenants
         for target in tenants:
             for source in tenants:
                 if target == source:
                     continue
                 
                 try:
-                    # Seleciona apenas dados com sobreposição de timestamps
+                    # Select only data with overlapping timestamps
                     data = pd.concat([wide[target], wide[source]], axis=1)
                     data = data.dropna()
                     
-                    # Verificação adicional para garantir dados suficientes
-                    if len(data) < maxlag + 5:  # Requer pelo menos 5 pontos além do maxlag
-                        logger.warning(f"Dados insuficientes para teste Granger {source}->{target}: {len(data)} pontos, mínimo {maxlag+5}")
+                    # Additional check to ensure sufficient data
+                    if len(data) < maxlag + 5:  # Requires at least 5 points beyond maxlag
+                        logger.warning(f"Insufficient data for Granger test {source}->{target}: {len(data)} points, minimum {maxlag+5}")
                         continue
                         
-                    # Verificar estacionariedade antes do teste
+                    # Check for stationarity before the test
                     from statsmodels.tsa.stattools import adfuller
-                    # Diferenciação de primeira ordem se não for estacionário
-                    for col in [0, 1]:
-                        adf_result = adfuller(data.iloc[:, col], autolag='AIC')
-                        if adf_result[1] > 0.05:  # p-valor > 0.05 indica não-estacionariedade
-                            # Aplicamos diferenciação - use .astype(float) para garantir tipo compatível
-                            col_data = data.iloc[:, col].diff().dropna().astype(float)
-                            # Reconstruir o DataFrame para evitar o aviso de tipo incompatível
-                            data = data.iloc[1:].copy()  # Remove a primeira linha que seria NaN após diff()
-                            # Usar iteração para evitar problemas de tipo na atribuição
-                            for idx in range(len(data)):
-                                data.iat[idx, col] = col_data.iloc[idx]
+                    # First-order differentiation if not stationary
+                    for col_idx, col_name in enumerate(data.columns):
+                        adf_result = adfuller(data[col_name], autolag='AIC')
+                        if adf_result[1] > 0.05:  # p-value > 0.05 indicates non-stationarity
+                            original_len = len(data)
+                            data[col_name] = data[col_name].diff().dropna()
+                            logger.warning(f"Series {col_name} was not stationary. Differentiated and reduced from {original_len} to {len(data)} points.")
                             
-                    data = data.dropna()  # Remover valores NaN após diferenciação
+                    data = data.dropna()  # Remove NaN values after differentiation
                     
-                    if len(data) <= maxlag + 3:  # Verifica novamente após diferenciação
-                        logger.warning(f"Dados insuficientes após diferenciação: {len(data)} pontos")
+                    if len(data) <= maxlag + 3:  # Check again after differentiation
+                        logger.warning(f"Insufficient data after differentiation: {len(data)} points")
                         continue
                         
                     with warnings.catch_warnings():
                         warnings.simplefilter('ignore')
-                        # Realiza teste de Granger com tratamento de erro aprimorado
+                        # Perform Granger test with improved error handling
                         test_results = grangercausalitytests(
                             data, 
                             maxlag=maxlag, 
                             verbose=False
                         )
                         
-                        # Extrai o menor p-valor entre todos os lags
+                        # Extract the lowest p-value among all lags
                         p_values = [test_results[lag][0]['ssr_chi2test'][1] for lag in range(1, maxlag+1)]
                         min_p_value = min(p_values) if p_values else np.nan
                     
-                    # Armazena o resultado na matriz
+                    # Store the result in the matrix
                     mat.loc[target, source] = min_p_value
                 except KeyError:
                     continue
                 except MissingDataError:
                     continue
                 except Exception as e:
-                    logging.warning(f"Erro ao calcular Granger para {source}->{target}: {str(e)}")
+                    logging.warning(f"Error calculating Granger for {source}->{target}: {str(e)}")
                     continue
                     
         return mat
@@ -388,24 +374,24 @@ class CausalityAnalyzer:
     @lru_cache(maxsize=32)
     def compute_transfer_entropy_matrix(self, metric: str, phase: str, round_id: str, bins: int = 8, k: int = 1) -> pd.DataFrame:
         """
-        Calcula a matriz de Transfer Entropy (TE) entre todos os tenants para uma métrica específica.
-        Resultados são cacheados para melhorar performance em execuções repetidas.
+        Calculates the Transfer Entropy (TE) matrix between all tenants for a specific metric.
+        Results are cached to improve performance on repeated runs.
         
         Args:
-            metric: Nome da métrica para análise
-            phase: Fase experimental (ex: "1 - Baseline", "2 - Attack")
-            round_id: ID do round (ex: "round-1") 
-            bins: Número de bins para discretização das séries contínuas
-            k: Histórico da série destino a considerar
+            metric: Name of the metric for analysis
+            phase: Experimental phase (e.g., "1-Baseline", "2-CPU-Noise")
+            round_id: ID of the round (e.g., "round-1") 
+            bins: Number of bins for discretizing continuous series
+            k: History of the target series to consider
             
         Returns:
-            DataFrame onde mat[i,j] é o valor da Transfer Entropy de j para i (j→i)
-            Valores mais altos indicam maior transferência de informação
+            DataFrame where mat[i,j] is the Transfer Entropy value from j to i (j→i)
+            Higher values indicate greater information transfer
         """
-        # Log do início do cálculo
-        logger.info(f"Calculando matriz de Transfer Entropy para {metric} em {phase} ({round_id}), bins={bins}, k={k}")
+        # Log the start of the calculation
+        logger.info(f"Calculating Transfer Entropy matrix for {metric} in {phase} ({round_id}), bins={bins}, k={k}")
         
-        # Filtra os dados relevantes
+        # Filter relevant data
         subset = self.df[(self.df['metric_name'] == metric) & 
                         (self.df['experimental_phase'] == phase) & 
                         (self.df['round_id'] == round_id)]
@@ -413,47 +399,50 @@ class CausalityAnalyzer:
         tenants = subset['tenant_id'].unique()
         mat = pd.DataFrame(np.nan, index=tenants, columns=tenants)
         
-        # Transforma para formato amplo para análise
+        # Transform to wide format for analysis
         wide = subset.pivot_table(index='timestamp', columns='tenant_id', values='metric_value')
+
+        # Ensure all tenants are present as columns, filling with NaN if necessary
+        wide = wide.reindex(columns=tenants, fill_value=np.nan)
         
-        # Interpola e preenche NaNs para alinhar todos os tenants
+        # Interpolate and fill NaNs to align all tenants
         wide = wide.sort_index().interpolate(method='time').ffill().bfill()
         
-        # Calcula TE para cada par de tenants
+        # Calculate TE for each pair of tenants
         for target in tenants:
             for source in tenants:
                 if target == source:
                     continue
                 
                 try:
-                    # Obtém séries temporais dos tenants
+                    # Get time series for the tenants
                     target_series = wide[target]
                     source_series = wide[source]
                     
-                    # Alinha os índices para garantir correspondência temporal
+                    # Align indices to ensure temporal correspondence
                     common_idx = target_series.index.intersection(source_series.index)
                     target_values = target_series.loc[common_idx].values
                     source_values = source_series.loc[common_idx].values
                     
-                    # Verifica se há pontos suficientes para cálculo significativo
-                    if len(target_values) >= 8:  # Reduzido de 10 para 8 pontos mínimos
-                        # Calcula TE e armazena na matriz
+                    # Check if there are enough points for a meaningful calculation
+                    if len(target_values) >= 8:  # Reduced from 10 to 8 minimum points
+                        # Calculate TE and store it in the matrix
                         try:
                             te_value = _transfer_entropy(target_values, source_values, bins=bins, k=k)
                             mat.loc[target, source] = te_value
                         except Exception as calc_error:
-                            logging.warning(f"Erro no cálculo de TE para {source}->{target}: {calc_error}")
+                            logging.warning(f"Error in TE calculation for {source}->{target}: {calc_error}")
                     else:
-                        logging.warning(f"Série temporal insuficiente para par {source}->{target}: {len(target_values)} pontos")
+                        logging.warning(f"Insufficient time series for pair {source}->{target}: {len(target_values)} points")
                         
                 except Exception as e:
-                    logging.error(f"Erro ao calcular Transfer Entropy para {source}->{target}: {str(e)}")
+                    logging.error(f"Error calculating Transfer Entropy for {source}->{target}: {str(e)}")
         
         return mat
 
 class CausalityVisualizer:
     """
-    Classe responsável por visualizações de causalidade (ex: grafos, heatmaps).
+    Class responsible for causality visualizations (e.g., graphs, heatmaps).
     """
     @staticmethod
     def plot_causality_graph(causality_matrix: pd.DataFrame, out_path: str, threshold: float = 0.05, directed: bool = True, metric: str = '', metric_color: str = ''):
@@ -466,16 +455,16 @@ class CausalityVisualizer:
         threshold: float = 0.05,
         directed: bool = True,
         metric_palette: dict = {},
-        threshold_mode: str = ''  # 'p' para Granger, 'TE' para Transfer Entropy
+        threshold_mode: str = ''  # 'p' for Granger, 'TE' for Transfer Entropy
     ):
         """
-        Plota um grafo de causalidade comparando múltiplas métricas.
-        Cada métrica é uma cor de aresta diferente.
-        threshold_mode: 'p' (arestas p < threshold), 'TE' (arestas TE > threshold), ou '' (auto).
+        Plots a causality graph comparing multiple metrics.
+        Each metric is a different edge color.
+        threshold_mode: 'p' (edges p < threshold), 'TE' (edges TE > threshold), or '' (auto).
         """
         if not causality_matrices:
             return None
-        # Paleta padrão
+        # Default palette
         if not metric_palette:
             metric_palette = {
                 'cpu_usage': 'tab:blue',
@@ -483,25 +472,25 @@ class CausalityVisualizer:
                 'disk_io': 'tab:green',
                 'network_io': 'tab:red',
             }
-        # --- Lógica aprimorada para threshold_mode e legenda ---
-        # Detecta para cada métrica se é p-valor (Granger real) ou TE
+        # --- Enhanced logic for threshold_mode and legend ---
+        # Detect for each metric if it is p-value (real Granger) or TE
         metric_modes = {}
         for metric, mat in causality_matrices.items():
             if mat.isnull().all().all():
                 metric_modes[metric] = 'unknown'
             elif (mat.max().max() <= 1.0) and (mat.min().min() >= 0.0):
-                # Pode ser p-valor (Granger real ou placeholder)
-                # Se não for placeholder (tudo NaN), considera p-valor
+                # Could be p-value (real or placeholder Granger)
+                # If not a placeholder (all NaN), consider it a p-value
                 metric_modes[metric] = 'p'
             else:
                 metric_modes[metric] = 'TE'
-        # Prioriza p-valor se houver pelo menos uma métrica real de Granger
+        # Prioritize p-value if there is at least one real Granger metric
         if threshold_mode == '':
             if 'p' in metric_modes.values():
                 threshold_mode = 'p'
             else:
                 threshold_mode = 'TE'
-        # Unir todos os nós
+        # Unite all nodes
         all_tenants = set()
         for mat in causality_matrices.values():
             all_tenants.update(mat.index.tolist())
@@ -532,12 +521,12 @@ class CausalityVisualizer:
                             edge_widths.append(weight * 6 + 1)
                             edge_labels[(src, tgt)] = f"{weight:.2f}"
                             edge_metrics.append(metric)
-        # Layout circular para garantir visibilidade
+        # Circular layout to ensure visibility
         pos = nx.circular_layout(G)
         plt.figure(figsize=(8, 8))
         nx.draw_networkx_nodes(G, pos, node_color='skyblue', node_size=1200)
         nx.draw_networkx_labels(G, pos, font_size=12, font_weight='bold')
-        # Desenha cada aresta individualmente, com offset e seta visível
+        # Draw each edge individually, with offset and visible arrow
         for (edge, color, width, metric) in zip(edge_list, edge_colors, edge_widths, edge_metrics):
             nx.draw_networkx_edges(
                 G, pos, edgelist=[edge],
@@ -551,16 +540,15 @@ class CausalityVisualizer:
                 arrowsize=28
             )
         nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_color='gray', font_size=10)
-        # Legenda para cada métrica
-        import matplotlib.lines as mlines
+        # Legend for each metric
         legend_elements = [mlines.Line2D([0], [0], color=metric_palette.get(m, 'tab:blue'), lw=3, label=m) for m in causality_matrices.keys()]
         plt.legend(handles=legend_elements, loc='lower left')
-        # Legenda contextual automática
+        # Automatic contextual legend
         if threshold_mode == 'p':
-            legend_str = f'Arestas: p-valor < {threshold:.2g}'
+            legend_str = f'Edges: p-value < {threshold:.2g}'
         else:
-            legend_str = f'Arestas: TE > {threshold:.2g}'
-        plt.title(f'Causality Graph (Comparativo de Métricas) | {legend_str}')
+            legend_str = f'Edges: TE > {threshold:.2g}'
+        plt.title(f'Causality Graph (Metric Comparison) | {legend_str}')
         plt.axis('off')
         plt.tight_layout()
         os.makedirs(os.path.dirname(out_path), exist_ok=True)
@@ -570,7 +558,7 @@ class CausalityVisualizer:
 
 class CausalityModule:
     """
-    Módulo de alto nível para análise de causalidade, integrando cálculo e visualização.
+    High-level module for causality analysis, integrating calculation and visualization.
     """
     def __init__(self, df: pd.DataFrame):
         self.analyzer = CausalityAnalyzer(df)
@@ -580,7 +568,7 @@ class CausalityModule:
         os.makedirs(out_dir, exist_ok=True)
         mat = self.analyzer.compute_granger_matrix(metric, phase, round_id, maxlag)
         out_path = os.path.join(out_dir, f"causality_graph_granger_{metric}_{phase}_{round_id}.png")
-        # Paleta de cores igual à usada na função de plot
+        # Color palette same as used in the plot function
         metric_palette = {
             'cpu_usage': 'tab:blue',
             'memory_usage': 'tab:orange',
@@ -594,7 +582,7 @@ class CausalityModule:
         os.makedirs(out_dir, exist_ok=True)
         mat = self.analyzer.compute_transfer_entropy_matrix(metric, phase, round_id, bins)
         out_path = os.path.join(out_dir, f"causality_graph_te_{metric}_{phase}_{round_id}.png")
-        # Paleta de cores igual à usada na função de plot
+        # Color palette same as used in the plot function
         metric_palette = {
             'cpu_usage': 'tab:blue',
             'memory_usage': 'tab:orange',
@@ -602,7 +590,7 @@ class CausalityModule:
             'network_io': 'tab:red',
         }
         color = metric_palette.get(metric, 'tab:blue')
-        # Para TE, threshold destaca relações mais fortes (TE > threshold)
+        # For TE, threshold highlights stronger relationships (TE > threshold)
         def plot_te_graph(te_matrix, out_path, threshold, metric, color):
             if te_matrix.empty:
                 return None
@@ -631,9 +619,8 @@ class CausalityModule:
             for idx, (edge, w, c) in enumerate(zip(edges, edge_weights, edge_colors)):
                 nx.draw_networkx_edges(G, pos, edgelist=[edge], arrowstyle='->', arrows=True, width=w, edge_color=c, alpha=0.8)
             nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_color='gray', font_size=10)
-            plt.title(f'Transfer Entropy Graph (TE > {threshold:.2g})\nMétrica: {metric}')
+            plt.title(f'Transfer Entropy Graph (TE > {threshold:.2g})\nMetric: {metric}')
             plt.axis('off')
-            import matplotlib.lines as mlines
             legend_elements = [
                 mlines.Line2D([0], [0], color=color, lw=3, label=f'{metric}')
             ]
