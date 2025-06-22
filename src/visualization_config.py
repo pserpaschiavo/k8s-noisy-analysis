@@ -11,11 +11,11 @@ elements to ensure consistency and readability across all generated plots.
 PUBLICATION_CONFIG = {
     # Consistent color scheme for tenants (colorblind-friendly)
     'tenant_colors': {
-        'CPU Tenant': '#1f77b4',      # Muted Blue
-        'Memory Tenant': '#ff7f0e',  # Safety Orange
-        'Network Tenant': '#2ca02c', # Cooked Asparagus Green
-        'Storage Tenant': '#d62728', # Brick Red
-        'Noisy Tenant': '#9467bd',   # Muted Purple
+        'tenant-cpu': '#1f77b4',      # Muted Blue
+        'tenant-mem': '#ff7f0e',  # Safety Orange
+        'tenant-ntk': '#2ca02c', # Cooked Asparagus Green
+        'tenant-dsk': '#d62728', # Brick Red
+        'tenant-nsy': '#9467bd',   # Muted Purple
         'default': '#8c564b',        # Chestnut
     },
     
@@ -30,24 +30,24 @@ PUBLICATION_CONFIG = {
     
     # Standardized color scheme for experimental phases
     'phase_colors': {
-        '1-Baseline': '#7f7f7f',       # Medium Gray
-        '2-CPU-Noise': '#e41a1c',      # Red
-        '3-Memory-Noise': '#377eb8',   # Blue
-        '4-Network-Noise': '#4daf4a',  # Green
-        '5-Disk-Noise': '#984ea3',     # Purple
-        '6-Combined-Noise': '#ff7f00', # Orange
-        '7-Recovery': '#a65628',       # Brown
+        '1 - Baseline': '#7f7f7f',       # Medium Gray
+        '2 - CPU Noise': '#e41a1c',      # Red
+        '3 - Memory Noise': '#377eb8',   # Blue
+        '4 - Network Noise': '#4daf4a',  # Green
+        '5 - Disk Noise': '#984ea3',     # Purple
+        '6 - Combined Noise': '#ff7f00', # Orange
+        '7 - Recovery': '#a65628',       # Brown
     },
     
     # Standardized display names in English for phases
     'phase_display_names': {
-        '1-Baseline': 'Baseline',
-        '2-CPU-Noise': 'CPU Noise',
-        '3-Memory-Noise': 'Memory Noise',
-        '4-Network-Noise': 'Network Noise',
-        '5-Disk-Noise': 'Disk I/O Noise',
-        '6-Combined-Noise': 'Combined Noise',
-        '7-Recovery': 'Recovery',
+        '1 - Baseline': 'Baseline',
+        '2 - CPU Noise': 'CPU Noise',
+        '3 - Memory Noise': 'Memory Noise',
+        '4 - Network Noise': 'Network Noise',
+        '5 - Disk Noise': 'Disk I/O Noise',
+        '6 - Combined Noise': 'Combined Noise',
+        '7 - Recovery': 'Recovery',
     },
 
     # Standardization of metric names and units

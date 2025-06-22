@@ -13,11 +13,11 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(mess
 # Define the official order of experimental phases to ensure correct processing
 PHASE_ORDER = [
     '1 - Baseline',
-    '2 - CPU-Noise',
-    '3 - Memory-Noise',
-    '4 - Network-Noise',
-    '5 - Disk-Noise',
-    '6 - Combined-Noise',
+    '2 - CPU Noise',
+    '3 - Memory Noise',
+    '4 - Network Noise',
+    '5 - Disk Noise',
+    '6 - Combined Noise',
     '7 - Recovery'
 ]
 
@@ -109,11 +109,16 @@ def ingest_experiment_data(
     selected_metrics: Optional[List[str]] = None,
     selected_tenants: Optional[List[str]] = None,
     selected_rounds: Optional[List[str]] = None,
+    selected_phases: Optional[List[str]] = None,
 ) -> pd.DataFrame:
     """
-    Ingest all experiment data into a long-format DataFrame, with optional filtering by metrics, tenants, and rounds.
+    Ingest all experiment data into a long-format DataFrame, with optional filtering.
+    This version handles combined metrics (network_io) and filename mappings (disk_io).
     """
     records = []
+    if selected_metrics is None:
+        selected_metrics = []
+
     for experiment_path in list_experiments(data_root):
         experiment_id = os.path.basename(experiment_path)
         for round_path in list_rounds(experiment_path):
@@ -122,48 +127,104 @@ def ingest_experiment_data(
                 continue
             for phase_path in list_phases(round_path):
                 experimental_phase = os.path.basename(phase_path)
+                normalized_phase_name = experimental_phase.split(' - ', 1)[-1].lower().replace(' ', '-')
+                if selected_phases and normalized_phase_name not in selected_phases:
+                    continue
+
                 for tenant_path in list_tenants(phase_path):
                     tenant_id = os.path.basename(tenant_path)
                     if selected_tenants and tenant_id not in selected_tenants:
                         continue
+                    
+                    # Handle network_io as a special case by combining two files
+                    if 'network_io' in selected_metrics:
+                        rx_file = os.path.join(tenant_path, 'network_receive.csv')
+                        tx_file = os.path.join(tenant_path, 'network_transmit.csv')
+                        
+                        if os.path.exists(rx_file) and os.path.exists(tx_file):
+                            try:
+                                rx_df = pd.read_csv(rx_file, usecols=['timestamp', 'value'])
+                                tx_df = pd.read_csv(tx_file, usecols=['timestamp', 'value'])
+                                
+                                rx_df['timestamp'] = pd.to_datetime(rx_df['timestamp'], format='%Y%m%d_%H%M%S', errors='coerce')
+                                tx_df['timestamp'] = pd.to_datetime(tx_df['timestamp'], format='%Y%m%d_%H%M%S', errors='coerce')
+                                
+                                rx_df.dropna(subset=['timestamp'], inplace=True)
+                                tx_df.dropna(subset=['timestamp'], inplace=True)
+
+                                # Merge based on the nearest timestamp
+                                merged_df = pd.merge_asof(
+                                    rx_df.sort_values('timestamp'), 
+                                    tx_df.sort_values('timestamp'), 
+                                    on='timestamp', 
+                                    direction='nearest', 
+                                    tolerance=pd.Timedelta('2s')
+                                ).fillna(0)
+                                
+                                merged_df['metric_value'] = pd.to_numeric(merged_df['value_x'], errors='coerce') + pd.to_numeric(merged_df['value_y'], errors='coerce')
+                                merged_df.dropna(subset=['metric_value'], inplace=True)
+
+                                for _, row in merged_df.iterrows():
+                                    records.append({
+                                        'timestamp': row['timestamp'],
+                                        'metric_value': row['metric_value'],
+                                        'metric_name': 'network_io',
+                                        'tenant_id': tenant_id,
+                                        'experimental_phase': experimental_phase,
+                                        'round_id': round_id,
+                                        'experiment_id': experiment_id
+                                    })
+                            except Exception as e:
+                                logging.error(f"Error processing network_io for {tenant_path}: {e}")
+                        else:
+                            logging.warning(f"Skipping network_io for {tenant_path}: one or both files are missing.")
+
+                    # Process other metrics
                     for metric_file in list_metric_files(tenant_path):
-                        metric_name = os.path.splitext(os.path.basename(metric_file))[0]
-                        if selected_metrics and metric_name not in selected_metrics:
+                        metric_name_from_file = os.path.splitext(os.path.basename(metric_file))[0]
+                        
+                        if 'network_receive' in metric_name_from_file or 'network_transmit' in metric_name_from_file:
                             continue
+
+                        current_metric_name = None
+                        if metric_name_from_file == 'disk_io_total' and 'disk_io' in selected_metrics:
+                            current_metric_name = 'disk_io'
+                        elif metric_name_from_file in selected_metrics:
+                            current_metric_name = metric_name_from_file
                         
-                        # Correctly associate the metric with its tenant
-                        # The tenant_id should be derived from the folder name, not the metric file
-                        
+                        if not current_metric_name:
+                            continue
+
                         try:
-                            df = pd.read_csv(metric_file)
+                            df = pd.read_csv(metric_file, on_bad_lines='warn')
                             if 'timestamp' not in df.columns or 'value' not in df.columns:
                                 logging.warning(f"File {metric_file} missing required columns. Skipping.")
                                 continue
-                            
-                            # The metric name should be clean (e.g., 'cpu_usage'), and the tenant_id
-                            # should be what is specified in the directory structure.
-                            
+
+                            df['timestamp'] = pd.to_datetime(df['timestamp'], format='%Y%m%d_%H%M%S', errors='coerce')
+                            df['metric_value'] = pd.to_numeric(df['value'], errors='coerce')
+
+                            invalid_timestamps = df['timestamp'].isnull().sum()
+                            invalid_values = df['metric_value'].isnull().sum()
+                            if invalid_timestamps > 0 or invalid_values > 0:
+                                logging.warning(f"Found {invalid_timestamps} invalid timestamps and {invalid_values} invalid values in {metric_file}. Dropping rows.")
+                                df.dropna(subset=['timestamp', 'metric_value'], inplace=True)
+
                             for _, row in df.iterrows():
                                 records.append({
                                     'timestamp': row['timestamp'],
-                                    'metric_value': row['value'],
-                                    'metric_name': metric_name,
-                                    'tenant_id': tenant_id, # This is the fix
+                                    'metric_value': row['metric_value'],
+                                    'metric_name': current_metric_name,
+                                    'tenant_id': tenant_id,
                                     'experimental_phase': experimental_phase,
                                     'round_id': round_id,
                                     'experiment_id': experiment_id
                                 })
                         except Exception as e:
-                            logging.error(f"Error reading {metric_file}: {e}")
+                            logging.error(f"Error processing file {metric_file}: {e}")
     
     if not records:
         logging.warning("No records were ingested. Please check data paths and selections in config.")
         return pd.DataFrame()
     
-    df_long = pd.DataFrame.from_records(records)
-    # Type conversions and cleaning
-    if not df_long.empty:
-        # Correctly convert Prometheus Unix timestamps (assuming float/int) to datetime objects
-        df_long['timestamp'] = pd.to_datetime(df_long['timestamp'], format='%Y%m%d_%H%M%S', errors='coerce')
-        df_long['metric_value'] = pd.to_numeric(df_long['metric_value'], errors='coerce')
-    return df_long
+    return pd.DataFrame.from_records(records)

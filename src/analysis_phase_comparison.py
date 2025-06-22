@@ -45,13 +45,13 @@ def compute_phase_stats_comparison(df: pd.DataFrame, metric: str, round_id: str,
 
     # List of phases in the expected format
     phases = [
-        '1-Baseline',
-        '2-CPU-Noise',
-        '3-Memory-Noise',
-        '4-Network-Noise',
-        '5-Disk-Noise',
-        '6-Combined-Noise',
-        '7-Recovery'
+        '1 - Baseline',
+        '2 - CPU Noise',
+        '3 - Memory Noise',
+        '4 - Network Noise',
+        '5 - Disk Noise',
+        '6 - Combined Noise',
+        '7 - Recovery'
     ]
     available_phases = [p for p in phases if p in subset['experimental_phase'].unique()]
     
@@ -65,7 +65,7 @@ def compute_phase_stats_comparison(df: pd.DataFrame, metric: str, round_id: str,
         
         # Base metrics for the tenant (in baseline)
         baseline_data = subset[(subset['tenant_id'] == tenant) & 
-                              (subset['experimental_phase'] == '1-Baseline')]
+                              (subset['experimental_phase'] == '1 - Baseline')]
         
         # If no baseline data, use general averages
         if len(baseline_data) == 0:
@@ -103,7 +103,7 @@ def compute_phase_stats_comparison(df: pd.DataFrame, metric: str, round_id: str,
             tenant_data[f'{phase}_max'] = phase_data['metric_value'].max()
             
             # Calculate percentage change relative to baseline (if baseline exists)
-            if phase != '1-Baseline' and '1-Baseline' in available_phases:
+            if phase != '1 - Baseline' and '1 - Baseline' in available_phases:
                 baseline_mean = baseline_stats['mean']
                 if baseline_mean != 0:  # Avoid division by zero
                     tenant_data[f'{phase}_vs_baseline_pct'] = ((tenant_data[f'{phase}_mean'] - baseline_mean) / 
@@ -171,34 +171,40 @@ def plot_phase_comparison(stats_df: pd.DataFrame, metric: str, out_path: str) ->
     phase_order = [phase_display_names[p] for p in phases]
     tenant_order = [tenant_display_names.get(t, t) for t in tenants]
 
+    # Create a color palette mapping display names to colors
+    phase_color_map = {
+        display_name: PUBLICATION_CONFIG['phase_colors'][phase_key]
+        for phase_key, display_name in phase_display_names.items()
+        if phase_key in PUBLICATION_CONFIG['phase_colors']
+    }
+
     # Create subplots with adjusted size
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(22, 8))
     
     # Plot 1: Mean values per phase and tenant
     sns.barplot(x='tenant_id', y='mean', hue='phase', data=plot_df, 
-                ax=ax1, palette=PUBLICATION_CONFIG['phase_colors'], 
+                ax=ax1, palette=phase_color_map, 
                 hue_order=phase_order, order=tenant_order)
     ax1.set_title(f'Mean {metric_name} per Tenant and Phase')
     ax1.set_xlabel('Tenant')
     ax1.set_ylabel(f'{metric_name} ({metric_unit})' if metric_unit else metric_name)
-    ax1.tick_params(axis='x', rotation=45, horizontalalignment='right')
+    ax1.tick_params(axis='x', rotation=45)
     ax1.legend(title='Experimental Phase', bbox_to_anchor=(1.05, 1), loc='upper left')
     
     # Plot 2: Percentage change relative to baseline
-    baseline_display_name = phase_display_names['1-Baseline']
+    baseline_display_name = phase_display_names['1 - Baseline']
     baseline_plot_df = plot_df[plot_df['phase'] != baseline_display_name]
     
     if not baseline_plot_df.empty:
         sns.barplot(x='tenant_id', y='vs_baseline', hue='phase', data=baseline_plot_df, 
-                    ax=ax2, palette=PUBLICATION_CONFIG['phase_colors'], 
+                    ax=ax2, palette=phase_color_map, 
                     hue_order=[p for p in phase_order if p != baseline_display_name],
                     order=tenant_order)
         ax2.set_title(f'% Change in {metric_name} vs. Baseline')
         ax2.set_xlabel('Tenant')
         ax2.set_ylabel('% Change vs. Baseline')
         ax2.axhline(y=0, color='gray', linestyle='--', alpha=0.7)
-        ax2.tick_params(axis='x', rotation=45, horizontalalignment='right')
-        ax2.legend(title='Experimental Phase', bbox_to_anchor=(1.05, 1), loc='upper left')
+        ax2.tick_params(axis='x', rotation=45)
     
     # Adjust layout
     plt.tight_layout(rect=(0, 0, 0.9, 1)) # Adjust for legend

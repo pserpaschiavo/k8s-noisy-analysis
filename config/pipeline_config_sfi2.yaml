@@ -12,17 +12,26 @@ output_parquet_name: ./data/processed/sfi2_paper.parquet
 selected_metrics:
   - cpu_usage
   - memory_usage
+  - network_io
+  - disk_io
   
 selected_tenants:
   - tenant-cpu
-  - tenant-dsk
   - tenant-mem
   - tenant-ntk
+  - tenant-nsy
   
 selected_rounds:
   - round-1
-  - round-2
-  - round-3
+
+selected_phases:
+  - baseline
+  - cpu-noise
+  - memory-noise
+  - network-noise
+  - disk-noise
+  - combined-noise
+  - recovery
 
 # Parâmetros de análise
 correlation:

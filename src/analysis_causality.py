@@ -20,6 +20,8 @@ from statsmodels.tools.sm_exceptions import MissingDataError
 from functools import lru_cache
 import warnings
 
+from src.visualization.plots import plot_causality_graph
+
 # Import utilities for time series processing
 try:
     from src.utils_timeseries import check_and_transform_timeseries, resample_and_align_timeseries
@@ -45,102 +47,6 @@ except ImportError:
     logger.warning("pyinform is not installed. Transfer Entropy will use a basic implementation. Install with: pip install pyinform")
 
 plt.style.use('tableau-colorblind10')
-
-def plot_causality_graph(causality_matrix: pd.DataFrame, out_path: str, threshold: float = 0.05, directed: bool = True, metric: str = '', metric_color: str = ''):
-    """
-    Plots a causality graph from a causality matrix (e.g., Granger p-values or scores).
-    Edges are drawn where causality_matrix.loc[src, tgt] < threshold.
-    Edge width = intensity (1-p or score), color = metric.
-    """
-    if causality_matrix.empty:
-        return None
-    if directed:
-        G = nx.DiGraph()
-    else:
-        G = nx.Graph()
-    tenants = causality_matrix.index.tolist()
-    G.add_nodes_from(tenants)
-    edge_labels = {}
-    edges = []
-    edge_weights = []
-    edge_colors = []
-    # Color palette for metrics
-    metric_palette = {
-        'cpu_usage': 'tab:blue',
-        'memory_usage': 'tab:orange',
-        'disk_io': 'tab:green',
-        'network_io': 'tab:red',
-    }
-    color = metric_color if metric_color else metric_palette.get(metric, 'tab:blue')
-    for src in tenants:
-        for tgt in tenants:
-            if src != tgt:
-                val = causality_matrix.at[src, tgt]
-                if not pd.isna(val) and float(val) < threshold:
-                    weight = 1 - float(val)
-                    G.add_edge(src, tgt, weight=weight)
-                    edges.append((src, tgt))
-                    edge_weights.append(weight * 6 + 1)
-                    edge_colors.append(color)
-                    edge_labels[(src, tgt)] = f"{weight:.2f}"
-    
-    # Implement fixed positions for nodes to ensure visual consistency between different graphs
-    # First, ensure tenants are in a consistent order for positioning
-    sorted_tenants = sorted(tenants)
-    
-    # Create a dictionary of fixed positions for each tenant (using circular layout)
-    pos = {}
-    if len(sorted_tenants) <= 1:
-        if sorted_tenants:
-            pos[sorted_tenants[0]] = np.array([0.0, 0.0])
-    else:
-        angles = np.linspace(0, 2 * np.pi, len(sorted_tenants), endpoint=False)
-        # Position nodes in a circle with radius 0.8 to leave space for labels
-        radius = 0.8
-        for tenant, angle in zip(sorted_tenants, angles):
-            pos[tenant] = np.array([radius * np.cos(angle), radius * np.sin(angle)])
-    
-    # Add a small jitter to avoid perfect overlap of bidirectional edges
-    for node in pos:
-        pos[node] = pos[node] + np.random.normal(0, 0.02, size=2)
-    
-    plt.figure(figsize=(10, 10))  # Increase figure size
-    
-    # Add a light background for better visibility
-    ax = plt.gca()
-    ax.set_facecolor('#f8f8f8')
-    
-    # Draw larger nodes with borders
-    nx.draw_networkx_nodes(G, pos, node_color='skyblue', node_size=1600, 
-                          edgecolors='darkblue', linewidths=1.5)
-    
-    # Improve node labels
-    nx.draw_networkx_labels(G, pos, font_size=13, font_weight='bold', font_color='black')
-    
-    # Draw each edge individually to apply weight and color
-    for idx, (edge, w, c) in enumerate(zip(edges, edge_weights, edge_colors)):
-        nx.draw_networkx_edges(G, pos, edgelist=[edge], arrowstyle='->' if directed else '-', 
-                             arrows=directed, width=w, edge_color=c, alpha=0.9,
-                             connectionstyle='arc3,rad=0.2')  # Curve edges for better visualization
-    
-    # Improve edge labels
-    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, 
-                               font_color='darkred', font_size=11, font_weight='bold',
-                               bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="gray", alpha=0.7))
-    
-    plt.title(f'Causality Graph ({"Directed" if directed else "Undirected"})\nMetric: {metric if metric else "?"} | Edges: p < {threshold:.2g}',
-             fontsize=14, fontweight='bold')
-    plt.axis('off')
-    # Custom legend
-    legend_elements = [
-        mlines.Line2D([0], [0], color=color, lw=3, label=f'{metric if metric else "Metric"}')
-    ]
-    plt.legend(handles=legend_elements, loc='lower left')
-    plt.tight_layout()
-    os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    plt.savefig(out_path)
-    plt.close()
-    return out_path
 
 def _transfer_entropy(x, y, bins=5, k=1):
     """
@@ -302,7 +208,16 @@ class CausalityAnalyzer:
                         (self.df['experimental_phase'] == phase) & 
                         (self.df['round_id'] == round_id)]
         
+        # Enhanced validation
+        if subset.empty:
+            logger.warning(f"Skipping Granger for {metric}, {phase}, {round_id}: No data found after filtering.")
+            return pd.DataFrame()
+
         tenants = subset['tenant_id'].unique()
+        if len(tenants) < 2:
+            logger.warning(f"Skipping Granger for {metric}, {phase}, {round_id}: Requires at least 2 tenants, but found {len(tenants)}.")
+            return pd.DataFrame(index=tenants, columns=tenants)
+
         mat = pd.DataFrame(np.nan, index=tenants, columns=tenants)
         
         # Transform to wide format for time series analysis
@@ -396,7 +311,16 @@ class CausalityAnalyzer:
                         (self.df['experimental_phase'] == phase) & 
                         (self.df['round_id'] == round_id)]
         
+        # Enhanced validation
+        if subset.empty:
+            logger.warning(f"Skipping TE for {metric}, {phase}, {round_id}: No data found after filtering.")
+            return pd.DataFrame()
+
         tenants = subset['tenant_id'].unique()
+        if len(tenants) < 2:
+            logger.warning(f"Skipping TE for {metric}, {phase}, {round_id}: Requires at least 2 tenants, but found {len(tenants)}.")
+            return pd.DataFrame(index=tenants, columns=tenants)
+
         mat = pd.DataFrame(np.nan, index=tenants, columns=tenants)
         
         # Transform to wide format for analysis
@@ -439,195 +363,3 @@ class CausalityAnalyzer:
                     logging.error(f"Error calculating Transfer Entropy for {source}->{target}: {str(e)}")
         
         return mat
-
-class CausalityVisualizer:
-    """
-    Class responsible for causality visualizations (e.g., graphs, heatmaps).
-    """
-    @staticmethod
-    def plot_causality_graph(causality_matrix: pd.DataFrame, out_path: str, threshold: float = 0.05, directed: bool = True, metric: str = '', metric_color: str = ''):
-        return plot_causality_graph(causality_matrix, out_path, threshold, directed, metric, metric_color)
-
-    @staticmethod
-    def plot_causality_graph_multi(
-        causality_matrices: dict,  # {metric: matrix}
-        out_path: str,
-        threshold: float = 0.05,
-        directed: bool = True,
-        metric_palette: dict = {},
-        threshold_mode: str = ''  # 'p' for Granger, 'TE' for Transfer Entropy
-    ):
-        """
-        Plots a causality graph comparing multiple metrics.
-        Each metric is a different edge color.
-        threshold_mode: 'p' (edges p < threshold), 'TE' (edges TE > threshold), or '' (auto).
-        """
-        if not causality_matrices:
-            return None
-        # Default palette
-        if not metric_palette:
-            metric_palette = {
-                'cpu_usage': 'tab:blue',
-                'memory_usage': 'tab:orange',
-                'disk_io': 'tab:green',
-                'network_io': 'tab:red',
-            }
-        # --- Enhanced logic for threshold_mode and legend ---
-        # Detect for each metric if it is p-value (real Granger) or TE
-        metric_modes = {}
-        for metric, mat in causality_matrices.items():
-            if mat.isnull().all().all():
-                metric_modes[metric] = 'unknown'
-            elif (mat.max().max() <= 1.0) and (mat.min().min() >= 0.0):
-                # Could be p-value (real or placeholder Granger)
-                # If not a placeholder (all NaN), consider it a p-value
-                metric_modes[metric] = 'p'
-            else:
-                metric_modes[metric] = 'TE'
-        # Prioritize p-value if there is at least one real Granger metric
-        if threshold_mode == '':
-            if 'p' in metric_modes.values():
-                threshold_mode = 'p'
-            else:
-                threshold_mode = 'TE'
-        # Unite all nodes
-        all_tenants = set()
-        for mat in causality_matrices.values():
-            all_tenants.update(mat.index.tolist())
-        tenants = sorted(all_tenants)
-        G = nx.DiGraph() if directed else nx.Graph()
-        G.add_nodes_from(tenants)
-        edge_labels = {}
-        edge_colors = []
-        edge_widths = []
-        edge_list = []
-        edge_metrics = []
-        for metric, mat in causality_matrices.items():
-            color = metric_palette.get(metric, 'tab:blue')
-            mode = metric_modes.get(metric, threshold_mode)
-            for src in tenants:
-                for tgt in tenants:
-                    if src != tgt and src in mat.index and tgt in mat.columns:
-                        val = mat.at[src, tgt]
-                        if mode == 'p':
-                            cond = (not pd.isna(val)) and (float(val) < threshold)
-                        else:
-                            cond = (not pd.isna(val)) and (float(val) > threshold)
-                        if cond:
-                            weight = 1 - float(val) if mode == 'p' else float(val)
-                            G.add_edge(src, tgt)
-                            edge_list.append((src, tgt))
-                            edge_colors.append(color)
-                            edge_widths.append(weight * 6 + 1)
-                            edge_labels[(src, tgt)] = f"{weight:.2f}"
-                            edge_metrics.append(metric)
-        # Circular layout to ensure visibility
-        pos = nx.circular_layout(G)
-        plt.figure(figsize=(8, 8))
-        nx.draw_networkx_nodes(G, pos, node_color='skyblue', node_size=1200)
-        nx.draw_networkx_labels(G, pos, font_size=12, font_weight='bold')
-        # Draw each edge individually, with offset and visible arrow
-        for (edge, color, width, metric) in zip(edge_list, edge_colors, edge_widths, edge_metrics):
-            nx.draw_networkx_edges(
-                G, pos, edgelist=[edge],
-                arrowstyle='-|>' if directed else '-',
-                arrows=directed,
-                width=width,
-                edge_color=color,
-                alpha=0.8,
-                connectionstyle='arc3,rad=0.18',
-                min_source_margin=25, min_target_margin=25,
-                arrowsize=28
-            )
-        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_color='gray', font_size=10)
-        # Legend for each metric
-        legend_elements = [mlines.Line2D([0], [0], color=metric_palette.get(m, 'tab:blue'), lw=3, label=m) for m in causality_matrices.keys()]
-        plt.legend(handles=legend_elements, loc='lower left')
-        # Automatic contextual legend
-        if threshold_mode == 'p':
-            legend_str = f'Edges: p-value < {threshold:.2g}'
-        else:
-            legend_str = f'Edges: TE > {threshold:.2g}'
-        plt.title(f'Causality Graph (Metric Comparison) | {legend_str}')
-        plt.axis('off')
-        plt.tight_layout()
-        os.makedirs(os.path.dirname(out_path), exist_ok=True)
-        plt.savefig(out_path)
-        plt.close()
-        return out_path
-
-class CausalityModule:
-    """
-    High-level module for causality analysis, integrating calculation and visualization.
-    """
-    def __init__(self, df: pd.DataFrame):
-        self.analyzer = CausalityAnalyzer(df)
-        self.visualizer = CausalityVisualizer()
-
-    def run_granger_and_plot(self, metric: str, phase: str, round_id: str, out_dir: str, maxlag: int = 5, threshold: float = 0.05):
-        os.makedirs(out_dir, exist_ok=True)
-        mat = self.analyzer.compute_granger_matrix(metric, phase, round_id, maxlag)
-        out_path = os.path.join(out_dir, f"causality_graph_granger_{metric}_{phase}_{round_id}.png")
-        # Color palette same as used in the plot function
-        metric_palette = {
-            'cpu_usage': 'tab:blue',
-            'memory_usage': 'tab:orange',
-            'disk_io': 'tab:green',
-            'network_io': 'tab:red',
-        }
-        color = metric_palette.get(metric, 'tab:blue')
-        return self.visualizer.plot_causality_graph(mat, out_path, threshold, directed=True, metric=metric, metric_color=color)
-
-    def run_transfer_entropy_and_plot(self, metric: str, phase: str, round_id: str, out_dir: str, bins: int = 8, threshold: float = 0.05):
-        os.makedirs(out_dir, exist_ok=True)
-        mat = self.analyzer.compute_transfer_entropy_matrix(metric, phase, round_id, bins)
-        out_path = os.path.join(out_dir, f"causality_graph_te_{metric}_{phase}_{round_id}.png")
-        # Color palette same as used in the plot function
-        metric_palette = {
-            'cpu_usage': 'tab:blue',
-            'memory_usage': 'tab:orange',
-            'disk_io': 'tab:green',
-            'network_io': 'tab:red',
-        }
-        color = metric_palette.get(metric, 'tab:blue')
-        # For TE, threshold highlights stronger relationships (TE > threshold)
-        def plot_te_graph(te_matrix, out_path, threshold, metric, color):
-            if te_matrix.empty:
-                return None
-            G = nx.DiGraph()
-            tenants = te_matrix.index.tolist()
-            G.add_nodes_from(tenants)
-            edge_labels = {}
-            edges = []
-            edge_weights = []
-            edge_colors = []
-            for src in tenants:
-                for tgt in tenants:
-                    if src != tgt:
-                        val = te_matrix.at[src, tgt]
-                        if not pd.isna(val) and float(val) > threshold:
-                            weight = float(val)
-                            G.add_edge(src, tgt, weight=weight)
-                            edges.append((src, tgt))
-                            edge_weights.append(weight * 6 + 1)
-                            edge_colors.append(color)
-                            edge_labels[(src, tgt)] = f"{weight:.2f}"
-            pos = nx.spring_layout(G, seed=42)
-            plt.figure(figsize=(7, 7))
-            nx.draw_networkx_nodes(G, pos, node_color='skyblue', node_size=1200)
-            nx.draw_networkx_labels(G, pos, font_size=12, font_weight='bold')
-            for idx, (edge, w, c) in enumerate(zip(edges, edge_weights, edge_colors)):
-                nx.draw_networkx_edges(G, pos, edgelist=[edge], arrowstyle='->', arrows=True, width=w, edge_color=c, alpha=0.8)
-            nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_color='gray', font_size=10)
-            plt.title(f'Transfer Entropy Graph (TE > {threshold:.2g})\nMetric: {metric}')
-            plt.axis('off')
-            legend_elements = [
-                mlines.Line2D([0], [0], color=color, lw=3, label=f'{metric}')
-            ]
-            plt.legend(handles=legend_elements, loc='lower left')
-            plt.tight_layout()
-            os.makedirs(os.path.dirname(out_path), exist_ok=True)
-            plt.savefig(out_path)
-            plt.close()
-            return out_path
-        return plot_te_graph(mat, out_path, threshold, metric, color)

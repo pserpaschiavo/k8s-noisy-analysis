@@ -34,14 +34,19 @@ from src.data_export import save_dataframe, load_dataframe
 from src.data_segment import filter_long_df, get_wide_format_for_analysis
 from src.analysis_descriptive import compute_descriptive_stats, plot_metric_timeseries_multi_tenant, plot_metric_timeseries_multi_tenant_all_phases
 from src.analysis_descriptive import plot_metric_barplot_by_phase, plot_metric_boxplot
-from src.analysis_correlation import compute_correlation_matrix, plot_correlation_heatmap
-from src.analysis_correlation import compute_covariance_matrix, plot_covariance_heatmap
-from src.analysis_causality import plot_causality_graph
+from src.analysis_correlation import compute_correlation_matrix, compute_covariance_matrix, compute_cross_correlation
 from src.report_generation import generate_tenant_metrics, generate_tenant_ranking_plot, generate_markdown_report
 from src.insight_aggregation import aggregate_tenant_insights, generate_comparative_table, plot_insight_matrix
 from src import config
 from src.parse_config import load_parse_config, get_selected_metrics, get_selected_tenants, get_selected_rounds
 from src.parse_config import get_data_root, get_processed_data_dir, get_experiment_folder, get_experiment_dir
+from src.utils import validate_data_availability as preflight_check
+from src.visualization.plots import (
+    plot_correlation_heatmap,
+    plot_covariance_heatmap,
+    plot_ccf,
+    plot_causality_graph
+)
 
 # Logging configuration
 logging.basicConfig(
@@ -560,7 +565,6 @@ class CorrelationAnalysisStage(PipelineStage):
                                 os.makedirs(ccf_dir, exist_ok=True)
                                 
                                 # Calculate CCF
-                                from src.analysis_correlation import compute_cross_correlation, plot_ccf
                                 ccf_results = compute_cross_correlation(phase_specific_df_ccf, metric, phase, round_id, max_lag=20)
                                 
                                 if ccf_results:
@@ -612,7 +616,7 @@ class CausalityAnalysisStage(PipelineStage):
         Returns:
             Updated context with results and plot paths.
         """
-        from src.analysis_causality import CausalityAnalyzer, plot_causality_graph
+        from src.analysis_causality import CausalityAnalyzer
         from tqdm import tqdm
         
         df_long = context.get('df_long')
@@ -700,7 +704,8 @@ class CausalityAnalysisStage(PipelineStage):
                                     granger_out_path,
                                     threshold=granger_threshold, 
                                     directed=True,
-                                    metric=metric
+                                    metric=metric,
+                                    threshold_mode='less'
                                 )
                                 plot_paths.append(granger_out_path)
                                 
@@ -713,17 +718,14 @@ class CausalityAnalysisStage(PipelineStage):
                                     f"causality_graph_te_{metric}_{phase}_{round_id}.png"
                                 )
                                 
-                                # For visualization, we invert to a format compatible with plot_causality_graph
-                                # (which expects smaller values = more causality)
-                                te_viz_matrix = 1.0 / (te_matrix + 1.0)
-                                
                                 # Original visualization
                                 plot_causality_graph(
-                                    te_viz_matrix,
+                                    te_matrix,
                                     te_out_path,
-                                    threshold=0.9,  # Threshold for visualization (smaller values = more causality)
+                                    threshold=te_threshold,
                                     directed=True,
-                                    metric=f"{metric} (TE)"
+                                    metric=f"{metric} (TE)",
+                                    threshold_mode='greater'
                                 )
                                 plot_paths.append(te_out_path)
                         except Exception as e:
@@ -1079,6 +1081,11 @@ class Pipeline:
         self.context['output_dir'] = self.config.get('output_dir', 'outputs')
         self.context['data_root'] = self.config.get('data_root', config.DATA_ROOT)
         self.context['processed_data_dir'] = self.config.get('processed_data_dir', config.PROCESSED_DATA_DIR)
+
+        # Perform pre-flight check for raw data files
+        if not preflight_check(self.config):
+            self.logger.warning("Pre-flight check for raw data files failed. Ingestion may be incomplete.")
+            # The pipeline continues as per the action plan, but with a warning.
 
         for stage in self.stages:
             try:

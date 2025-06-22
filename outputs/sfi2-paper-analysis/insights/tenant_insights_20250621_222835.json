@@ -1,0 +1,861 @@
+{
+    "tenant-nsy": {
+        "name": "tenant-nsy",
+        "rank": 1,
+        "noisy_score": 0.6438609917454121,
+        "is_noisy_tenant": true,
+        "is_victim_tenant": true,
+        "main_impacted_tenants": [
+            {
+                "tenant": "tenant-mem",
+                "score": 0.06896551724137931,
+                "metric": "sfi2-paper:round-1:2 - CPU Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 0.4345515272698892,
+                "metric": "sfi2-paper:round-1:3 - Memory Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 0.25596112309185476,
+                "metric": "sfi2-paper:round-1:3 - Memory Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 0.51219429965343,
+                "metric": "sfi2-paper:round-1:4 - Network Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 0.29698603004761187,
+                "metric": "sfi2-paper:round-1:4 - Network Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 0.4205156253863337,
+                "metric": "sfi2-paper:round-1:5 - Disk Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 0.2006949854427218,
+                "metric": "sfi2-paper:round-1:5 - Disk Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 0.6746950210075726,
+                "metric": "sfi2-paper:round-1:6 - Combined Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 0.6719151648176405,
+                "metric": "sfi2-paper:round-1:6 - Combined Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 0.5872915115068181,
+                "metric": "sfi2-paper:round-1:2 - CPU Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-ntk",
+                "score": 0.5637419153654059,
+                "metric": "sfi2-paper:round-1:2 - CPU Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 0.9408349143153198,
+                "metric": "sfi2-paper:round-1:3 - Memory Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-ntk",
+                "score": 0.9125652912658672,
+                "metric": "sfi2-paper:round-1:3 - Memory Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 0.9801670842458122,
+                "metric": "sfi2-paper:round-1:4 - Network Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-ntk",
+                "score": 0.9166963173359554,
+                "metric": "sfi2-paper:round-1:4 - Network Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-ntk",
+                "score": 1.20393471950654,
+                "metric": "sfi2-paper:round-1:5 - Disk Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 1.0790899225839725,
+                "metric": "sfi2-paper:round-1:5 - Disk Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-ntk",
+                "score": 1.2281947947677838,
+                "metric": "sfi2-paper:round-1:6 - Combined Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 1.1216081074130586,
+                "metric": "sfi2-paper:round-1:6 - Combined Noise:cpu_usage"
+            }
+        ],
+        "main_impact_sources": [
+            {
+                "tenant": "tenant-ntk",
+                "score": 0.06896551724137931,
+                "metric": "sfi2-paper:round-1:2 - CPU Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 0.26888201704152304,
+                "metric": "sfi2-paper:round-1:4 - Network Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-ntk",
+                "score": 0.14218727165492218,
+                "metric": "sfi2-paper:round-1:5 - Disk Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 0.39794653803814245,
+                "metric": "sfi2-paper:round-1:5 - Disk Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 0.2769886113269701,
+                "metric": "sfi2-paper:round-1:5 - Disk Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 0.4352351823893742,
+                "metric": "sfi2-paper:round-1:6 - Combined Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 0.4533916637105988,
+                "metric": "sfi2-paper:round-1:6 - Combined Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-ntk",
+                "score": 0.3907548407874013,
+                "metric": "sfi2-paper:round-1:2 - CPU Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-ntk",
+                "score": 1.2416958309381647,
+                "metric": "sfi2-paper:round-1:5 - Disk Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 1.0935476827900164,
+                "metric": "sfi2-paper:round-1:5 - Disk Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 1.2137370345617398,
+                "metric": "sfi2-paper:round-1:5 - Disk Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-ntk",
+                "score": 1.0118202377401297,
+                "metric": "sfi2-paper:round-1:6 - Combined Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 1.0397790341165543,
+                "metric": "sfi2-paper:round-1:6 - Combined Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 1.1320095895118532,
+                "metric": "sfi2-paper:round-1:6 - Combined Noise:cpu_usage"
+            }
+        ],
+        "anomalous_metrics": [],
+        "noise_sensitivity": {},
+        "correlation_patterns": [],
+        "recommendations": [
+            "Consider adjusting resource limits to avoid impacting other tenants.",
+            "Consider isolating from impacting tenants: tenant-cpu, tenant-mem, tenant-ntk."
+        ]
+    },
+    "tenant-ntk": {
+        "name": "tenant-ntk",
+        "rank": 2,
+        "noisy_score": 0.6140086794375454,
+        "is_noisy_tenant": false,
+        "is_victim_tenant": true,
+        "main_impacted_tenants": [
+            {
+                "tenant": "tenant-mem",
+                "score": 0.586881034781168,
+                "metric": "sfi2-paper:round-1:2 - CPU Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-nsy",
+                "score": 0.06896551724137931,
+                "metric": "sfi2-paper:round-1:2 - CPU Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 0.48661273431564567,
+                "metric": "sfi2-paper:round-1:3 - Memory Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 0.3436229688331303,
+                "metric": "sfi2-paper:round-1:3 - Memory Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 0.3797119444910484,
+                "metric": "sfi2-paper:round-1:4 - Network Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 0.1914639428196398,
+                "metric": "sfi2-paper:round-1:4 - Network Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 0.24713159066228568,
+                "metric": "sfi2-paper:round-1:5 - Disk Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-nsy",
+                "score": 0.14218727165492218,
+                "metric": "sfi2-paper:round-1:5 - Disk Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 0.5941423696283857,
+                "metric": "sfi2-paper:round-1:6 - Combined Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 0.5619031114662102,
+                "metric": "sfi2-paper:round-1:6 - Combined Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-nsy",
+                "score": 0.3907548407874013,
+                "metric": "sfi2-paper:round-1:2 - CPU Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 0.3417944260322063,
+                "metric": "sfi2-paper:round-1:2 - CPU Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 1.1772057064626769,
+                "metric": "sfi2-paper:round-1:3 - Memory Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 0.9877185610618342,
+                "metric": "sfi2-paper:round-1:3 - Memory Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 1.0996305831010413,
+                "metric": "sfi2-paper:round-1:4 - Network Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 0.9415902848785814,
+                "metric": "sfi2-paper:round-1:4 - Network Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-nsy",
+                "score": 1.2416958309381647,
+                "metric": "sfi2-paper:round-1:5 - Disk Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 1.230343738847171,
+                "metric": "sfi2-paper:round-1:5 - Disk Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 1.2236409778635577,
+                "metric": "sfi2-paper:round-1:6 - Combined Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-nsy",
+                "score": 1.0118202377401297,
+                "metric": "sfi2-paper:round-1:6 - Combined Noise:cpu_usage"
+            }
+        ],
+        "main_impact_sources": [
+            {
+                "tenant": "tenant-mem",
+                "score": 0.2624013956702349,
+                "metric": "sfi2-paper:round-1:2 - CPU Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 0.1344873975824181,
+                "metric": "sfi2-paper:round-1:2 - CPU Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 0.24773610500118634,
+                "metric": "sfi2-paper:round-1:3 - Memory Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 0.33928858886510344,
+                "metric": "sfi2-paper:round-1:3 - Memory Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 0.061453203778824,
+                "metric": "sfi2-paper:round-1:4 - Network Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-nsy",
+                "score": 0.5637419153654059,
+                "metric": "sfi2-paper:round-1:2 - CPU Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 0.4862022575899957,
+                "metric": "sfi2-paper:round-1:2 - CPU Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 0.7755249998507951,
+                "metric": "sfi2-paper:round-1:2 - CPU Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-nsy",
+                "score": 0.9125652912658672,
+                "metric": "sfi2-paper:round-1:3 - Memory Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 0.8435997740244878,
+                "metric": "sfi2-paper:round-1:3 - Memory Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 0.9555002049843684,
+                "metric": "sfi2-paper:round-1:3 - Memory Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-nsy",
+                "score": 0.9166963173359554,
+                "metric": "sfi2-paper:round-1:4 - Network Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 1.086513728127508,
+                "metric": "sfi2-paper:round-1:4 - Network Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 0.7199186386099931,
+                "metric": "sfi2-paper:round-1:4 - Network Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-nsy",
+                "score": 1.20393471950654,
+                "metric": "sfi2-paper:round-1:5 - Disk Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-nsy",
+                "score": 1.2281947947677838,
+                "metric": "sfi2-paper:round-1:6 - Combined Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 1.126161924317285,
+                "metric": "sfi2-paper:round-1:6 - Combined Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 1.2281947947677838,
+                "metric": "sfi2-paper:round-1:6 - Combined Noise:cpu_usage"
+            }
+        ],
+        "anomalous_metrics": [],
+        "noise_sensitivity": {},
+        "correlation_patterns": [],
+        "recommendations": [
+            "Consider isolating from impacting tenants: tenant-nsy, tenant-cpu, tenant-mem."
+        ]
+    },
+    "tenant-mem": {
+        "name": "tenant-mem",
+        "rank": 3,
+        "noisy_score": 0.611643832605861,
+        "is_noisy_tenant": false,
+        "is_victim_tenant": true,
+        "main_impacted_tenants": [
+            {
+                "tenant": "tenant-ntk",
+                "score": 0.2624013956702349,
+                "metric": "sfi2-paper:round-1:2 - CPU Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 0.17123455874633112,
+                "metric": "sfi2-paper:round-1:2 - CPU Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 0.39912781277922726,
+                "metric": "sfi2-paper:round-1:3 - Memory Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-ntk",
+                "score": 0.24773610500118634,
+                "metric": "sfi2-paper:round-1:3 - Memory Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 0.41014083769157245,
+                "metric": "sfi2-paper:round-1:4 - Network Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-nsy",
+                "score": 0.26888201704152304,
+                "metric": "sfi2-paper:round-1:4 - Network Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-nsy",
+                "score": 0.39794653803814245,
+                "metric": "sfi2-paper:round-1:5 - Disk Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 0.25379096465781814,
+                "metric": "sfi2-paper:round-1:5 - Disk Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 0.4878290373921362,
+                "metric": "sfi2-paper:round-1:6 - Combined Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-nsy",
+                "score": 0.4352351823893742,
+                "metric": "sfi2-paper:round-1:6 - Combined Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-ntk",
+                "score": 0.4862022575899957,
+                "metric": "sfi2-paper:round-1:2 - CPU Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 0.4152359993091868,
+                "metric": "sfi2-paper:round-1:2 - CPU Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 1.1946151127859725,
+                "metric": "sfi2-paper:round-1:3 - Memory Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-ntk",
+                "score": 0.8435997740244878,
+                "metric": "sfi2-paper:round-1:3 - Memory Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 1.3233685297614133,
+                "metric": "sfi2-paper:round-1:4 - Network Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-ntk",
+                "score": 1.086513728127508,
+                "metric": "sfi2-paper:round-1:4 - Network Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 1.2023849424707465,
+                "metric": "sfi2-paper:round-1:5 - Disk Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-nsy",
+                "score": 1.0935476827900164,
+                "metric": "sfi2-paper:round-1:5 - Disk Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-ntk",
+                "score": 1.126161924317285,
+                "metric": "sfi2-paper:round-1:6 - Combined Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-nsy",
+                "score": 1.0397790341165543,
+                "metric": "sfi2-paper:round-1:6 - Combined Noise:cpu_usage"
+            }
+        ],
+        "main_impact_sources": [
+            {
+                "tenant": "tenant-nsy",
+                "score": 0.06896551724137931,
+                "metric": "sfi2-paper:round-1:2 - CPU Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-ntk",
+                "score": 0.586881034781168,
+                "metric": "sfi2-paper:round-1:2 - CPU Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 0.3279232760112737,
+                "metric": "sfi2-paper:round-1:2 - CPU Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-nsy",
+                "score": 0.4345515272698892,
+                "metric": "sfi2-paper:round-1:3 - Memory Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-ntk",
+                "score": 0.48661273431564567,
+                "metric": "sfi2-paper:round-1:3 - Memory Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 0.3486816998328871,
+                "metric": "sfi2-paper:round-1:3 - Memory Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-nsy",
+                "score": 0.51219429965343,
+                "metric": "sfi2-paper:round-1:4 - Network Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-ntk",
+                "score": 0.3797119444910484,
+                "metric": "sfi2-paper:round-1:4 - Network Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 0.5625482115897535,
+                "metric": "sfi2-paper:round-1:4 - Network Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-nsy",
+                "score": 0.4205156253863337,
+                "metric": "sfi2-paper:round-1:5 - Disk Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-ntk",
+                "score": 0.24713159066228568,
+                "metric": "sfi2-paper:round-1:5 - Disk Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 0.33606819765060936,
+                "metric": "sfi2-paper:round-1:5 - Disk Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-nsy",
+                "score": 0.6719151648176405,
+                "metric": "sfi2-paper:round-1:6 - Combined Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-ntk",
+                "score": 0.5941423696283857,
+                "metric": "sfi2-paper:round-1:6 - Combined Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 0.3937753498425687,
+                "metric": "sfi2-paper:round-1:6 - Combined Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-nsy",
+                "score": 0.5872915115068181,
+                "metric": "sfi2-paper:round-1:2 - CPU Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-ntk",
+                "score": 0.3417944260322063,
+                "metric": "sfi2-paper:round-1:2 - CPU Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 0.4897424969099066,
+                "metric": "sfi2-paper:round-1:2 - CPU Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-nsy",
+                "score": 0.9408349143153198,
+                "metric": "sfi2-paper:round-1:3 - Memory Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-ntk",
+                "score": 1.1772057064626769,
+                "metric": "sfi2-paper:round-1:3 - Memory Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 1.220140620181177,
+                "metric": "sfi2-paper:round-1:3 - Memory Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-ntk",
+                "score": 0.9415902848785814,
+                "metric": "sfi2-paper:round-1:4 - Network Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 0.9860585883727434,
+                "metric": "sfi2-paper:round-1:4 - Network Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-nsy",
+                "score": 1.0790899225839725,
+                "metric": "sfi2-paper:round-1:5 - Disk Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-cpu",
+                "score": 1.3474274225038443,
+                "metric": "sfi2-paper:round-1:5 - Disk Noise:cpu_usage"
+            }
+        ],
+        "anomalous_metrics": [],
+        "noise_sensitivity": {},
+        "correlation_patterns": [],
+        "recommendations": [
+            "Consider isolating from impacting tenants: tenant-nsy, tenant-cpu, tenant-ntk."
+        ]
+    },
+    "tenant-cpu": {
+        "name": "tenant-cpu",
+        "rank": 4,
+        "noisy_score": 0.5932650793347777,
+        "is_noisy_tenant": false,
+        "is_victim_tenant": true,
+        "main_impacted_tenants": [
+            {
+                "tenant": "tenant-mem",
+                "score": 0.3279232760112737,
+                "metric": "sfi2-paper:round-1:2 - CPU Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-ntk",
+                "score": 0.1344873975824181,
+                "metric": "sfi2-paper:round-1:2 - CPU Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 0.3486816998328871,
+                "metric": "sfi2-paper:round-1:3 - Memory Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-ntk",
+                "score": 0.33928858886510344,
+                "metric": "sfi2-paper:round-1:3 - Memory Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 0.5625482115897535,
+                "metric": "sfi2-paper:round-1:4 - Network Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-ntk",
+                "score": 0.061453203778824,
+                "metric": "sfi2-paper:round-1:4 - Network Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 0.33606819765060936,
+                "metric": "sfi2-paper:round-1:5 - Disk Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-nsy",
+                "score": 0.2769886113269701,
+                "metric": "sfi2-paper:round-1:5 - Disk Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-nsy",
+                "score": 0.4533916637105988,
+                "metric": "sfi2-paper:round-1:6 - Combined Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 0.3937753498425687,
+                "metric": "sfi2-paper:round-1:6 - Combined Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-ntk",
+                "score": 0.7755249998507951,
+                "metric": "sfi2-paper:round-1:2 - CPU Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 0.4897424969099066,
+                "metric": "sfi2-paper:round-1:2 - CPU Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 1.220140620181177,
+                "metric": "sfi2-paper:round-1:3 - Memory Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-ntk",
+                "score": 0.9555002049843684,
+                "metric": "sfi2-paper:round-1:3 - Memory Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 0.9860585883727434,
+                "metric": "sfi2-paper:round-1:4 - Network Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-ntk",
+                "score": 0.7199186386099931,
+                "metric": "sfi2-paper:round-1:4 - Network Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 1.3474274225038443,
+                "metric": "sfi2-paper:round-1:5 - Disk Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-nsy",
+                "score": 1.2137370345617398,
+                "metric": "sfi2-paper:round-1:5 - Disk Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-ntk",
+                "score": 1.2281947947677838,
+                "metric": "sfi2-paper:round-1:6 - Combined Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-nsy",
+                "score": 1.1320095895118532,
+                "metric": "sfi2-paper:round-1:6 - Combined Noise:cpu_usage"
+            }
+        ],
+        "main_impact_sources": [
+            {
+                "tenant": "tenant-mem",
+                "score": 0.17123455874633112,
+                "metric": "sfi2-paper:round-1:2 - CPU Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-nsy",
+                "score": 0.25596112309185476,
+                "metric": "sfi2-paper:round-1:3 - Memory Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-ntk",
+                "score": 0.3436229688331303,
+                "metric": "sfi2-paper:round-1:3 - Memory Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 0.39912781277922726,
+                "metric": "sfi2-paper:round-1:3 - Memory Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-nsy",
+                "score": 0.29698603004761187,
+                "metric": "sfi2-paper:round-1:4 - Network Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-ntk",
+                "score": 0.1914639428196398,
+                "metric": "sfi2-paper:round-1:4 - Network Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 0.41014083769157245,
+                "metric": "sfi2-paper:round-1:4 - Network Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-nsy",
+                "score": 0.2006949854427218,
+                "metric": "sfi2-paper:round-1:5 - Disk Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 0.25379096465781814,
+                "metric": "sfi2-paper:round-1:5 - Disk Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-nsy",
+                "score": 0.6746950210075726,
+                "metric": "sfi2-paper:round-1:6 - Combined Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-ntk",
+                "score": 0.5619031114662102,
+                "metric": "sfi2-paper:round-1:6 - Combined Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 0.4878290373921362,
+                "metric": "sfi2-paper:round-1:6 - Combined Noise:memory_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 0.4152359993091868,
+                "metric": "sfi2-paper:round-1:2 - CPU Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-ntk",
+                "score": 0.9877185610618342,
+                "metric": "sfi2-paper:round-1:3 - Memory Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 1.1946151127859725,
+                "metric": "sfi2-paper:round-1:3 - Memory Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-nsy",
+                "score": 0.9801670842458122,
+                "metric": "sfi2-paper:round-1:4 - Network Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-ntk",
+                "score": 1.0996305831010413,
+                "metric": "sfi2-paper:round-1:4 - Network Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 1.3233685297614133,
+                "metric": "sfi2-paper:round-1:4 - Network Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-ntk",
+                "score": 1.230343738847171,
+                "metric": "sfi2-paper:round-1:5 - Disk Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-mem",
+                "score": 1.2023849424707465,
+                "metric": "sfi2-paper:round-1:5 - Disk Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-nsy",
+                "score": 1.1216081074130586,
+                "metric": "sfi2-paper:round-1:6 - Combined Noise:cpu_usage"
+            },
+            {
+                "tenant": "tenant-ntk",
+                "score": 1.2236409778635577,
+                "metric": "sfi2-paper:round-1:6 - Combined Noise:cpu_usage"
+            }
+        ],
+        "anomalous_metrics": [],
+        "noise_sensitivity": {},
+        "correlation_patterns": [],
+        "recommendations": [
+            "Consider isolating from impacting tenants: tenant-nsy, tenant-mem, tenant-ntk."
+        ]
+    }
+}
