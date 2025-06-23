@@ -32,8 +32,8 @@ import networkx as nx
 from src.data_ingestion import ingest_experiment_data
 from src.data_export import save_dataframe, load_dataframe
 from src.data_segment import filter_long_df, get_wide_format_for_analysis
-from src.analysis_descriptive import compute_descriptive_stats, plot_metric_timeseries_multi_tenant, plot_metric_timeseries_multi_tenant_all_phases
-from src.analysis_descriptive import plot_metric_barplot_by_phase, plot_metric_boxplot
+from src.analysis_descriptive import compute_descriptive_stats, plot_metric_timeseries_multi_tenant
+from src.analysis_descriptive import plot_metric_barplot_by_phase, plot_metric_boxplot, plot_metric_timeseries_multi_tenant_all_phases
 from src.analysis_correlation import compute_correlation_matrix, compute_covariance_matrix, compute_cross_correlation
 from src.report_generation import generate_tenant_metrics, generate_tenant_ranking_plot, generate_markdown_report
 from src.insight_aggregation import aggregate_tenant_insights, generate_comparative_table, plot_insight_matrix
@@ -631,17 +631,15 @@ class CausalityAnalysisStage(PipelineStage):
         # Configuration parameters
         config = context.get('config', {})
         causality_config = config.get('causality', {})
-        granger_max_lag = causality_config.get('granger_max_lag', 5)
         granger_threshold = causality_config.get('granger_threshold', 0.05)
-        te_bins = causality_config.get('transfer_entropy_bins', 8)
         
         # Structures to store results
         granger_matrices = {}
         te_matrices = {}
         plot_paths = []
         
-        # Initialize causality analyzer
-        analyzer = CausalityAnalyzer(df_long)
+        # Initialize causality analyzer with the output directory
+        analyzer = CausalityAnalyzer(df_long, out_dir)
         
         # Process each combination of experiment, round, metric, and phase
         experiments = df_long['experiment_id'].unique()
@@ -651,85 +649,37 @@ class CausalityAnalysisStage(PipelineStage):
             exp_df = df_long[df_long['experiment_id'] == experiment_id]
             
             for round_id in exp_df['round_id'].unique():
-                # Filter for the specific round
                 round_df = exp_df[exp_df['round_id'] == round_id]
                 
-                for metric in tqdm(round_df['metric_name'].unique(), desc=f"Metrics in {round_id}"):
+                for metric in tqdm(round_df['metric_name'].unique(), desc=f"Causality Analysis for Metrics in {round_id}"):
                     for phase in round_df['experimental_phase'].unique():
-                        self.logger.info(f"Calculating causality for {metric}, {phase}, {round_id}")
+                        self.logger.info(f"Running causality analysis for {metric}, {phase}, {round_id}")
                         try:
-                            # Filter data for this phase/metric/round
-                            phase_df = filter_long_df(
-                                round_df,
-                                phase=phase,
-                                metric=metric,
-                                round_id=round_id
-                            )
-                            
-                            # Check if there is enough data
+                            # Check if there is enough data before calling the analyzer
+                            phase_df = round_df[(round_df['experimental_phase'] == phase) & (round_df['metric_name'] == metric)]
                             if phase_df.empty or phase_df['tenant_id'].nunique() < 2:
-                                self.logger.warning(f"Insufficient data for {metric}, {phase}, {round_id}")
+                                self.logger.warning(f"Insufficient data for {metric}, {phase}, {round_id}. Skipping causality analysis.")
                                 continue
-                                
-                            # Calculate Granger causality
-                            granger_matrix = analyzer.compute_granger_matrix(
-                                metric=metric, 
-                                phase=phase, 
-                                round_id=round_id,
-                                maxlag=granger_max_lag
-                            )
-                            
-                            # Calculate Transfer Entropy
-                            te_matrix = analyzer.compute_transfer_entropy_matrix(
+
+                            # Run the full analysis and plotting pipeline for this slice
+                            analysis_results = analyzer.run_and_plot_causality_analysis(
                                 metric=metric,
                                 phase=phase,
                                 round_id=round_id,
-                                bins=te_bins
+                                p_value_threshold=granger_threshold
                             )
                             
                             # Store results
                             result_key = f"{experiment_id}:{round_id}:{phase}:{metric}"
-                            granger_matrices[result_key] = granger_matrix
-                            te_matrices[result_key] = te_matrix
-                            
-                            # Generate visualizations for Granger causality
-                            if not granger_matrix.empty and not granger_matrix.isna().all().all():
-                                granger_out_path = os.path.join(
-                                    out_dir, 
-                                    f"causality_graph_granger_{metric}_{phase}_{round_id}.png"
-                                )
-                                # Original visualization
-                                plot_causality_graph(
-                                    granger_matrix, 
-                                    granger_out_path,
-                                    threshold=granger_threshold, 
-                                    directed=True,
-                                    metric=metric,
-                                    threshold_mode='less'
-                                )
-                                plot_paths.append(granger_out_path)
-                                
-                            # Generate visualizations for Transfer Entropy
-                            if not te_matrix.empty and not te_matrix.isna().all().all():
-                                # For TE, higher values = more causality, so we use an inverse threshold
-                                te_threshold = 0.1  # Minimum threshold to consider a causal relationship via TE
-                                te_out_path = os.path.join(
-                                    out_dir, 
-                                    f"causality_graph_te_{metric}_{phase}_{round_id}.png"
-                                )
-                                
-                                # Original visualization
-                                plot_causality_graph(
-                                    te_matrix,
-                                    te_out_path,
-                                    threshold=te_threshold,
-                                    directed=True,
-                                    metric=f"{metric} (TE)",
-                                    threshold_mode='greater'
-                                )
-                                plot_paths.append(te_out_path)
+                            if not analysis_results["granger_matrix"].empty:
+                                granger_matrices[result_key] = analysis_results["granger_matrix"]
+                            if not analysis_results["te_matrix"].empty:
+                                te_matrices[result_key] = analysis_results["te_matrix"]
+                            if analysis_results["plot_paths"]:
+                                plot_paths.extend(analysis_results["plot_paths"])
+
                         except Exception as e:
-                            self.logger.error(f"Error processing causality for {metric}, {phase}, {round_id}: {e}")
+                            self.logger.error(f"Error processing causality for {metric}, {phase}, {round_id}: {e}", exc_info=True)
         
         # Update context
         context['granger_matrices'] = granger_matrices

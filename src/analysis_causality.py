@@ -20,7 +20,7 @@ from statsmodels.tools.sm_exceptions import MissingDataError
 from functools import lru_cache
 import warnings
 
-from src.visualization.plots import plot_causality_graph
+from src.visualization.plots import plot_causality_graph, plot_causality_heatmap
 
 # Import utilities for time series processing
 try:
@@ -130,8 +130,101 @@ class CausalityAnalyzer:
     """
     Class responsible for causality calculations (e.g., Granger, Transfer Entropy) between tenants.
     """
-    def __init__(self, df: pd.DataFrame):
+    def __init__(self, df: pd.DataFrame, output_dir: str):
         self.df = df
+        self.output_dir = output_dir
+        os.makedirs(self.output_dir, exist_ok=True)
+
+
+    def run_and_plot_causality_analysis(self, metric: str, phase: str, round_id: str, p_value_threshold: float = 0.05) -> dict:
+        """
+        Orchestrates the full causality analysis pipeline for a given metric, phase, and round.
+        It computes causality matrices, generates visualizations (graphs and heatmaps),
+        and saves them to the output directory.
+
+        Args:
+            metric: The metric to analyze.
+            phase: The experimental phase.
+            round_id: The round identifier.
+            p_value_threshold: Significance level for Granger causality.
+            
+        Returns:
+            A dictionary containing the computed matrices and paths to the generated plots.
+        """
+        logger.info(f"Starting causality analysis for metric='{metric}', phase='{phase}', round='{round_id}'")
+        plot_paths = []
+        results = {
+            "granger_matrix": pd.DataFrame(),
+            "te_matrix": pd.DataFrame(),
+            "plot_paths": []
+        }
+
+        # --- Granger Causality ---
+        granger_p_matrix = self.compute_granger_matrix(metric, phase, round_id)
+        results["granger_matrix"] = granger_p_matrix
+
+        if not granger_p_matrix.empty:
+            # Define output path for the graph
+            graph_filename = os.path.join(self.output_dir, f"granger_graph_{metric}_{phase}_{round_id}.png")
+            
+            # Plot and save Granger causality graph
+            path = plot_causality_graph(
+                causality_matrix=granger_p_matrix,
+                out_path=graph_filename,
+                metric=metric,
+                threshold=p_value_threshold,
+                threshold_mode='less'
+            )
+            if path: plot_paths.append(path)
+
+            # Plot and save Granger p-value heatmap
+            path = plot_causality_heatmap(
+                causality_matrix=granger_p_matrix,
+                metric=metric,
+                phase=phase,
+                round_id=round_id,
+                out_dir=self.output_dir,
+                method='Granger',
+                value_type='p-value'
+            )
+            if path: plot_paths.append(path)
+
+        # --- Transfer Entropy ---
+        te_matrix = self.compute_transfer_entropy_matrix(metric, phase, round_id)
+        results["te_matrix"] = te_matrix
+
+        if not te_matrix.empty:
+            # Define a threshold for TE score to be considered significant
+            te_threshold = 0.1  # This threshold may require tuning
+
+            # Plot and save Transfer Entropy causality graph
+            te_graph_filename = os.path.join(self.output_dir, f"te_graph_{metric}_{phase}_{round_id}.png")
+            path = plot_causality_graph(
+                causality_matrix=te_matrix,
+                out_path=te_graph_filename,
+                metric=metric,
+                threshold=te_threshold,
+                threshold_mode='greater',
+                directed=True
+            )
+            if path: plot_paths.append(path)
+
+            # Plot and save Transfer Entropy score heatmap
+            path = plot_causality_heatmap(
+                causality_matrix=te_matrix,
+                metric=metric,
+                phase=phase,
+                round_id=round_id,
+                out_dir=self.output_dir,
+                method='TE',
+                value_type='score'
+            )
+            if path: plot_paths.append(path)
+
+        logger.info(f"Finished causality analysis for metric='{metric}', phase='{phase}', round='{round_id}'")
+        results["plot_paths"] = plot_paths
+        return results
+
 
     def _granger_causality_test(self, source_series: np.ndarray, target_series: np.ndarray, max_lag: int = 3) -> dict:
         """

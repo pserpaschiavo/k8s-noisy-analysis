@@ -18,6 +18,7 @@ selected_metrics:
 selected_tenants:
   - tenant-cpu
   - tenant-mem
+  - tenant-dsk
   - tenant-ntk
   - tenant-nsy
   

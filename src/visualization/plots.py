@@ -1,6 +1,6 @@
 """
 Module: src.visualization.plots
-Description: Centralized plotting functions for the analysis pipeline.
+Description: Centralized plotting functions for the analysis pipeline, using a unified configuration.
 """
 import os
 import matplotlib.pyplot as plt
@@ -11,21 +11,20 @@ import logging
 import networkx as nx
 import matplotlib.lines as mlines
 import matplotlib.patches as mpatches
-import matplotlib.cm as cm
 
 from src.visualization_config import PUBLICATION_CONFIG
 
 logger = logging.getLogger(__name__)
 
-# Global plotting settings can be defined here
-sns.set_theme(style="whitegrid")
-plt.style.use('tableau-colorblind10')
+# Apply global style settings from the configuration
+plt.rcParams.update(PUBLICATION_CONFIG.get('figure_style', {}))
 
 
-def save_plot(fig, out_path: str, dpi: int = 300):
-    """Saves a matplotlib figure to a file."""
+def save_plot(fig, out_path: str):
+    """Saves a matplotlib figure to a file, creating directories if needed."""
     try:
         os.makedirs(os.path.dirname(out_path), exist_ok=True)
+        dpi = PUBLICATION_CONFIG.get('figure_style', {}).get('figure.dpi', 300)
         fig.savefig(out_path, dpi=dpi, bbox_inches='tight')
         logger.info(f"Plot saved to {out_path}")
         plt.close(fig)
@@ -34,50 +33,29 @@ def save_plot(fig, out_path: str, dpi: int = 300):
 
 
 def plot_correlation_heatmap(corr_matrix: pd.DataFrame, metric: str, phase: str, round_id: str, out_dir: str, method: str = 'pearson') -> str | None:
-    """
-    Plots a heatmap of the correlation matrix between tenants for a given metric, phase, and round.
-    
-    Args:
-        corr_matrix: Calculated correlation matrix
-        metric: Metric name
-        phase: Experimental phase 
-        round_id: Round ID
-        out_dir: Output directory
-        method: Correlation method used ('pearson', 'kendall', or 'spearman')
-        
-    Returns:
-        Path to the generated plot or None if there is no data
-    """
+    """Plots a correlation heatmap using the centralized configuration."""
     if corr_matrix.empty:
-        logger.warning(f"Empty correlation matrix. Cannot generate heatmap for {metric}, {phase}, {round_id}")
+        logger.warning(f"Empty correlation matrix for {metric}, {phase}, {round_id}")
         return None
-        
-    fig, ax = plt.subplots(figsize=(10, 8))
-    
-    # Improve visualization with masks for the upper triangle
+
+    metric_info = PUBLICATION_CONFIG['metric_display_names'].get(metric, {'name': metric})
+    metric_name = metric_info['name']
+    phase_display = PUBLICATION_CONFIG['phase_display_names'].get(phase, phase)
+    cmap = PUBLICATION_CONFIG['heatmap_colormaps'].get('correlation', 'vlag')
+
+    fig, ax = plt.subplots()
     mask = np.zeros_like(corr_matrix, dtype=bool)
     mask[np.triu_indices_from(mask, 1)] = True
-    
-    # Enhance the aesthetics of the heatmap
+
     sns.heatmap(
-        corr_matrix, 
-        annot=True, 
-        cmap='vlag', 
-        vmin=-1, 
-        vmax=1, 
-        center=0, 
-        square=True, 
-        linewidths=0.5, 
-        mask=mask,
-        cbar_kws={"label": f"{method.title()} correlation", "shrink": 0.8},
-        ax=ax
+        corr_matrix, annot=True, cmap=cmap, vmin=-1, vmax=1, center=0, square=True,
+        linewidths=0.5, mask=mask, cbar_kws={"label": f"{method.title()} Correlation", "shrink": 0.8}, ax=ax
     )
-    
-    ax.set_title(f'{method.title()} correlation between tenants\n{metric} - {phase} - {round_id}', fontsize=12, fontweight='bold')
-    
-    out_path = os.path.join(out_dir, f"correlation_heatmap_{metric}_{phase}_{round_id}.png")
+
+    title = f'{method.title()} Correlation: {metric_name}\n{phase_display} - Round {round_id}'
+    ax.set_title(title, fontweight='bold')
+    out_path = os.path.join(out_dir, f"correlation_heatmap_{method}_{metric}_{phase}_{round_id}.png")
     save_plot(fig, out_path)
-    
     return out_path
 
 
@@ -246,84 +224,84 @@ def plot_lag_scatter(df: pd.DataFrame, metric: str, phase: str, round_id: str, t
 
 # Causality Plots
 
-def plot_causality_graph(causality_matrix: pd.DataFrame, out_path: str, threshold: float = 0.05, directed: bool = True, metric: str = '', metric_color: str = '', threshold_mode: str = 'less'):
-    """
-    Plots a causality graph from a causality matrix (e.g., Granger p-values or scores).
-    Edges are drawn based on the threshold and threshold_mode.
-    - threshold_mode='less': Edge where value < threshold (e.g., for p-values)
-    - threshold_mode='greater': Edge where value > threshold (e.g., for TE scores)
-    """
+def plot_causality_graph(causality_matrix: pd.DataFrame, out_path: str, threshold: float = 0.05, directed: bool = True, metric: str = '', threshold_mode: str = 'less'):
+    """Plots a causality graph using the centralized configuration."""
     if causality_matrix.empty:
         logger.warning(f"Causality matrix is empty for {metric}. Skipping plot.")
-        return None
+        return
 
-    if directed:
-        G = nx.DiGraph()
-    else:
-        G = nx.Graph()
-    
+    G = nx.DiGraph() if directed else nx.Graph()
     tenants = causality_matrix.index.tolist()
     G.add_nodes_from(tenants)
-    edge_labels = {}
-    edges = []
-    edge_weights = []
-    edge_colors = []
-    
-    metric_palette = {
-        'cpu_usage': 'tab:blue',
-        'memory_usage': 'tab:orange',
-        'disk_io': 'tab:green',
-        'network_io': 'tab:red',
-    }
-    color = metric_color if metric_color else metric_palette.get(metric, 'tab:blue')
 
+    tenant_display_names = PUBLICATION_CONFIG['tenant_display_names']
+    node_colors: list[str] = [PUBLICATION_CONFIG['tenant_colors'].get(t, '#8c564b') for t in tenants]
+    node_labels = {t: tenant_display_names.get(t, t) for t in tenants}
+
+    edges, edge_weights, edge_labels = [], [], {}
+    edge_weights: list[float] = []
     for src in tenants:
         for tgt in tenants:
-            if src != tgt:
-                val = causality_matrix.at[src, tgt]
-                is_significant = False
-                weight = 0
+            if src == tgt: continue
+            val = causality_matrix.at[src, tgt]
+            is_significant, weight = False, 0
+            if threshold_mode == 'less' and not pd.isna(val) and float(val) < threshold:
+                is_significant, weight = True, 1 - float(val)
+            elif threshold_mode == 'greater' and not pd.isna(val) and float(val) > threshold:
+                is_significant, weight = True, float(val)
+            
+            if is_significant:
+                G.add_edge(src, tgt, weight=weight)
+                edges.append((src, tgt))
+                edge_weights.append(weight * 5 + 1)
+                edge_labels[(src, tgt)] = f"{weight:.2f}"
 
-                if threshold_mode == 'less':
-                    if not pd.isna(val) and float(val) < threshold:
-                        is_significant = True
-                        weight = 1 - float(val)
-                elif threshold_mode == 'greater':
-                    if not pd.isna(val) and float(val) > threshold:
-                        is_significant = True
-                        weight = float(val)
+    if not G.nodes:
+        logger.warning(f"No nodes in graph for {metric}. Skipping plot.")
+        return
 
-                if is_significant:
-                    G.add_edge(src, tgt, weight=weight)
-                    edges.append((src, tgt))
-                    edge_weights.append(weight * 6 + 1)
-                    edge_colors.append(color)
-                    edge_labels[(src, tgt)] = f"{weight:.2f}"
-
-    sorted_tenants = sorted(tenants)
-    pos = nx.circular_layout(G)
-
-    fig, ax = plt.subplots(figsize=(12, 12))
+    pos = nx.spring_layout(G, seed=42, k=0.9, iterations=50)
+    fig, ax = plt.subplots(figsize=(12, 10))
     ax.set_facecolor('#f8f8f8')
 
-    nx.draw_networkx_nodes(G, pos, node_color='skyblue', node_size=1600, edgecolors='darkblue', linewidths=1.5, ax=ax)
-    nx.draw_networkx_labels(G, pos, font_size=13, font_weight='bold', font_color='black', ax=ax)
+    nx.draw_networkx_nodes(G, pos, node_color=node_colors, node_size=3000, node_shape='o', edgecolors='darkblue', linewidths=1.5, ax=ax)
+    nx.draw_networkx_labels(G, pos, labels=node_labels, font_size=12, font_weight='bold', font_color='white', ax=ax)
+    nx.draw_networkx_edges(G, pos, edgelist=edges, arrowstyle='->' if directed else '-', width=edge_weights, edge_color='gray', alpha=0.8, connectionstyle='arc3,rad=0.1', ax=ax)
+    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_color='darkred', font_size=10, bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="gray", alpha=0.7), ax=ax)
 
-    for edge, w, c in zip(edges, edge_weights, edge_colors):
-        nx.draw_networkx_edges(G, pos, edgelist=[edge], arrowstyle='->' if directed else '-', 
-                             arrows=directed, width=w, edge_color=c, alpha=0.9,
-                             connectionstyle='arc3,rad=0.2', ax=ax)
-
-    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_color='darkred', font_size=11, font_weight='bold',
-                               bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="gray", alpha=0.7), ax=ax)
-
-    title = f'Causality Graph ({"Directed" if directed else "Undirected"})\nMetric: {metric} | Edges: {threshold_mode.replace("less", "p <").replace("greater", "TE >")} {threshold:.2g}'
-    ax.set_title(title, fontsize=14, fontweight='bold')
+    metric_name = PUBLICATION_CONFIG['metric_display_names'].get(metric, {'name': metric})['name']
+    title = f'Causality: {metric_name} (Edges: {threshold_mode.replace("less", "p <").replace("greater", "TE >")} {threshold:.2g})'
+    ax.set_title(title, fontweight='bold')
     ax.axis('off')
 
-    legend_elements = [mlines.Line2D([0], [0], color=color, lw=3, label=f'{metric if metric else "Metric"}')]
-    ax.legend(handles=legend_elements, loc='lower left')
+    legend_patches = [mpatches.Patch(color=c, label=l) for t, l, c in zip(tenants, node_labels.values(), node_colors)]
+    ax.legend(handles=legend_patches, title="Tenants", bbox_to_anchor=(1.05, 1), loc='upper left')
 
+    fig.tight_layout(rect=(0, 0, 0.85, 1))
+    save_plot(fig, out_path)
+    return out_path
+
+
+def plot_causality_heatmap(causality_matrix: pd.DataFrame, metric: str, phase: str, round_id: str, out_dir: str, method: str, value_type: str = 'p-value') -> str | None:
+    """Plots a causality heatmap using the centralized configuration."""
+    if causality_matrix.empty:
+        logger.warning(f"Empty causality matrix for {metric}, {phase}, {round_id}")
+        return None
+
+    metric_display = PUBLICATION_CONFIG['metric_display_names'].get(metric, {'name': metric})['name']
+    phase_display = PUBLICATION_CONFIG['phase_display_names'].get(phase, phase)
+    cmap = PUBLICATION_CONFIG['heatmap_colormaps'].get(value_type, 'viridis')
+    cbar_label = f"{method} {value_type.replace('_', ' ').title()}"
+
+    fig, ax = plt.subplots()
+    sns.heatmap(causality_matrix, annot=True, cmap=cmap, fmt=".3f", linewidths=0.5, cbar_kws={"label": cbar_label}, ax=ax)
+
+    title = f'{method} Causality: {metric_display}\n{phase_display} - Round {round_id}'
+    ax.set_title(title, fontweight='bold')
+    ax.set_xlabel("Caused by (Source Tenant)")
+    ax.set_ylabel("Affected (Target Tenant)")
+    
+    out_path = os.path.join(out_dir, f"{method.lower()}_causality_heatmap_{metric}_{phase}_{round_id}.png")
     save_plot(fig, out_path)
     return out_path
 
@@ -331,277 +309,201 @@ def plot_causality_graph(causality_matrix: pd.DataFrame, out_path: str, threshol
 # Descriptive Analysis Plots
 
 def plot_metric_timeseries_multi_tenant(df: pd.DataFrame, metric: str, phase: str, round_id: str, out_dir: str):
-    """
-    Plots time series for all tenants for a given metric, phase, and round,
-    using the centralized academic publication configuration.
-    X-axis: relative time in seconds; Y-axis: metric value; Colors: tenants.
-    """
+    """Plots multi-tenant time series using the centralized configuration."""
     subset = df[(df['metric_name'] == metric) & (df['experimental_phase'] == phase) & (df['round_id'] == round_id)]
     if subset.empty:
-        logger.warning(f"No data for {metric}, {phase}, {round_id}")
+        logger.warning(f"No data for time series: {metric}, {phase}, {round_id}")
         return None
-    if not pd.api.types.is_datetime64_any_dtype(subset['timestamp']):
-        subset['timestamp'] = pd.to_datetime(subset['timestamp'], errors='coerce')
-    
-    plt.rcParams.update(PUBLICATION_CONFIG['figure_style'])
 
+    subset['timestamp'] = pd.to_datetime(subset['timestamp'], errors='coerce')
     metric_info = PUBLICATION_CONFIG['metric_display_names'].get(metric, {'name': metric, 'unit': ''})
-    metric_name = metric_info['name']
-    metric_unit = metric_info['unit']
     phase_display = PUBLICATION_CONFIG['phase_display_names'].get(phase, phase)
     tenant_colors = PUBLICATION_CONFIG['tenant_colors']
+    tenant_markers = PUBLICATION_CONFIG['tenant_markers']
     tenant_display_names = PUBLICATION_CONFIG['tenant_display_names']
 
+    fig, ax = plt.subplots()
     phase_start = subset['timestamp'].min()
-    
-    fig, ax = plt.subplots(figsize=(14, 7))
 
-    tenants = sorted(subset['tenant_id'].unique())
-
-    for tenant_id in tenants:
+    for tenant_id in sorted(subset['tenant_id'].unique()):
         group = subset[subset['tenant_id'] == tenant_id].sort_values('timestamp')
-        if group.empty:
-            continue
-        
+        if group.empty: continue
         elapsed = (group['timestamp'] - phase_start).dt.total_seconds()
-        
-        display_name = tenant_display_names.get(tenant_id, tenant_id)
-        color = tenant_colors.get(tenant_id, tenant_colors['default'])
-        
-        ax.plot(elapsed, group['metric_value'], marker='o', markersize=3, linestyle='-', label=display_name, color=color)
-    
-    ax.set_title(f'Time Series - {metric_name} - {phase_display} (Round {round_id})')
+        ax.plot(elapsed, group['metric_value'], 
+                marker=tenant_markers.get(tenant_id, 'x'), 
+                linestyle='-', 
+                color=tenant_colors.get(tenant_id, '#7f7f7f'),
+                label=tenant_display_names.get(tenant_id, tenant_id))
+
+    ax.set_title(f'Time Series: {metric_info["name"]} - {phase_display} (Round {round_id})', fontweight='bold')
     ax.set_xlabel("Time (seconds from phase start)")
-    ax.set_ylabel(f'{metric_name} ({metric_unit})' if metric_unit else metric_name)
+    ax.set_ylabel(f'{metric_info["name"]} ({metric_info["unit"]})' if metric_info["unit"] else metric_info["name"])
     ax.legend(title='Tenant', bbox_to_anchor=(1.05, 1), loc='upper left')
     ax.grid(True, which='both', linestyle='--', linewidth=0.5)
-    
     fig.tight_layout(rect=(0, 0, 0.85, 1))
     out_path = os.path.join(out_dir, f"timeseries_multi_{metric}_{phase.replace(' ', '_')}_{round_id}.png")
     save_plot(fig, out_path)
-    
     return out_path
 
-def plot_metric_barplot_by_phase(df: pd.DataFrame, metric: str, round_id: str, out_dir: str):
-    """
-    Generates a bar plot of a metric, grouped by phase and tenant,
-    using the centralized academic publication configuration.
-    """
-    subset = df[(df['metric_name'] == metric) & (df['round_id'] == round_id)]
-    if subset.empty:
-        logger.warning(f"No data for bar plot of {metric} in {round_id}")
-        return None
-
-    plt.rcParams.update(PUBLICATION_CONFIG['figure_style'])
-
-    metric_info = PUBLICATION_CONFIG['metric_display_names'].get(metric, {'name': metric, 'unit': ''})
-    metric_name = metric_info['name']
-    metric_unit = metric_info['unit']
-    tenant_colors = PUBLICATION_CONFIG['tenant_colors']
-    tenant_display_names = PUBLICATION_CONFIG['tenant_display_names']
-    phase_display_names = PUBLICATION_CONFIG['phase_display_names']
-
-    # Create a color palette mapped to display names
-    color_palette = {
-        tenant_display_names.get(k, k): v 
-        for k, v in tenant_colors.items()
-    }
-
-    plot_df = subset.copy()
-    plot_df['tenant_id'] = plot_df['tenant_id'].map(tenant_display_names).fillna(plot_df['tenant_id'])
-    plot_df['experimental_phase'] = plot_df['experimental_phase'].map(phase_display_names).fillna(plot_df['experimental_phase'])
-
-    phase_order = [phase_display_names[p] for p in PUBLICATION_CONFIG['phase_display_names'] if phase_display_names.get(p) in plot_df['experimental_phase'].unique()]
-    tenant_order = [tenant_display_names[t] for t in PUBLICATION_CONFIG['tenant_display_names'] if tenant_display_names.get(t) in plot_df['tenant_id'].unique()]
-
-    fig, ax = plt.subplots(figsize=(14, 7))
-    sns.barplot(
-        data=plot_df,
-        x='experimental_phase',
-        y='metric_value',
-        hue='tenant_id',
-        palette=color_palette,
-        order=phase_order,
-        hue_order=tenant_order,
-        errorbar='sd',
-        capsize=0.1,
-        ax=ax
-    )
-
-    ax.set_title(f'Mean {metric_name} by Phase and Tenant (Round {round_id})')
-    ax.set_xlabel('Experimental Phase')
-    ax.set_ylabel(f'Mean {metric_name} ({metric_unit})' if metric_unit else f'Mean {metric_name}')
-    ax.tick_params(axis='x', rotation=45)
-    for label in ax.get_xticklabels():
-        label.set_horizontalalignment("right")
-    
-    ax.legend(title='Tenant', bbox_to_anchor=(1.05, 1), loc='upper left')
-    ax.grid(True, axis='y', linestyle='--', linewidth=0.5)
-
-    fig.tight_layout(rect=(0, 0, 0.85, 1))
-    out_path = os.path.join(out_dir, f"barplot_{metric}_{round_id}.png")
-    save_plot(fig, out_path)
-    
-    return out_path
 
 def plot_metric_timeseries_multi_tenant_all_phases(df: pd.DataFrame, metric: str, round_id: str, out_dir: str):
-    """
-    Plots time series for all tenants across all phases in a single plot,
-    using the centralized academic publication configuration.
-    """
-    subset = df[(df['metric_name'] == metric) & (df['round_id'] == round_id)].copy()
+    """Plots a single time series for a metric, with phases indicated by shaded regions."""
+    subset = df[(df['metric_name'] == metric) & (df['round_id'] == round_id)]
     if subset.empty:
-        logger.warning(f"No data for all-phases time series of {metric} in {round_id}")
+        logger.warning(f"No data for multi-phase plot: {metric}, {round_id}.")
         return None
-    if not pd.api.types.is_datetime64_any_dtype(subset['timestamp']):
-        subset['timestamp'] = pd.to_datetime(subset['timestamp'], errors='coerce')
 
-    plt.rcParams.update(PUBLICATION_CONFIG['figure_style'])
+    subset['timestamp'] = pd.to_datetime(subset['timestamp'], errors='coerce')
+    subset = subset.sort_values('timestamp')
 
     metric_info = PUBLICATION_CONFIG['metric_display_names'].get(metric, {'name': metric, 'unit': ''})
-    metric_name = metric_info['name']
-    metric_unit = metric_info['unit']
     tenant_colors = PUBLICATION_CONFIG['tenant_colors']
+    tenant_markers = PUBLICATION_CONFIG['tenant_markers']
     tenant_display_names = PUBLICATION_CONFIG['tenant_display_names']
     phase_colors = PUBLICATION_CONFIG['phase_colors']
     phase_display_names = PUBLICATION_CONFIG['phase_display_names']
 
-    phase_order = list(phase_display_names.keys())
-    subset['phase_order'] = pd.Categorical(subset['experimental_phase'], categories=phase_order, ordered=True)
-    subset = subset.sort_values(['phase_order', 'timestamp'])
-    
-    tenants = sorted(subset['tenant_id'].unique())
-    
-    fig, ax = plt.subplots(figsize=(18, 8))
-    
+    fig, ax = plt.subplots(figsize=(15, 7))
+    round_start_time = subset['timestamp'].min()
+
+    # Plot tenant data first
     legend_handles = []
-    time_offset = 0
-    last_time = 0
-
+    tenants = sorted(subset['tenant_id'].unique())
     for tenant_id in tenants:
-        display_name = tenant_display_names.get(tenant_id, tenant_id)
-        color = tenant_colors.get(tenant_id, tenant_colors['default'])
-        legend_handles.append(mpatches.Patch(color=color, label=display_name))
+        group = subset[subset['tenant_id'] == tenant_id]
+        if group.empty: continue
+        
+        elapsed = (group['timestamp'] - round_start_time).dt.total_seconds()
+        color = tenant_colors.get(tenant_id, '#7f7f7f')
+        marker = tenant_markers.get(tenant_id, 'x')
+        label = tenant_display_names.get(tenant_id, tenant_id)
+        
+        ax.plot(elapsed, group['metric_value'], marker=marker, linestyle='-', color=color, label=label)
 
-    for phase_key in phase_order:
-        phase_data = subset[subset['experimental_phase'] == phase_key]
-        if phase_data.empty:
+    # Create shaded regions for phases
+    phase_patches = []
+    # Ensure phases are sorted chronologically for correct plotting
+    phases = sorted(subset['experimental_phase'].unique(), 
+                    key=lambda p: subset[subset['experimental_phase'] == p]['timestamp'].min())
+
+    for phase in phases:
+        phase_df = subset[subset['experimental_phase'] == phase]
+        if phase_df.empty:
             continue
-
-        phase_start_time = phase_data['timestamp'].min()
-        phase_end_time = phase_data['timestamp'].max()
-        phase_duration = (phase_end_time - phase_start_time).total_seconds()
-
-        for tenant_id in tenants:
-            group = phase_data[phase_data['tenant_id'] == tenant_id].sort_values('timestamp')
-            if group.empty:
-                continue
-            
-            elapsed = (group['timestamp'] - phase_start_time).dt.total_seconds() + time_offset
-            color = tenant_colors.get(tenant_id, tenant_colors['default'])
-            ax.plot(elapsed, group['metric_value'], marker='o', markersize=2.5, linestyle='-', color=color, alpha=0.8)
+        start_time = (phase_df['timestamp'].min() - round_start_time).total_seconds()
+        end_time = (phase_df['timestamp'].max() - round_start_time).total_seconds()
         
-        current_phase_end = time_offset + phase_duration
-        ax.axvspan(time_offset, current_phase_end, color=phase_colors.get(phase_key, '#f0f0f0'), alpha=0.2, zorder=0)
+        # Clean up phase name to handle potential inconsistencies.
+        clean_phase_name = phase.strip()
         
-        phase_display = phase_display_names.get(phase_key, phase_key)
-        ax.annotate(
-            phase_display,
-            xy=((time_offset + current_phase_end) / 2, 1.01),
-            xycoords=("data", "axes fraction"),
-            ha='center', va='bottom', fontsize=11, color='black', fontweight='bold'
-        )
+        # The config keys might be the base name (e.g., "Baseline") 
+        # while the data has a numeric prefix (e.g., "1 - Baseline").
+        # We try to match the full name first, then the base name.
+        base_phase_name = clean_phase_name.split(' - ', 1)[-1]
         
-        time_offset = current_phase_end
-        last_time = max(last_time, time_offset)
+        # Normalize the base name to match config keys (e.g., "CPU Noise" -> "cpu-noise")
+        normalized_base_name = base_phase_name.lower().replace(' ', '-')
 
-    ax.set_xlim(0, last_time)
-    ax.set_title(f'Time Series - {metric_name} (All Phases, Round {round_id})')
-    ax.set_xlabel("Time (seconds, phases concatenated)")
-    ax.set_ylabel(f'{metric_name} ({metric_unit})' if metric_unit else metric_name)
-    ax.legend(handles=legend_handles, title='Tenant', bbox_to_anchor=(1.05, 1), loc='upper left')
+        # Determine color by trying the full name, then the normalized base name.
+        color = phase_colors.get(clean_phase_name)
+        if not color:
+            color = phase_colors.get(normalized_base_name)
+        if not color:
+            logger.warning(f"No color found for phase '{clean_phase_name}' or base name '{normalized_base_name}'. Defaulting.")
+            color = '#dddddd'
+
+        # Determine display name for the legend, trying full, base, and normalized names.
+        display_name = phase_display_names.get(clean_phase_name, 
+                                               phase_display_names.get(base_phase_name, 
+                                                                       phase_display_names.get(normalized_base_name, clean_phase_name)))
+        
+        # Draw the shaded region with slightly higher alpha for better visibility.
+        ax.axvspan(start_time, end_time, color=color, alpha=0.35, lw=0)
+        phase_patches.append(mpatches.Patch(color=color, alpha=0.35, label=display_name))
+
+    # Combine legends
+    tenant_legend = ax.legend(title='Tenant', bbox_to_anchor=(1.05, 1), loc='upper left')
+    ax.add_artist(tenant_legend)
+    ax.legend(handles=phase_patches, title="Phase", bbox_to_anchor=(1.05, 0), loc='lower left')
+
+    ax.set_title(f'Time Series: {metric_info["name"]} - All Phases (Round {round_id})', fontweight='bold')
+    ax.set_xlabel("Time (seconds from round start)")
+    ax.set_ylabel(f'{metric_info["name"]} ({metric_info["unit"]})' if metric_info["unit"] else metric_info["name"])
     ax.grid(True, which='both', linestyle='--', linewidth=0.5)
+    ax.autoscale(enable=True, axis='x', tight=True)
 
-    fig.tight_layout(rect=(0, 0, 0.85, 1))
-    out_path = os.path.join(out_dir, f"timeseries_multi_{metric}_allphases_{round_id}.png")
+    fig.tight_layout(rect=(0, 0, 0.88, 1))
+    out_path = os.path.join(out_dir, f"timeseries_all_phases_{metric}_{round_id}.png")
     save_plot(fig, out_path)
-    
     return out_path
 
-def plot_metric_boxplot(df: pd.DataFrame, metric: str, round_id: str, out_dir: str):
-    """
-    Generates a grouped box plot of a metric by phase and tenant,
-    using the centralized academic publication configuration.
-    """
+
+def plot_metric_barplot_by_phase(df: pd.DataFrame, metric: str, round_id: str, out_dir: str):
+    """Generates a bar plot using the centralized configuration."""
     subset = df[(df['metric_name'] == metric) & (df['round_id'] == round_id)]
     if subset.empty:
-        logger.warning(f"No data for box plot of {metric} in {round_id}")
+        logger.warning(f"No data for bar plot: {metric}, {round_id}. Check input dataframe.")
         return None
 
-    plt.rcParams.update(PUBLICATION_CONFIG['figure_style'])
-
     metric_info = PUBLICATION_CONFIG['metric_display_names'].get(metric, {'name': metric, 'unit': ''})
-    metric_name = metric_info['name']
-    metric_unit = metric_info['unit']
-    tenant_colors = PUBLICATION_CONFIG['tenant_colors']
     tenant_display_names = PUBLICATION_CONFIG['tenant_display_names']
     phase_display_names = PUBLICATION_CONFIG['phase_display_names']
-
-    # Create a color palette mapped to display names
-    color_palette = {
-        tenant_display_names.get(k, k): v 
-        for k, v in tenant_colors.items()
-    }
+    color_palette = {tenant_display_names.get(k, k): v for k, v in PUBLICATION_CONFIG['tenant_colors'].items()}
 
     plot_df = subset.copy()
     plot_df['tenant_id'] = plot_df['tenant_id'].map(tenant_display_names).fillna(plot_df['tenant_id'])
     plot_df['experimental_phase'] = plot_df['experimental_phase'].map(phase_display_names).fillna(plot_df['experimental_phase'])
 
-    # Robustly determine order from available data
-    phase_order = [phase_display_names.get(p, p) for p in PUBLICATION_CONFIG.get('phase_order', []) if phase_display_names.get(p, p) in plot_df['experimental_phase'].unique()]
-    if not phase_order:
-        phase_order = sorted(plot_df['experimental_phase'].unique())
+    fig, ax = plt.subplots(figsize=(12, 7))
+    sns.barplot(data=plot_df, x='experimental_phase', y='metric_value', hue='tenant_id', palette=color_palette, errorbar='sd', capsize=0.1, ax=ax)
 
-    tenant_order = [tenant_display_names.get(t, t) for t in PUBLICATION_CONFIG.get('tenant_order', []) if tenant_display_names.get(t, t) in plot_df['tenant_id'].unique()]
-    if not tenant_order:
-        tenant_order = sorted(plot_df['tenant_id'].unique())
-
-
-    fig, ax = plt.subplots(figsize=(16, 8))
-    sns.boxplot(
-        data=plot_df,
-        x='experimental_phase',
-        y='metric_value',
-        hue='tenant_id',
-        palette=color_palette,
-        order=phase_order,
-        hue_order=tenant_order,
-        showfliers=False,
-        ax=ax
-    )
-
-    ax.set_title(f'Box Plot of {metric_name} by Phase and Tenant (Round {round_id})')
+    ax.set_title(f'Mean {metric_info["name"]} by Phase (Round {round_id})', fontweight='bold')
     ax.set_xlabel('Experimental Phase')
-    ax.set_ylabel(f'{metric_name} ({metric_unit})' if metric_unit else metric_name)
+    ax.set_ylabel(f'Mean {metric_info["name"]} ({metric_info["unit"]})' if metric_info["unit"] else f'Mean {metric_info["name"]}')
     ax.tick_params(axis='x', rotation=45)
-    for label in ax.get_xticklabels():
-        label.set_horizontalalignment("right")
-    
     ax.legend(title='Tenant', bbox_to_anchor=(1.05, 1), loc='upper left')
-    
     ax.grid(True, axis='y', linestyle='--', linewidth=0.5)
-
     fig.tight_layout(rect=(0, 0, 0.85, 1))
-    out_path = os.path.join(out_dir, f"boxplot_{metric}_{round_id}.png")
+    plt.subplots_adjust(bottom=0.2)
+    out_path = os.path.join(out_dir, f"barplot_{metric}_{round_id}.png")
     save_plot(fig, out_path)
-    
     return out_path
 
+
+def plot_metric_boxplot(df: pd.DataFrame, metric: str, round_id: str, out_dir: str):
+    """Generates a box plot using the centralized configuration."""
+    subset = df[(df['metric_name'] == metric) & (df['round_id'] == round_id)]
+    if subset.empty:
+        logger.warning(f"No data for box plot: {metric}, {round_id}. Check input dataframe.")
+        return None
+
+    metric_info = PUBLICATION_CONFIG['metric_display_names'].get(metric, {'name': metric, 'unit': ''})
+    tenant_display_names = PUBLICATION_CONFIG['tenant_display_names']
+    phase_display_names = PUBLICATION_CONFIG['phase_display_names']
+    color_palette = {tenant_display_names.get(k, k): v for k, v in PUBLICATION_CONFIG['tenant_colors'].items()}
+
+    plot_df = subset.copy()
+    plot_df['tenant_id'] = plot_df['tenant_id'].map(tenant_display_names).fillna(plot_df['tenant_id'])
+    plot_df['experimental_phase'] = plot_df['experimental_phase'].map(phase_display_names).fillna(plot_df['experimental_phase'])
+
+    fig, ax = plt.subplots(figsize=(14, 8))
+    sns.boxplot(data=plot_df, x='experimental_phase', y='metric_value', hue='tenant_id', palette=color_palette, showfliers=False, ax=ax)
+
+    ax.set_title(f'Distribution of {metric_info["name"]} by Phase (Round {round_id})', fontweight='bold')
+    ax.set_xlabel('Experimental Phase')
+    ax.set_ylabel(f'{metric_info["name"]} ({metric_info["unit"]})' if metric_info["unit"] else metric_info["name"])
+    ax.tick_params(axis='x', rotation=45)
+    ax.legend(title='Tenant', bbox_to_anchor=(1.05, 1), loc='upper left')
+    ax.grid(True, axis='y', linestyle='--' , linewidth=0.5)
+    fig.tight_layout(rect=(0, 0, 0.85, 1))
+    plt.subplots_adjust(bottom=0.2)
+    out_path = os.path.join(out_dir, f"boxplot_{metric}_{round_id}.png")
+    save_plot(fig, out_path)
+    return out_path
+
+
 def plot_anomalies(df: pd.DataFrame, anomalies: pd.DataFrame, metric: str, phase: str, round_id: str, out_dir: str) -> str | None:
-    """
-    Plots time series with highlighted anomalies, using the centralized
-    academic publication configuration.
-    """
+    """Plots time series with highlighted anomalies using the centralized configuration."""
     if anomalies.empty:
         logger.info(f"No anomalies to plot for: {metric}, {phase}, {round_id}")
         return None
@@ -611,62 +513,39 @@ def plot_anomalies(df: pd.DataFrame, anomalies: pd.DataFrame, metric: str, phase
         logger.warning(f"No data to plot anomalies for: {metric}, {phase}, {round_id}")
         return None
 
-    if not pd.api.types.is_datetime64_any_dtype(subset['timestamp']):
-        subset['timestamp'] = pd.to_datetime(subset['timestamp'], errors='coerce')
-    if not pd.api.types.is_datetime64_any_dtype(anomalies['timestamp']):
-        anomalies['timestamp'] = pd.to_datetime(anomalies['timestamp'], errors='coerce')
-
-    plt.rcParams.update(PUBLICATION_CONFIG['figure_style'])
+    subset['timestamp'] = pd.to_datetime(subset['timestamp'], errors='coerce')
+    anomalies['timestamp'] = pd.to_datetime(anomalies['timestamp'], errors='coerce')
 
     metric_info = PUBLICATION_CONFIG['metric_display_names'].get(metric, {'name': metric, 'unit': ''})
-    metric_name = metric_info['name']
-    metric_unit = metric_info['unit']
     phase_display = PUBLICATION_CONFIG['phase_display_names'].get(phase, phase)
     tenant_colors = PUBLICATION_CONFIG['tenant_colors']
     tenant_display_names = PUBLICATION_CONFIG['tenant_display_names']
 
+    fig, ax = plt.subplots()
     phase_start = subset['timestamp'].min()
 
-    fig, ax = plt.subplots(figsize=(14, 7))
-
-    tenants = sorted(subset['tenant_id'].unique())
-
-    for tenant_id in tenants:
+    for tenant_id in sorted(subset['tenant_id'].unique()):
         group = subset[subset['tenant_id'] == tenant_id].sort_values('timestamp')
-        if group.empty:
-            continue
-        
+        if group.empty: continue
         elapsed = (group['timestamp'] - phase_start).dt.total_seconds()
-        display_name = tenant_display_names.get(tenant_id, tenant_id)
-        color = tenant_colors.get(tenant_id, tenant_colors['default'])
-        
         ax.plot(elapsed, group['metric_value'], marker='o', markersize=3, linestyle='-', 
-                label=display_name, color=color, alpha=0.7)
+                color=tenant_colors.get(tenant_id, '#7f7f7f'), 
+                label=tenant_display_names.get(tenant_id, tenant_id), alpha=0.7)
 
-    anomaly_handles = []
-    for tenant_id in tenants:
+    for tenant_id in sorted(anomalies['tenant_id'].unique()):
         anomaly_group = anomalies[anomalies['tenant_id'] == tenant_id]
-        if anomaly_group.empty:
-            continue
-
+        if anomaly_group.empty: continue
         elapsed = (anomaly_group['timestamp'] - phase_start).dt.total_seconds()
-        color = tenant_colors.get(tenant_id, tenant_colors['default'])
-        
         ax.scatter(elapsed, anomaly_group['metric_value'], color='red', s=100, marker='X', 
                    edgecolors='black', linewidth=1, zorder=10)
 
-    if not anomalies.empty:
-        ax.scatter([], [], color='red', s=100, marker='X', edgecolors='black', 
-                   linewidth=1, label='Anomaly')
-
-    ax.set_title(f'Time Series with Anomalies - {metric_name} - {phase_display} (Round {round_id})')
+    ax.scatter([], [], color='red', s=100, marker='X', edgecolors='black', linewidth=1, label='Anomaly')
+    ax.set_title(f'Anomalies in {metric_info["name"]} - {phase_display} (Round {round_id})', fontweight='bold')
     ax.set_xlabel("Time (seconds from phase start)")
-    ax.set_ylabel(f'{metric_name} ({metric_unit})' if metric_unit else metric_name)
+    ax.set_ylabel(f'{metric_info["name"]} ({metric_info["unit"]})' if metric_info["unit"] else metric_info["name"])
     ax.grid(True, which='both', linestyle='--', linewidth=0.5)
     ax.legend(title='Tenant / Event', bbox_to_anchor=(1.05, 1), loc='upper left')
-
     fig.tight_layout(rect=(0, 0, 0.85, 1))
     out_path = os.path.join(out_dir, f"anomalies_{metric}_{phase.replace(' ', '_')}_{round_id}.png")
     save_plot(fig, out_path)
-    
     return out_path

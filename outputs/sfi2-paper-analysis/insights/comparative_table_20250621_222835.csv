@@ -1,5 +1,0 @@
-Rank,Tenant,Noisy Score,Is Noisy?,Is Victim?,Impacts On,Impacted By,Sensitive To,Recommendations
-1,tenant-nsy,0.6438609917454121,Yes,Yes,"tenant-cpu, tenant-mem, tenant-ntk","tenant-cpu, tenant-mem, tenant-ntk",,"Consider adjusting resource limits to avoid impacting other tenants. | Consider isolating from impacting tenants: tenant-cpu, tenant-mem, tenant-ntk."
-2,tenant-ntk,0.6140086794375454,No,Yes,"tenant-nsy, tenant-cpu, tenant-mem","tenant-nsy, tenant-cpu, tenant-mem",,"Consider isolating from impacting tenants: tenant-nsy, tenant-cpu, tenant-mem."
-3,tenant-mem,0.611643832605861,No,Yes,"tenant-nsy, tenant-cpu, tenant-ntk","tenant-nsy, tenant-cpu, tenant-ntk",,"Consider isolating from impacting tenants: tenant-nsy, tenant-cpu, tenant-ntk."
-4,tenant-cpu,0.5932650793347777,No,Yes,"tenant-nsy, tenant-mem, tenant-ntk","tenant-nsy, tenant-mem, tenant-ntk",,"Consider isolating from impacting tenants: tenant-nsy, tenant-mem, tenant-ntk."
