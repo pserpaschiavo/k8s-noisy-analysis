@@ -552,6 +552,136 @@ def plot_anomalies(df: pd.DataFrame, anomalies: pd.DataFrame, metric: str, phase
     return out_path
 
 
+def generate_enhanced_consolidated_boxplot(
+    df_long: pd.DataFrame,
+    metric: str,
+    output_dir: str,
+    normalize: bool = False,
+    baseline_phase_name: Optional[str] = "Baseline"
+) -> Optional[str]:
+    """
+    Generates an enhanced consolidated boxplot (violin plot) for a metric,
+    comparing experimental phases across all rounds, with optional normalization.
+
+    Args:
+        df_long: DataFrame in long format with data from all rounds.
+        metric: The metric to be plotted.
+        output_dir: Directory to save the plot.
+        normalize: If True, normalizes the data based on the baseline phase mean.
+        baseline_phase_name: The name of the phase to use for normalization.
+
+    Returns:
+        Path to the generated plot file or None if an error occurs.
+    """
+    logger.info(f"Generating enhanced consolidated boxplot for metric: {metric} (Normalized: {normalize})")
+
+    metric_df = df_long[df_long['metric_name'] == metric].copy()
+    if metric_df.empty:
+        logger.warning(f"No data for metric '{metric}'. Boxplot will not be generated.")
+        return None
+
+    # Get display names and colors from config
+    metric_info = PUBLICATION_CONFIG['metric_display_names'].get(metric, {'name': metric, 'unit': ''})
+    metric_name = metric_info['name']
+    metric_unit = metric_info['unit']
+    
+    tenant_display_names = PUBLICATION_CONFIG['tenant_display_names']
+    phase_display_names = PUBLICATION_CONFIG['phase_display_names']
+    color_palette = {tenant_display_names.get(k, k): v for k, v in PUBLICATION_CONFIG['tenant_colors'].items()}
+
+    # Map internal names to display names for plotting
+    metric_df['tenant_id'] = metric_df['tenant_id'].map(tenant_display_names).fillna(metric_df['tenant_id'])
+    
+    # Ensure experimental phases are ordered correctly
+    phase_order = sorted(metric_df['experimental_phase'].unique())
+    metric_df['experimental_phase'] = pd.Categorical(metric_df['experimental_phase'], categories=phase_order, ordered=True)
+
+    y_axis_label = f"{metric_name} ({metric_unit})"
+    plot_title = f"Distribution of {metric_name} by Phase"
+
+    if normalize:
+        if baseline_phase_name not in metric_df['experimental_phase'].unique():
+            logger.error(f"Baseline phase '{baseline_phase_name}' not found for metric '{metric}'. Cannot normalize.")
+            return None
+
+        # Calculate the mean of the baseline phase for each tenant
+        baseline_means = metric_df[metric_df['experimental_phase'] == baseline_phase_name]
+        if baseline_means.empty:
+            logger.warning(f"No data for baseline phase '{baseline_phase_name}' in metric '{metric}'. Skipping normalization.")
+        else:
+            tenant_baselines = baseline_means.groupby('tenant_id')['metric_value'].mean().to_dict()
+            
+            # Avoid division by zero
+            for tenant, mean_val in tenant_baselines.items():
+                if mean_val == 0:
+                    logger.warning(f"Baseline mean for tenant '{tenant}' is zero. Using 1.0 to avoid division by zero.")
+                    tenant_baselines[tenant] = 1.0
+
+            metric_df['metric_value'] = metric_df.apply(
+                lambda row: row['metric_value'] / tenant_baselines.get(row['tenant_id'], 1.0),
+                axis=1
+            )
+            y_axis_label = f"Normalized {metric_name} (Ratio to Baseline)"
+            plot_title += "\n(Normalized by Tenant's Baseline Mean)"
+
+
+    fig, ax = plt.subplots(figsize=(16, 9))
+    
+    # Use violinplot for a richer distribution view
+    sns.violinplot(
+        data=metric_df,
+        x='experimental_phase',
+        y='metric_value',
+        hue='tenant_id',
+        palette=color_palette,
+        inner='quartile',  # Shows quartiles inside the violin
+        linewidth=1.5,
+        ax=ax
+    )
+
+    ax.set_title(plot_title, fontweight='bold')
+    ax.set_xlabel("Experimental Phase")
+    ax.set_ylabel(y_axis_label)
+    ax.tick_params(axis='x', rotation=30, labelsize=12)
+    ax.grid(True, axis='y', linestyle='--', linewidth=0.5)
+    
+    ax.legend(title='Tenant', bbox_to_anchor=(1.02, 1), loc='upper left')
+    fig.tight_layout(rect=(0, 0, 0.9, 1))
+
+    norm_suffix = "_normalized" if normalize else ""
+    output_path = os.path.join(output_dir, f"enhanced_boxplot_{metric}{norm_suffix}.png")
+    save_plot(fig, output_path)
+    return output_path
+
+
+def generate_all_enhanced_consolidated_boxplots(df_long: pd.DataFrame, output_dir: str) -> Dict[str, str]:
+    """
+    Generates and saves all enhanced consolidated boxplots for each metric in the dataframe.
+
+    Args:
+        df_long: The dataframe containing all data.
+        output_dir: The directory to save the plots.
+
+    Returns:
+        A dictionary mapping metric names to the paths of their generated plots.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    plot_paths = {}
+    
+    metrics = df_long['metric_name'].unique()
+    for metric in metrics:
+        # Generate both regular and normalized plots
+        path = generate_enhanced_consolidated_boxplot(df_long, metric, output_dir, normalize=False)
+        if path:
+            plot_paths[f"{metric}_raw"] = path
+            
+        path_norm = generate_enhanced_consolidated_boxplot(df_long, metric, output_dir, normalize=True)
+        if path_norm:
+            plot_paths[f"{metric}_normalized"] = path_norm
+            
+    return plot_paths
+
+
 def generate_consolidated_boxplot(
     df_long: pd.DataFrame,
     metric: str,

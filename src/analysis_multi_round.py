@@ -23,7 +23,10 @@ from sklearn.metrics import silhouette_score
 from datetime import datetime
 
 from src.pipeline_stage import PipelineStage
-from src.visualization.plots import generate_consolidated_boxplot, generate_consolidated_heatmap
+from src.visualization.plots import (
+    generate_consolidated_heatmap,
+    generate_all_enhanced_consolidated_boxplots
+)
 from src.visualization.advanced_plots import generate_all_consolidated_timeseries
 
 # Configuração de logging e estilo
@@ -177,24 +180,36 @@ class MultiRoundAnalysisStage(PipelineStage):
 
             # 6. Visualizações consolidadas
             self.logger.info("Gerando visualizações consolidadas...")
-            results['visualization_paths'] = generate_round_consistency_visualizations(
-                df_long=df_filtered,
-                consistency_results=results.get('metric_consistency', {}),
-                causality_robustness=results.get('causality_robustness', {}),
-                output_dir=output_dir
-            )
+            # Removido o antigo `generate_round_consistency_visualizations`
+            # As visualizações agora são geradas por tipo.
 
-            # 6.1 Time Series Consolidados (NOVA FUNCIONALIDADE v2.0)
+            # 6.1 Boxplots Consolidados (Aprimorado v2.1)
+            self.logger.info("Gerando boxplots consolidados (violin) para todas as métricas...")
+            try:
+                boxplot_dir = os.path.join(output_dir, "boxplots")
+                os.makedirs(boxplot_dir, exist_ok=True)
+                boxplot_paths = generate_all_enhanced_consolidated_boxplots(
+                    df_long=df_filtered,
+                    output_dir=boxplot_dir
+                )
+                results['consolidated_boxplots'] = boxplot_paths
+                self.logger.info(f"✅ Boxplots consolidados gerados: {len(boxplot_paths)} arquivos")
+            except Exception as e:
+                self.logger.error(f"Erro ao gerar boxplots consolidados: {e}")
+                results['consolidated_boxplots'] = {}
+
+            # 6.2 Time Series Consolidados (v2.0)
             self.logger.info("Gerando time series consolidados para todas as métricas...")
             try:
+                timeseries_dir = os.path.join(output_dir, "timeseries")
+                os.makedirs(timeseries_dir, exist_ok=True)
                 timeseries_paths = generate_all_consolidated_timeseries(
                     df_long=df_filtered,
-                    output_dir=output_dir,
+                    output_dir=timeseries_dir, # Diretório específico
                     rounds=rounds,
                     tenants=tenants,
                     normalize_time=True,
-                    add_confidence_bands=True,
-                    add_phase_annotations=True
+                    add_confidence_bands=True
                 )
                 results['consolidated_timeseries'] = timeseries_paths
                 self.logger.info(f"✅ Time series consolidados gerados: {len(timeseries_paths)} métricas")
@@ -384,6 +399,61 @@ class MultiRoundAnalysisStage(PipelineStage):
             f.write("Identifica rounds com comportamento anômalo e mede a estabilidade do comportamento dos tenants através dos rounds usando a Divergência de Kullback-Leibler.\n\n")
             f.write("Para dados detalhados, veja `tenant_stability_scores.csv`.\n\n")
 
+            # --- Seção 4.1: Boxplots Consolidados (Aprimorado v2.1) ---
+            f.write("## 4.1. Boxplots Consolidados (Violin Plots)\n\n")
+            f.write("**🆕 Visualizações aprimoradas** que mostram a distribuição de cada métrica por fase experimental, agregando dados de todos os rounds. Os violin plots oferecem uma visão mais rica da densidade dos dados em comparação com os boxplots tradicionais.\n\n")
+            
+            consolidated_boxplots = all_results.get('consolidated_boxplots', {})
+            if consolidated_boxplots:
+                f.write("### Boxplots por Métrica\n")
+                f.write("Para cada métrica, são gerados dois gráficos:\n")
+                f.write("- **Valores Brutos**: Mostra a distribuição real dos dados.\n")
+                f.write("- **Valores Normalizados**: Normaliza os dados pela média da fase 'Baseline' de cada tenant, permitindo uma comparação justa do *impacto relativo* das fases de stress.\n\n")
+                
+                # Organizar por métrica para apresentar lado a lado
+                metrics_boxplot = sorted(list(set([k.replace('_raw', '').replace('_normalized', '') for k in consolidated_boxplots.keys()])))
+                
+                for metric in metrics_boxplot:
+                    metric_display = metric.replace("_", " ").title()
+                    f.write(f"#### {metric_display}\n")
+                    
+                    raw_path = consolidated_boxplots.get(f"{metric}_raw")
+                    norm_path = consolidated_boxplots.get(f"{metric}_normalized")
+                    
+                    if raw_path:
+                        f.write(f"![Boxplot {metric_display}](./boxplots/{os.path.basename(raw_path)})\n")
+                    if norm_path:
+                        f.write(f"![Boxplot Normalizado {metric_display}](./boxplots/{os.path.basename(norm_path)})\n")
+                    f.write("\n")
+
+            else:
+                f.write("Boxplots consolidados não foram gerados nesta execução.\n\n")
+
+            # --- Seção 4.2: Time Series Consolidados (v2.0) ---
+            f.write("## 4.2. Time Series Consolidados\n\n")
+            f.write("**Visualizações avançadas** que agregam a evolução temporal de todas as métricas através dos rounds, facilitando a identificação de padrões, tendências e divergências comportamentais.\n\n")
+            
+            consolidated_timeseries = all_results.get('consolidated_timeseries', {})
+            if consolidated_timeseries:
+                f.write("### Time Series por Métrica\n")
+                f.write("Cada visualização inclui:\n")
+                f.write("- **Evolução por Round**: Tendências agregadas entre todos os tenants\n")
+                f.write("- **Evolução por Tenant**: Comportamento individual de cada tenant em todos os rounds\n")
+                f.write("- **Tendências Suavizadas**: Médias móveis para identificar padrões de longo prazo\n")
+                f.write("- **Distribuições por Fase**: Boxplots comparando fases experimentais\n\n")
+                
+                for metric, path in consolidated_timeseries.items():
+                    metric_display = metric.replace("_", " ").title()
+                    f.write(f"#### {metric_display}\n")
+                    f.write(f"![Time Series Consolidado - {metric_display}](./timeseries/{os.path.basename(path)})\n\n")
+                    
+                f.write("**Interpretação**: \n")
+                f.write("- **Convergência entre rounds** indica comportamento reproduzível\n")
+                f.write("- **Divergências significativas** podem indicar efeitos de noisy neighbors\n")
+                f.write("- **Padrões temporais consistentes** sugerem relações causais estáveis\n\n")
+            else:
+                f.write("Time series consolidados não foram gerados nesta execução.\n\n")
+
 
             # --- Seção 5: Veredictos de Consenso ---
             f.write("## 5. Veredictos de Consenso\n\n")
@@ -475,6 +545,7 @@ class MultiRoundAnalysisStage(PipelineStage):
             'granger_matrices_by_round': granger_matrices_by_round
         }
 
+
 def generate_robust_causality_graph(
     robust_relationships: Dict[str, Dict[Tuple[str, str], Dict[str, float]]],
     output_dir: str,
@@ -511,664 +582,22 @@ def generate_robust_causality_graph(
     pos = nx.spring_layout(G, k=0.9, iterations=50)
 
     # Desenhar nós com tamanho proporcional ao out-degree (influência).
-    node_sizes: List[int] = [int(500 + 1000 * G.out_degree(n)) for n in G.nodes()]
-    nx.draw_networkx_nodes(G, pos, node_size=node_sizes, node_color='skyblue', alpha=0.8)
+    node_sizes = [int(500 + 1000 * G.out_degree(n)) for n in G.nodes()]
+    nx.draw_networkx_nodes(G, pos, node_size=node_sizes, node_color='skyblue', alpha=0.8) # type: ignore
 
     # Desenhar arestas com espessura proporcional à força da causalidade (peso).
-    edge_weights: List[float] = [float(G[u][v]['weight']) for u, v in G.edges()]
+    edge_weights = [float(G[u][v]['weight']) for u, v in G.edges()]
     
     if edge_weights:
         # Normalizar pesos para uma faixa de espessura visualmente agradável (e.g., 1 a 10).
         min_w = min(edge_weights)
         max_w = max(edge_weights)
         
-        edge_widths: List[float]
+        edge_widths = []
         if max_w > min_w:
-            edge_widths = [float(1.0 + 9.0 * (w - min_w) / (max_w - min_w)) for w in edge_weights]
+            edge_widths = [1.0 + 9.0 * (w - min_w) / (max_w - min_w) for w in edge_weights]
         else:
             # Todos os pesos são iguais, usar uma espessura média.
             edge_widths = [5.0] * len(edge_weights)
             
-        nx.draw_networkx_edges(G, pos, width=edge_widths, alpha=0.6, edge_color='gray', arrowsize=20)
-
-    # Desenhar rótulos dos nós
-    nx.draw_networkx_labels(G, pos, font_size=10, font_weight='bold')
-
-    plt.title(f"Grafo de Causalidade Robusto para a Métrica: {metric}", fontsize=16)
-    plt.axis('off')
-    
-    output_path = os.path.join(output_dir, f"robust_causality_graph_{metric}.png")
-    try:
-        plt.savefig(output_path, dpi=300, bbox_inches='tight')
-        logger.info(f"Grafo de causalidade robusto para '{metric}' salvo em: {output_path}")
-        plt.close()
-        return output_path
-    except Exception as e:
-        logger.error(f"Erro ao salvar o grafo de causalidade para '{metric}': {e}")
-        plt.close()
-        return None
-
-
-def analyze_round_consistency(
-    df_long: pd.DataFrame,
-    metrics: List[str],
-    tenants: List[str],
-    output_dir: str
-) -> Dict[str, Any]:
-    """
-    Analisa a consistência dos dados entre diferentes rounds do experimento usando
-    coeficiente de variação (CV) e teste de Friedman.
-    
-    Args:
-        df_long: DataFrame consolidado em formato long.
-        metrics: Lista de métricas para analisar.
-        tenants: Lista de tenants para analisar.
-        output_dir: Diretório para salvar resultados.
-        
-    Returns:
-        Dicionário com resultados da análise de consistência.
-    """
-    # Inicializar resultados
-    consistency_results = {
-        'cv_by_metric': {},
-        'cv_by_tenant': {},
-        'friedman_tests': {},
-        'consistent_tenants': {},
-        'inconsistent_tenants': {}
-    }
-    
-    # Para cada métrica e tenant, calcular o CV entre rounds
-    for metric in metrics:
-        cv_values = {}
-        friedman_p_values = {}
-        
-        for tenant in tenants:
-            # Filtrar dados para este tenant e métrica
-            filtered_df = df_long[
-                (df_long['metric_name'] == metric) & 
-                (df_long['tenant_id'] == tenant)
-            ]
-            
-            if filtered_df.empty:
-                continue
-                
-            # Agrupar por round e calcular estatísticas
-            stats_by_round = filtered_df.groupby('round_id')['metric_value'].agg(
-                ['mean', 'std', 'count']
-            )
-            
-            if len(stats_by_round) <= 1:
-                continue
-            
-            # Calcular CV (Coeficiente de Variação) entre as médias dos rounds
-            cv = stats_by_round['mean'].std() / stats_by_round['mean'].mean() * 100 if stats_by_round['mean'].mean() != 0 else np.nan
-            cv_values[tenant] = cv
-            
-            # Preparar dados para teste de Friedman
-            if len(stats_by_round) >= 3:  # Friedman requer pelo menos 3 grupos
-                # Reorganizar dados para o formato necessário para o teste de Friedman
-                round_data = {}
-                for round_id in stats_by_round.index:
-                    round_data[round_id] = filtered_df[filtered_df['round_id'] == round_id]['metric_value'].values
-                
-                # Equalizar tamanhos para o teste de Friedman (requer mesmo número de observações)
-                min_size = min(len(data) for data in round_data.values())
-                if min_size > 5:  # Garantir amostra mínima significativa
-                    friedman_data = np.array([data[:min_size] for data in round_data.values()])
-                    statistic, p_value = stats.friedmanchisquare(*friedman_data)
-                    friedman_p_values[tenant] = p_value
-        
-        if cv_values:
-            consistency_results['cv_by_metric'][metric] = cv_values
-            
-            # Classificar tenants como consistentes ou inconsistentes
-            consistent = {tenant: cv for tenant, cv in cv_values.items() if cv < 15}  # CV < 15% indica boa consistência
-            inconsistent = {tenant: cv for tenant, cv in cv_values.items() if cv >= 15}
-            
-            consistency_results['consistent_tenants'][metric] = consistent
-            consistency_results['inconsistent_tenants'][metric] = inconsistent
-        
-        if friedman_p_values:
-            consistency_results['friedman_tests'][metric] = friedman_p_values
-    
-    # Calcular CV médio por tenant (em todas as métricas)
-    tenant_avg_cv = {}
-    for metric, tenant_cvs in consistency_results['cv_by_metric'].items():
-        for tenant, cv in tenant_cvs.items():
-            if not np.isnan(cv):
-                if tenant not in tenant_avg_cv:
-                    tenant_avg_cv[tenant] = []
-                tenant_avg_cv[tenant].append(cv)
-    
-    # Finalizar cálculo da média
-    for tenant, cvs in tenant_avg_cv.items():
-        consistency_results['cv_by_tenant'][tenant] = np.mean(cvs)
-    
-    # Salvar resultados
-    cv_df = pd.DataFrame.from_dict({
-        metric: pd.Series(tenant_cvs) for metric, tenant_cvs in consistency_results['cv_by_metric'].items()
-    })
-    cv_df.to_csv(os.path.join(output_dir, 'round_consistency_cv.csv'))
-    
-    return consistency_results
-
-
-def analyze_causality_robustness(
-    te_matrices_by_round: Dict[str, Dict[str, pd.DataFrame]],
-    granger_matrices_by_round: Dict[str, Dict[str, pd.DataFrame]],
-    output_dir: str
-) -> Dict[str, Any]:
-    """
-    Analisa a robustez das relações causais detectadas entre diferentes rounds.
-    
-    Args:
-        te_matrices_by_round: Matrizes de transfer entropy por round.
-        granger_matrices_by_round: Matrizes de causalidade de Granger por round.
-        output_dir: Diretório para salvar resultados.
-        
-    Returns:
-        Dicionário com resultados da análise de robustez causal.
-    """
-    results = {
-        'robust_causal_relationships': {},
-        'robust_te_scores': {},
-        'inconsistent_causal_relationships': {},
-        'metrics_with_consistent_causality': []
-    }
-    
-    # Verificar quais métricas existem em todos os rounds (tanto TE quanto Granger)
-    common_metrics_te = set()
-    for round_id, te_matrices in te_matrices_by_round.items():
-        if round_id == list(te_matrices_by_round.keys())[0]:
-            common_metrics_te = set(te_matrices.keys())
-        else:
-            common_metrics_te = common_metrics_te.intersection(set(te_matrices.keys()))
-    
-    # Analisar robustez do Transfer Entropy
-    for metric in common_metrics_te:
-        # Coletar matrizes de TE para esta métrica em todos os rounds
-        te_matrices = [
-            matrices[metric] for round_id, matrices in te_matrices_by_round.items() 
-            if metric in matrices
-        ]
-        
-        if len(te_matrices) < 2:
-            continue
-            
-        # Identificar pares de tenants presentes em todas as matrizes
-        common_sources = set(te_matrices[0].columns)
-        common_targets = set(te_matrices[0].index)
-        
-        for matrix in te_matrices[1:]:
-            common_sources = common_sources.intersection(set(matrix.columns))
-            common_targets = common_targets.intersection(set(matrix.index))
-        
-        # Calcular média e desvio padrão do TE para cada par de tenants
-        robust_pairs = {}
-        inconsistent_pairs = {}
-        for source in common_sources:
-            for target in common_targets:
-                if source == target:  # Pular auto-relações
-                    continue
-                    
-                # Extrair valores de TE de todos os rounds
-                te_values = [matrix.loc[target, source] for matrix in te_matrices]
-                
-                # Calcular média, desvio e CV
-                mean_te = np.mean(np.array(te_values))
-                std_te = np.std(np.array(te_values))
-                cv = (std_te / mean_te * 100) if mean_te > 0 else np.inf
-                
-                # Determinar se a relação causal é robusta (CV < 25% e média > 0.05)
-                if cv < 25 and mean_te > 0.05:
-                    robust_pairs[(source, target)] = {
-                        'mean_te': mean_te,
-                        'std_te': std_te,
-                        'cv': cv,
-                        'values': te_values
-                    }
-                elif mean_te > 0.05:  # Relação causal significativa, mas inconsistente
-                    inconsistent_pairs[(source, target)] = {
-                        'mean_te': mean_te,
-                        'std_te': std_te,
-                        'cv': cv,
-                        'values': te_values
-                    }
-        
-        if robust_pairs:
-            results['robust_causal_relationships'][metric] = robust_pairs
-            results['robust_te_scores'][metric] = {
-                f"{source}->{target}": data['mean_te'] 
-                for (source, target), data in robust_pairs.items()
-            }
-            
-            if len(robust_pairs) >= 2:  # Pelo menos duas relações causais robustas
-                results['metrics_with_consistent_causality'].append(metric)
-        
-        if inconsistent_pairs:
-            results['inconsistent_causal_relationships'][metric] = inconsistent_pairs
-    
-    # Salvar resultados em CSV
-    robust_data = []
-    for metric, pairs in results['robust_causal_relationships'].items():
-        for (source, target), stats in pairs.items():
-            robust_data.append({
-                'metric': metric,
-                'source': source,
-                'target': target,
-                'mean_te': stats['mean_te'],
-                'std_te': stats['std_te'],
-                'cv': stats['cv']
-            })
-    
-    if robust_data:
-        pd.DataFrame(robust_data).to_csv(os.path.join(output_dir, 'robust_causal_relationships.csv'), index=False)
-    
-    return results
-
-
-def analyze_behavioral_divergence(
-    df_long: pd.DataFrame,
-    metrics: List[str],
-    tenants: List[str],
-    output_dir: str
-) -> Dict[str, Any]:
-    """
-    Realiza análise de divergência comportamental entre rounds usando distância de
-    Kullback-Leibler e clustering hierárquico.
-    
-    Args:
-        df_long: DataFrame consolidado em formato long.
-        metrics: Lista de métricas para analisar.
-        tenants: Lista de tenants para analisar.
-        output_dir: Diretório para salvar resultados.
-        
-    Returns:
-        Dicionário com resultados da análise de divergência.
-    """
-    results = {
-        'kl_divergence': {},
-        'clustered_rounds': {},
-        'anomalous_rounds': {},
-        'tenant_stability': {}
-    }
-    
-    # Para cada métrica e tenant, calcular a divergência de KL entre distributions por round
-    for metric in metrics:
-        metric_results = {}
-        
-        for tenant in tenants:
-            # Filtrar dados para este tenant e métrica
-            filtered_df = df_long[
-                (df_long['metric_name'] == metric) & 
-                (df_long['tenant_id'] == tenant)
-            ]
-            
-            if filtered_df.empty:
-                continue
-            
-            rounds = filtered_df['round_id'].unique()
-            if len(rounds) < 2:
-                continue
-                
-            # Calcular KL Divergence entre cada par de rounds
-            kl_distances = {}
-            distributions = {}
-            
-            # Preparar distribuições dos valores para cada round
-            for round_id in rounds:
-                round_data = filtered_df[filtered_df['round_id'] == round_id]['metric_value']
-                
-                # Criar histograma para estimar densidade
-                hist, bin_edges = np.histogram(round_data, bins=10, density=True)
-                # Evitar zeros (que causam infinitos na KL divergence)
-                hist = hist + 1e-10
-                hist = hist / hist.sum()  # Normalizar novamente
-                
-                distributions[round_id] = hist
-            
-            # Calcular KL divergence para cada par de rounds
-            for i, round1 in enumerate(rounds):
-                for round2 in rounds[i+1:]:
-                    # Cálculo simétrico de divergência: KL(P||Q) + KL(Q||P)
-                    kl1 = distance.jensenshannon(distributions[round1], distributions[round2])
-                    kl2 = distance.jensenshannon(distributions[round2], distributions[round1])
-                    symmetric_kl = (kl1 + kl2) / 2
-                    
-                    kl_distances[(round1, round2)] = symmetric_kl
-            
-            # Se temos pelo menos 3 rounds, podemos fazer clustering
-            if len(rounds) >= 3:
-                # Criar matriz de distância para clustering
-                n_rounds = len(rounds)
-                distance_matrix = np.zeros((n_rounds, n_rounds))
-                
-                for i, round1 in enumerate(rounds):
-                    for j, round2 in enumerate(rounds):
-                        if i == j:
-                            distance_matrix[i, j] = 0
-                        elif (round1, round2) in kl_distances:
-                            distance_matrix[i, j] = kl_distances[(round1, round2)]
-                        else:
-                            distance_matrix[i, j] = kl_distances[(round2, round1)]
-                
-                # Aplicar clustering hierárquico
-                clustering = AgglomerativeClustering(
-                    n_clusters=None,
-                    distance_threshold=0.05,  # Ajustar conforme necessário
-                    metric='precomputed',
-                    linkage='average'
-                ).fit(distance_matrix)
-                
-                # Verificar se algum round está isolado (potencialmente anômalo)
-                labels = clustering.labels_
-                unique_clusters = np.unique(labels)
-                anomalous_rounds = []
-                
-                for cluster in unique_clusters:
-                    cluster_size = sum(labels == cluster)
-                    if cluster_size == 1:  # Round isolado
-                        anomalous_round_idx = np.where(labels == cluster)[0][0]
-                        anomalous_rounds.append(rounds[anomalous_round_idx])
-                
-                # Organizar rounds por cluster
-                clusters = {}
-                for i, label in enumerate(labels):
-                    if label not in clusters:
-                        clusters[label] = []
-                    clusters[label].append(rounds[i])
-                
-                # Armazenar resultado do clustering
-                if clusters:
-                    results['clustered_rounds'][(tenant, metric)] = clusters
-                    
-                if anomalous_rounds:
-                    results['anomalous_rounds'][(tenant, metric)] = anomalous_rounds
-            
-            # Armazenar KL divergences
-            if kl_distances:
-                metric_results[(tenant)] = {
-                    'kl_distances': kl_distances,
-                    # Calcular métrica de estabilidade (inverso da média das divergências)
-                    'stability_score': 1 / (1 + np.mean(list(kl_distances.values())))
-                }
-        
-        if metric_results:
-            results['kl_divergence'][metric] = metric_results
-            
-            # Armazenar scores de estabilidade por tenant
-            for tenant, data in metric_results.items():
-                if tenant not in results['tenant_stability']:
-                    results['tenant_stability'][tenant] = []
-                results['tenant_stability'][tenant].append(data['stability_score'])
-    
-    # Finalizar scores de estabilidade por tenant
-    for tenant in results['tenant_stability']:
-        results['tenant_stability'][tenant] = np.mean(results['tenant_stability'][tenant])
-    
-    # Salvar resultados em CSV
-    stability_df = pd.DataFrame({
-        'tenant': list(results['tenant_stability'].keys()),
-        'stability_score': list(results['tenant_stability'].values())
-    })
-    
-    if not stability_df.empty:
-        stability_df.to_csv(os.path.join(output_dir, 'tenant_stability_scores.csv'), index=False)
-    
-    return results
-
-
-def aggregate_round_consensus(
-    df_long: pd.DataFrame,
-    te_matrices_by_round: Dict[str, Dict[str, pd.DataFrame]],
-    consistency_results: Dict[str, Any],
-    output_dir: str
-) -> Dict[str, Any]:
-    """
-    Realiza agregação de consenso entre rounds, produzindo veredictos consolidados
-    sobre o comportamento do sistema.
-    
-    Args:
-        df_long: DataFrame consolidado em formato long.
-        te_matrices_by_round: Matrizes de transfer entropy por round.
-        consistency_results: Resultados da análise de consistência.
-        output_dir: Diretório para salvar resultados.
-        
-    Returns:
-        Dicionário com resultados da agregação de consenso.
-    """
-    results = {
-        'noisy_tenants_consensus': {},
-        'causal_relationships_consensus': {},
-        'tenant_influence_ranking': {}
-    }
-    
-    # Extrair rounds e métricas
-    rounds = df_long['round_id'].unique()
-    metrics = df_long['metric_name'].unique()
-    
-    # Para cada métrica, determinar os "noisy tenants" e relações causais por consenso
-    for metric in metrics:
-        # Verificar se temos matrizes de TE para esta métrica em todos os rounds
-        te_available = all(
-            round_id in te_matrices_by_round and 
-            metric in te_matrices_by_round[round_id]
-            for round_id in rounds
-        )
-        
-        if not te_available:
-            continue
-        
-        # Coletar "votos" para relações causais significativas em cada round
-        causal_relationship_votes = {}
-        noisy_tenant_votes = {}
-        
-        for round_id in rounds:
-            te_matrix = te_matrices_by_round[round_id][metric]
-            
-            # Identificar tenants com maior "outgoing causality"
-            tenant_outgoing_te = {}
-            for source in te_matrix.columns:
-                outgoing = te_matrix[source].drop(source) if source in te_matrix.index else te_matrix[source]
-                significant_outgoing = outgoing[outgoing > 0.05]  # Threshold de significância
-                
-                # Calcular score de influência do tenant
-                influence_score = significant_outgoing.sum() * len(significant_outgoing)
-                tenant_outgoing_te[source] = influence_score
-                
-                # Registrar "voto" para tenant barulhento se tiver influência significativa
-                if influence_score > 0.1:  # Threshold empírico
-                    if source not in noisy_tenant_votes:
-                        noisy_tenant_votes[source] = 0
-                    noisy_tenant_votes[source] += 1
-                
-                # Registrar votos para cada relação causal significativa
-                for target, te_value in significant_outgoing.items():
-                    relationship = (source, target)
-                    if relationship not in causal_relationship_votes:
-                        causal_relationship_votes[relationship] = 0
-                    causal_relationship_votes[relationship] += 1
-        
-        # Determinar consenso para "noisy tenants" (mais de 75% dos rounds)
-        min_votes_noisy = len(rounds) * 0.75
-        consensus_noisy_tenants = {
-            tenant: votes for tenant, votes in noisy_tenant_votes.items() 
-            if votes > min_votes_noisy
-        }
-        
-        # Determinar consenso para relações causais (mais de 75% dos rounds)
-        min_votes_causal = len(rounds) * 0.75
-        consensus_causal_relationships = {
-            relationship: votes for relationship, votes in causal_relationship_votes.items()
-            if votes > min_votes_causal
-        }
-        
-        # Armazenar resultados
-        if consensus_noisy_tenants:
-            results['noisy_tenants_consensus'][metric] = consensus_noisy_tenants
-            
-        if consensus_causal_relationships:
-            results['causal_relationships_consensus'][metric] = consensus_causal_relationships
-            
-        # Criar ranking de influência dos tenants por consenso
-        tenant_scores = {}
-        for (source, target), votes in consensus_causal_relationships.items():
-            if source not in tenant_scores:
-                tenant_scores[source] = {'total_influence': 0, 'targets': 0, 'vote_strength': 0}
-                
-            # Ponderação pelo número de votos e alvos
-            tenant_scores[source]['targets'] += 1
-            tenant_scores[source]['vote_strength'] += votes
-            
-        # Calcular score final
-        for tenant in tenant_scores:
-            tenant_scores[tenant]['total_influence'] = (
-                tenant_scores[tenant]['targets'] * 
-                tenant_scores[tenant]['vote_strength'] / len(rounds)
-            )
-        
-        # Ordenar por influência
-        tenant_ranking = {
-            tenant: score['total_influence'] 
-            for tenant, score in sorted(
-                tenant_scores.items(), 
-                key=lambda x: x[1]['total_influence'], 
-                reverse=True
-            )
-        }
-        
-        if tenant_ranking:
-            results['tenant_influence_ranking'][metric] = tenant_ranking
-    
-    # Salvar resultados
-    # Tenants barulhentos por consenso
-    noisy_data = []
-    for metric, tenants in results['noisy_tenants_consensus'].items():
-        for tenant, votes in tenants.items():
-            noisy_data.append({
-                'metric': metric,
-                'tenant': tenant,
-                'votes': votes,
-                'total_rounds': len(rounds),
-                'vote_percentage': (votes / len(rounds)) * 100
-            })
-    
-    if noisy_data:
-        pd.DataFrame(noisy_data).to_csv(
-            os.path.join(output_dir, 'consensus_noisy_tenants.csv'), 
-            index=False
-        )
-    
-    # Relações causais por consenso
-    causal_data = []
-    for metric, relationships in results['causal_relationships_consensus'].items():
-        for (source, target), votes in relationships.items():
-            causal_data.append({
-                'metric': metric,
-                'source': source,
-                'target': target,
-                'votes': votes,
-                'total_rounds': len(rounds),
-                'vote_percentage': (votes / len(rounds)) * 100
-            })
-    
-    if causal_data:
-        pd.DataFrame(causal_data).to_csv(
-            os.path.join(output_dir, 'consensus_causal_relationships.csv'), 
-            index=False
-        )
-    
-    # Ranking de influência
-    ranking_data = []
-    for metric, ranking in results['tenant_influence_ranking'].items():
-        for tenant, score in ranking.items():
-            ranking_data.append({
-                'metric': metric,
-                'tenant': tenant,
-                'influence_score': score
-            })
-    
-    if ranking_data:
-        pd.DataFrame(ranking_data).to_csv(
-            os.path.join(output_dir, 'tenant_influence_ranking.csv'), 
-            index=False
-        )
-    
-    return results
-
-
-def generate_round_consistency_visualizations(
-    df_long: pd.DataFrame,
-    consistency_results: Dict[str, Any],
-    causality_robustness: Dict[str, Any],
-    output_dir: str
-) -> List[str]:
-    """
-    Gera visualizações para análise de consistência entre rounds, incluindo
-    gráficos com intervalos de confiança e heatmaps.
-    
-    Args:
-        df_long: DataFrame consolidado em formato long.
-        consistency_results: Resultados da análise de consistência.
-        causality_robustness: Resultados da análise de robustez causal.
-        output_dir: Diretório para salvar resultados.
-        
-    Returns:
-        Lista com caminhos das visualizações geradas.
-    """
-    visualization_paths = []
-    
-    # 1. Gráfico de CV por métrica e tenant
-    if consistency_results.get('cv_by_metric'):
-        cv_data = []
-        for metric, tenant_cvs in consistency_results['cv_by_metric'].items():
-            for tenant, cv in tenant_cvs.items():
-                if not np.isnan(cv):
-                    cv_data.append({
-                        'metric': metric,
-                        'tenant': tenant,
-                        'cv': cv
-                    })
-        
-        if cv_data:
-            cv_df = pd.DataFrame(cv_data)
-            pivot_table = cv_df.pivot_table(
-                index='tenant', 
-                columns='metric', 
-                values='cv',
-                aggfunc='mean'
-            )
-            
-            plt.figure(figsize=(12, 8))
-            sns.heatmap(
-                pivot_table,
-                annot=True,
-                cmap='viridis',
-                fmt=".1f",
-                linewidths=0.5,
-                cbar_kws={'label': 'Coeficiente de Variação (%)'}
-            )
-            plt.title('Coeficiente de Variação entre Rounds por Tenant e Métrica')
-            plt.tight_layout()
-            
-            cv_heatmap_path = os.path.join(output_dir, 'cv_heatmap_by_tenant_metric.png')
-            plt.savefig(cv_heatmap_path, dpi=300, bbox_inches='tight')
-            plt.close()
-            visualization_paths.append(cv_heatmap_path)
-    
-    # 2. Gerar boxplots consolidados
-    logger.info("Gerando boxplots consolidados...")
-    metrics = df_long['metric_name'].unique()
-    for metric in metrics:
-        try:
-            path = generate_consolidated_boxplot(
-                df_long=df_long,
-                metric=metric,
-                output_dir=output_dir
-            )
-            if path:
-                visualization_paths.append(path)
-        except Exception as e:
-            logger.warning(f"Erro ao gerar boxplot consolidado para a métrica {metric}: {e}")
-            
-    return visualization_paths
+        nx.draw_networkx_edges(G, pos, width=edge_widths, alpha=0.6, edge_color='gray', arrowsize=20) # type: ignore

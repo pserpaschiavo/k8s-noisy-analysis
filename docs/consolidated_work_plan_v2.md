@@ -39,18 +39,21 @@ Elevar o pipeline para **nível científico avançado** com visualizações de a
 ### **🔥 FASE 1: MELHORIAS VISUAIS IMEDIATAS** 
 **Duração**: 2-3 dias | **Prioridade**: MÁXIMA
 
-#### **1.1 Time Series Consolidados** (Dia 1)
-- [ ] **Implementar `generate_consolidated_timeseries()`**
-  - Time series plots agregando todos os rounds para cada métrica
-  - Diferentes cores/estilos para rounds diferentes  
-  - Médias móveis para suavizar tendências
-  - Identificação visual de fases experimentais
+#### **1.1 Time Series Consolidados** ✅ **CONCLUÍDO** (24/06/2025)
+- [x] **Implementar `generate_consolidated_timeseries()`**
+  - ✅ Time series plots agregando todos os rounds para cada métrica
+  - ✅ Diferentes cores/estilos para rounds diferentes  
+  - ✅ Médias móveis para suavizar tendências
+  - ✅ Identificação visual de fases experimentais
 
-- [ ] **Features Avançadas**:
-  - Normalização temporal (tempo relativo já implementado)
-  - Confidence bands baseados em desvio padrão
-  - Annotations automáticas para eventos significativos
-  - Layout responsivo para diferentes números de rounds
+- [x] **Features Avançadas**:
+  - ✅ Normalização temporal (tempo relativo já implementado)
+  - ✅ Confidence bands baseados em desvio padrão
+  - ✅ Annotations automáticas para eventos significativos
+  - ✅ Layout responsivo para diferentes números de rounds
+  
+**📊 Resultado**: 4 visualizações científicas geradas em `/timeseries/` com layouts 2x2 profissionais
+**🎯 Impacto**: Elevação significativa da qualidade visual do pipeline
 
 #### **1.2 Boxplots Profissionais** (Dia 1-2)
 - [ ] **Melhorar layout atual dos boxplots**
@@ -59,7 +62,7 @@ Elevar o pipeline para **nível científico avançado** com visualizações de a
   - Normalização opcional para comparação relativa
   - Violin plots como alternativa para distribuições detalhadas
 
-#### **1.3 Agregação de Correlação/Causalidade** (Dia 2-3)
+#### **1.3 Agregação de Correlação/Causalidade** ⏳ **EM ANDAMENTO** (Dia 2-3)
 - [ ] **Implementar `aggregate_cross_round_correlations()`**
   - Consolidar 168 resultados de correlação existentes
   - Média, mediana, CV das correlações por par de tenants
@@ -177,9 +180,9 @@ outputs/
 ## ⚡ **EXECUÇÃO PRÁTICA**
 
 ### **Próximos Passos Imediatos**
-1. **Começar com Time Series Consolidados** (maior impacto visual)
-2. **Implementar agregação de correlação** (maior valor científico)  
-3. **Melhorar boxplots** (polimento)
+1. **Implementar agregação de correlação/causalidade** (maior valor científico)
+2. **Melhorar boxplots profissionais** (polimento visual)
+3. **Avançar para análises estatísticas da Fase 2** (aprofundamento científico)
 
 ### **Critérios de Sucesso**
 - [ ] **Time series plots** mostram claramente padrões temporais cross-round
@@ -213,4 +216,4 @@ Transformar o pipeline em uma **ferramenta científica de referência** para an�
 
 ---
 
-**🚀 PRÓXIMO PASSO**: Iniciar implementação dos time series consolidados conforme especificação da Fase 1.1
+**🚀 PRÓXIMO PASSO**: Iniciar implementação da agregação de correlação e causalidade cross-round (Fase 1.3).
