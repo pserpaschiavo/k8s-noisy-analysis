@@ -151,7 +151,13 @@ class CausalityAnalyzer:
         Returns:
             A dictionary containing the computed matrices and paths to the generated plots.
         """
+        # Criar um subdiretório específico para o round para manter os resultados organizados
+        round_output_dir = os.path.join(self.output_dir, round_id)
+        os.makedirs(round_output_dir, exist_ok=True)
+        
         logger.info(f"Starting causality analysis for metric='{metric}', phase='{phase}', round='{round_id}'")
+        logger.info(f"Output will be saved to: {round_output_dir}")
+        
         plot_paths = []
         results = {
             "granger_matrix": pd.DataFrame(),
@@ -164,8 +170,12 @@ class CausalityAnalyzer:
         results["granger_matrix"] = granger_p_matrix
 
         if not granger_p_matrix.empty:
+            # Salvar a matriz de p-valores de Granger em CSV
+            granger_csv_path = os.path.join(round_output_dir, f"granger_matrix_{metric}_{phase}.csv")
+            granger_p_matrix.to_csv(granger_csv_path)
+            
             # Define output path for the graph
-            graph_filename = os.path.join(self.output_dir, f"granger_graph_{metric}_{phase}_{round_id}.png")
+            graph_filename = os.path.join(round_output_dir, f"granger_graph_{metric}_{phase}.png")
             
             # Plot and save Granger causality graph
             path = plot_causality_graph(
@@ -182,8 +192,8 @@ class CausalityAnalyzer:
                 causality_matrix=granger_p_matrix,
                 metric=metric,
                 phase=phase,
-                round_id=round_id,
-                out_dir=self.output_dir,
+                round_id=round_id, # Mantido para fins de título no plot
+                out_dir=round_output_dir, # Salvar no diretório do round
                 method='Granger',
                 value_type='p-value'
             )
@@ -194,11 +204,15 @@ class CausalityAnalyzer:
         results["te_matrix"] = te_matrix
 
         if not te_matrix.empty:
+            # Salvar a matriz de Transfer Entropy em CSV
+            te_csv_path = os.path.join(round_output_dir, f"te_matrix_{metric}_{phase}.csv")
+            te_matrix.to_csv(te_csv_path)
+            
             # Define a threshold for TE score to be considered significant
             te_threshold = 0.1  # This threshold may require tuning
 
             # Plot and save Transfer Entropy causality graph
-            te_graph_filename = os.path.join(self.output_dir, f"te_graph_{metric}_{phase}_{round_id}.png")
+            te_graph_filename = os.path.join(round_output_dir, f"te_graph_{metric}_{phase}.png")
             path = plot_causality_graph(
                 causality_matrix=te_matrix,
                 out_path=te_graph_filename,
@@ -214,8 +228,8 @@ class CausalityAnalyzer:
                 causality_matrix=te_matrix,
                 metric=metric,
                 phase=phase,
-                round_id=round_id,
-                out_dir=self.output_dir,
+                round_id=round_id, # Mantido para fins de título no plot
+                out_dir=round_output_dir, # Salvar no diretório do round
                 method='TE',
                 value_type='score'
             )

@@ -11,6 +11,7 @@ import logging
 import networkx as nx
 import matplotlib.lines as mlines
 import matplotlib.patches as mpatches
+from typing import Dict, List, Optional
 
 from src.visualization_config import PUBLICATION_CONFIG
 
@@ -549,3 +550,78 @@ def plot_anomalies(df: pd.DataFrame, anomalies: pd.DataFrame, metric: str, phase
     out_path = os.path.join(out_dir, f"anomalies_{metric}_{phase.replace(' ', '_')}_{round_id}.png")
     save_plot(fig, out_path)
     return out_path
+
+
+def generate_consolidated_boxplot(
+    df_long: pd.DataFrame,
+    metric: str,
+    output_dir: str
+) -> Optional[str]:
+    """
+    Gera um boxplot consolidado para uma métrica, comparando fases experimentais
+    entre todos os rounds.
+
+    Args:
+        df_long: DataFrame em formato long com dados de todos os rounds.
+        metric: A métrica a ser plotada.
+        output_dir: Diretório para salvar o gráfico.
+
+    Returns:
+        Caminho do arquivo de imagem do gráfico gerado ou None em caso de erro.
+    """
+    logger.info(f"Gerando boxplot consolidado para a métrica: {metric}")
+    
+    fig, ax = plt.subplots(figsize=(12, 8))
+    
+    metric_df = df_long[df_long['metric_name'] == metric]
+    
+    if metric_df.empty:
+        logger.warning(f"Não há dados para a métrica '{metric}'. O boxplot não será gerado.")
+        plt.close(fig)
+        return None
+
+    sns.boxplot(data=metric_df, x='experimental_phase', y='metric_value', hue='tenant_id', ax=ax)
+    
+    ax.set_title(f"Boxplot Consolidado para {metric} (Todos os Rounds)")
+    ax.set_xlabel("Fase Experimental")
+    ax.set_ylabel("Valor da Métrica")
+    plt.xticks(rotation=45)
+    
+    output_path = os.path.join(output_dir, f"consolidated_boxplot_{metric}.png")
+    save_plot(fig, output_path)
+    return output_path
+
+def generate_consolidated_heatmap(
+    aggregated_matrix: pd.DataFrame,
+    output_dir: str,
+    title: str,
+    filename: str
+) -> Optional[str]:
+    """
+    Gera um heatmap consolidado a partir de uma matriz agregada.
+
+    Args:
+        aggregated_matrix: Matriz de dados agregados (e.g., Jaccard, Spearman).
+        output_dir: Diretório para salvar o gráfico.
+        title: Título do gráfico.
+        filename: Nome do arquivo de saída.
+
+    Returns:
+        Caminho do arquivo de imagem do gráfico gerado ou None em caso de erro.
+    """
+    logger.info(f"Gerando heatmap consolidado para: {title}")
+    
+    if aggregated_matrix.empty:
+        logger.warning(f"Matriz agregada vazia para '{title}'. O heatmap não será gerado.")
+        return None
+
+    fig, ax = plt.subplots(figsize=(12, 8))
+    sns.heatmap(aggregated_matrix, annot=True, cmap="viridis", fmt=".2f", ax=ax)
+    
+    ax.set_title(title)
+    ax.set_xlabel("Par de Rounds")
+    ax.set_ylabel("Métrica")
+    
+    output_path = os.path.join(output_dir, filename)
+    save_plot(fig, output_path)
+    return output_path

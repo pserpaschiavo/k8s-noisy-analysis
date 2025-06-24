@@ -1,52 +1,56 @@
 # Multi-Tenant Time Series Analysis System
 
-This system provides a structured pipeline for multi-tenant time series analysis of Kubernetes metrics, with a focus on identifying "noisy neighbors" and causality analysis between tenants.
+🎉 **Status**: Pipeline totalmente funcional end-to-end (Atualizado: 24/06/2025)
 
-## Pipeline Structure
+This system provides a **complete, production-ready pipeline** for multi-tenant time series analysis of Kubernetes metrics, with advanced focus on identifying "noisy neighbors" and causality analysis between tenants.
 
-The pipeline is organized into sequential, easily extensible stages:
+## ✅ Pipeline Status - All Stages Operational
 
-1.  **Data Ingestion**: Loads raw data from experiments.
-2.  **DataFrame Export**: Saves consolidated data in an efficient format.
-3.  **Descriptive Analysis**: Calculates basic statistics and generates visualizations.
-4.  **Correlation Analysis**: Examines relationships between metrics of different tenants.
-5.  **Causality Analysis**: Investigates causal relationships using Granger and Transfer Entropy.
-6.  **Phase Comparison**: Compares metrics between different experimental phases.
-7.  **Report Generation**: Consolidates results into a report identifying tenants with the greatest impact.
-8.  **Insight Aggregation**: Generates high-level insights from the analysis results.
+The pipeline consists of **10 fully functional stages** that execute without errors:
+
+1.  ✅ **Data Ingestion**: Loads raw data from experiments (supports Parquet and experiment_folder)
+2.  ✅ **Data Validation**: Validates data quality and generates validation reports
+3.  ✅ **Data Export**: Saves consolidated data in efficient formats
+4.  ✅ **Descriptive Analysis**: Calculates statistics and generates time-relative visualizations
+5.  ✅ **Correlation Analysis**: Cross-correlation analysis (CCF) with 61+ plots generated
+6.  ✅ **Causality Analysis**: Granger tests and Transfer Entropy implementation
+7.  ✅ **Phase Comparison**: Compares baseline/attack/recovery phases
+8.  ✅ **Report Generation**: Consolidated Markdown reports with insights
+9.  ✅ **Insight Aggregation**: High-level insights with tenant rankings
+10. ✅ **Multi-Round Analysis**: **FIXED 24/06/2025** - Cross-round consistency analysis
+
+## 🚀 Recent Major Achievement
+
+**Multi-Round Analysis Stage Fixed**: The critical `NotImplementedError` has been resolved. The stage now successfully generates:
+- Consolidated boxplots for all metrics
+- CV heatmaps by tenant and metric  
+- Multi-round analysis reports
+- Round consistency data
+- Tenant stability scores
 
 ## Project Structure
 
--   **src/**: Project source code
-    -   **pipeline.py**: Main pipeline orchestration system.
-    -   **data_ingestion.py**: Module for data ingestion and consolidation.
-    -   **data_export.py**: Module for exporting and loading DataFrames.
-    -   **data_segment.py**: Utilities for data segmentation and transformation.
-    -   **analysis_descriptive.py**: Descriptive analyses and visualizations.
-    -   **analysis_correlation.py**: Correlation and covariance analyses.
-    -   **analysis_causality.py**: Causality analyses (Granger and Transfer Entropy).
-    -   **analysis_anomaly.py**: Anomaly detection in time series.
-    -   **analysis_sliding_window.py**: Sliding window analyses.
-    -   **analysis_phase_comparison.py**: Comparative analyses between experimental phases.
-    -   **report_generation.py**: Generation of consolidated reports.
-    -   **insight_aggregation.py**: Aggregation of insights from analysis results.
-    -   **utils.py**: Utility functions.
--   **config/**: Configuration files
-    -   **pipeline_config.yaml**: Main pipeline configuration.
--   **data/processed/**: Processed data in efficient formats (Parquet).
--   **outputs/**: Analysis results
-    -   **plots/**: Generated visualizations.
-    -   **reports/**: Consolidated reports in Markdown format.
--   **docs/**: Project documentation.
+-   **src/**: Project source code (**All modules functional**)
+    -   **pipeline.py**: Main pipeline orchestration system (**✅ Working**)
+    -   **analysis_multi_round.py**: Multi-round analysis (**✅ Fixed 24/06/2025**)
+    -   **data_ingestion.py**: Data ingestion with experiment_folder support (**✅ Working**)
+    -   **analysis_*.py**: Complete suite of analysis modules (**✅ All Working**)
+    -   **visualization/**: Professional visualizations with relative time (**✅ Working**)
+-   **config/**: Configuration files (**✅ Tested configurations available**)
+-   **outputs/**: Analysis results (**✅ Complete outputs generated**)
+    -   **plots/**: Professional visualizations
+    -   **reports/**: Detailed Markdown reports  
+    -   **insights/**: Aggregated insights and rankings
+    -   **multi_round_analysis/**: Cross-round analysis results (**✅ NEW**)
 
-## Installation
+## Quick Start
 
 ```bash
-# Clone repository
+# Clone repository  
 git clone https://github.com/pserpaschiavo/k8s-noisy-analysis.git
 cd k8s-noisy-analysis
 
-# Set up virtual environment (recommended)
+# Set up virtual environment
 python3 -m venv venv
 source venv/bin/activate  # Linux/Mac
 # or

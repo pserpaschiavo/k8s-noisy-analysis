@@ -1,10 +1,10 @@
-Início do experimento: Fri Jun 20 04:41:12 PM -03 2025
-Número de rounds: 1
+Início do experimento: Sat Jun 21 11:01:47 PM -03 2025
+Número de rounds: 3
 Duração das fases:
-  - Baseline: 30 segundos
-  - Cada fase de ruído: 180 segundos
-  - Recuperação: 30 segundos
-Duração total estimada: 960 segundos
+  - Baseline: 600 segundos
+  - Cada fase de ruído: 1200 segundos
+  - Recuperação: 600 segundos
+Duração total estimada: 21600 segundos
 Intervalo de coleta de métricas: 5 segundos
-Fim do experimento: Fri Jun 20 04:59:15 PM -03 2025
-Duração total: 1083 segundos (18 minutos)
+Fim do experimento: Sun Jun 22 05:08:54 AM -03 2025
+Duração total: 22027 segundos (367 minutos)

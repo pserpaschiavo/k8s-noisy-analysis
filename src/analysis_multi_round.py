@@ -10,8 +10,8 @@ agregação de consenso para experimentos com múltiplos rounds.
 
 import os
 import logging
-import numpy as np
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import networkx as nx  # Adicionando importação do NetworkX
@@ -22,7 +22,9 @@ from sklearn.cluster import AgglomerativeClustering
 from sklearn.metrics import silhouette_score
 from datetime import datetime
 
-from src.pipeline import PipelineStage
+from src.pipeline_stage import PipelineStage
+from src.visualization.plots import generate_consolidated_boxplot, generate_consolidated_heatmap
+from src.visualization.advanced_plots import generate_all_consolidated_timeseries
 
 # Configuração de logging e estilo
 logging.basicConfig(level=logging.INFO)
@@ -41,134 +43,510 @@ class MultiRoundAnalysisStage(PipelineStage):
             description="Análise de consistência e robustez entre múltiplos rounds de experimento"
         )
         self.output_dir = output_dir
-    
+        # Adicionando um logger específico para esta classe para melhor rastreabilidade
+        self.logger = logging.getLogger(self.__class__.__name__)
+
     def _execute_implementation(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Implementação da análise de múltiplos rounds.
-        
-        Args:
-            context: Contexto atual do pipeline com resultados anteriores.
-            
-        Returns:
-            Contexto atualizado com resultados da análise multi-round.
+        Implementation of the abstract method from PipelineStage.
+        Bridges to the existing run method by extracting config from context.
         """
-        self.logger.info("Iniciando análise de experimentos com múltiplos rounds")
-        
+        # Extract config from context - pipeline stages should include their config
+        config = context.get('config', {})
+        return self.run(context, config)
+
+    def run(self, context: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Executa a análise multi-round, combinando consistência de métricas,
+        robustez causal e análise de divergência.
+        """
+        self.logger.info("Iniciando a análise multi-round completa...")
+
         if 'error' in context:
             self.logger.error(f"Erro em estágio anterior: {context['error']}")
             return context
-        
-        # Verificar se temos múltiplos rounds para analisar
+
         df_long = context.get('df_long')
         if df_long is None:
-            self.logger.warning("DataFrame principal não encontrado no contexto")
+            self.logger.warning("DataFrame principal (df_long) não encontrado no contexto.")
             context['error'] = "DataFrame principal não disponível para análise multi-round"
             return context
-        
-        rounds = df_long['round_id'].unique()
+
+        rounds = config.get('selected_rounds', sorted(df_long['round_id'].unique()))
         if len(rounds) <= 1:
-            self.logger.info("Apenas um round encontrado. Pulando análise multi-round.")
+            self.logger.info("Apenas um round encontrado ou selecionado. Pulando análise multi-round.")
             context['multi_round_analysis'] = {
                 'status': 'skipped',
-                'reason': 'O dataset contém apenas um round de experimento'
+                'reason': 'O dataset contém apenas um round de experimento ou apenas um foi selecionado.'
             }
             return context
-        
-        # Diretório de saída
-        output_dir = self.output_dir or context.get('output_dir')
-        if not output_dir:
-            output_dir = os.path.join(os.getcwd(), 'outputs', 'multi_round')
-        else:
-            output_dir = os.path.join(output_dir, 'multi_round')
-            
+
+        # Configuração do diretório de saída
+        base_output_dir = self.output_dir or context.get('output_dir')
+        if not base_output_dir:
+            experiment_id = context.get('experiment_id', 'unknown_experiment')
+            base_output_dir = os.path.join(os.getcwd(), 'outputs', experiment_id)
+            self.logger.warning(f"Diretório de saída não especificado. Usando fallback: {base_output_dir}")
+
+        output_dir = os.path.join(base_output_dir, 'multi_round_analysis')
         os.makedirs(output_dir, exist_ok=True)
+        self.logger.info(f"Diretório de saída para análise multi-round: {output_dir}")
         
-        # Extrair dados necessários do contexto
-        experiment_id = context.get('experiment_id', df_long['experiment_id'].iloc[0])
-        phases = sorted(df_long['experimental_phase'].unique())
-        metrics = context.get('selected_metrics', df_long['metric_name'].unique())
-        tenants = context.get('selected_tenants', df_long['tenant_id'].unique())
+        # Atualiza o output_dir da instância para que outros métodos o utilizem
+        self.output_dir = output_dir
+
+        metrics = context.get('selected_metrics', sorted(df_long['metric_name'].unique()))
+        tenants = context.get('selected_tenants', sorted(df_long['tenant_id'].unique()))
         
+        df_filtered = df_long[df_long['round_id'].isin(rounds)]
+
         try:
             results = {}
+
+            # 1. Análise de consistência de causalidade (Jaccard/Spearman)
+            self.logger.info("Analisando a consistência da estrutura causal (Jaccard/Spearman)...")
+            causality_data = self._load_causality_matrices(context, rounds)
+            te_matrices_by_round = causality_data.get('te_matrices_by_round', {})
+            granger_matrices_by_round = causality_data.get('granger_matrices_by_round', {})
             
-            # 1. Análise de consistência entre rounds
-            self.logger.info("Realizando análise de consistência entre rounds")
-            consistency_results = analyze_round_consistency(
-                df_long=df_long,
-                metrics=metrics,
-                tenants=tenants,
-                output_dir=output_dir
+            # Reformatar dados para o método de análise de consistência
+            causality_matrices_reformatted = {}
+            for r in rounds:
+                if r in te_matrices_by_round or r in granger_matrices_by_round:
+                     causality_matrices_reformatted[r] = {
+                         'te_matrices': te_matrices_by_round.get(r, {}),
+                         'granger_matrices': granger_matrices_by_round.get(r, {})
+                     }
+
+            if causality_matrices_reformatted:
+                graph_consistency_results = self.analyze_causality_consistency(causality_matrices_reformatted)
+                results['graph_consistency'] = graph_consistency_results
+                self.generate_consistency_visualizations(graph_consistency_results)
+            else:
+                self.logger.warning("Nenhuma matriz de causalidade carregada. Pulando análise de consistência da estrutura causal.")
+                results['graph_consistency'] = {}
+
+
+            # 2. Análise de consistência de métricas (CV/Friedman)
+            self.logger.info("Analisando a consistência dos valores das métricas (CV/Friedman)...")
+            results['metric_consistency'] = analyze_round_consistency(
+                df_long=df_filtered, metrics=metrics, tenants=tenants, output_dir=output_dir
             )
-            results['consistency'] = consistency_results
-            
-            # 2. Análise de robustez de causalidade
-            self.logger.info("Realizando análise de robustez de causalidade")
-            # Verificar se temos as matrizes de causalidade de todos os rounds
-            te_matrices_by_round = {}
-            granger_matrices_by_round = {}
-            
-            # Coletar matrizes de TE e Granger por round do contexto
-            for round_id in rounds:
-                te_key = f'te_matrices_round_{round_id}'
-                granger_key = f'granger_matrices_round_{round_id}'
-                
-                if te_key in context:
-                    te_matrices_by_round[round_id] = context[te_key]
-                if granger_key in context:
-                    granger_matrices_by_round[round_id] = context[granger_key]
-            
+
+            # 3. Análise de robustez de causalidade (CV sobre TE)
             if te_matrices_by_round:
+                self.logger.info("Analisando a robustez da força causal (CV sobre TE)...")
                 causality_robustness = analyze_causality_robustness(
                     te_matrices_by_round=te_matrices_by_round,
                     granger_matrices_by_round=granger_matrices_by_round,
                     output_dir=output_dir
                 )
                 results['causality_robustness'] = causality_robustness
+
+                if 'robust_causal_relationships' in causality_robustness:
+                    robust_graphs = {}
+                    for metric in causality_robustness.get('metrics_with_consistent_causality', []):
+                        graph_path = generate_robust_causality_graph(
+                            robust_relationships=causality_robustness['robust_causal_relationships'],
+                            output_dir=output_dir, metric=metric
+                        )
+                        if graph_path:
+                            robust_graphs[metric] = graph_path
+                    if robust_graphs:
+                        results['robust_causality_graphs'] = robust_graphs
             else:
-                self.logger.warning("Não foram encontradas matrizes de causalidade por round no contexto")
-            
-            # 3. Análise de divergência comportamental
-            self.logger.info("Realizando análise de divergência comportamental entre rounds")
-            divergence_results = analyze_behavioral_divergence(
-                df_long=df_long,
-                metrics=metrics,
-                tenants=tenants,
-                output_dir=output_dir
+                self.logger.warning("Matrizes de Transfer Entropy não disponíveis. Pulando análise de robustez causal.")
+
+            # 4. Análise de divergência comportamental (KL-Divergence)
+            self.logger.info("Analisando a divergência comportamental entre rounds (KL-Divergence)...")
+            results['behavioral_divergence'] = analyze_behavioral_divergence(
+                df_long=df_filtered, metrics=metrics, tenants=tenants, output_dir=output_dir
             )
-            results['divergence'] = divergence_results
-            
-            # 4. Agregação de consenso
-            self.logger.info("Realizando agregação de consenso entre rounds")
-            consensus_results = aggregate_round_consensus(
-                df_long=df_long,
-                te_matrices_by_round=te_matrices_by_round,
-                consistency_results=consistency_results,
-                output_dir=output_dir
-            )
-            results['consensus'] = consensus_results
-            
-            # 5. Visualizações de consistência
-            self.logger.info("Gerando visualizações de consistência entre rounds")
-            visualization_paths = generate_round_consistency_visualizations(
-                df_long=df_long,
-                consistency_results=consistency_results,
+
+            # 5. Agregação de consenso
+            if te_matrices_by_round:
+                self.logger.info("Agregando um consenso entre os rounds...")
+                results['consensus'] = aggregate_round_consensus(
+                    df_long=df_filtered,
+                    te_matrices_by_round=te_matrices_by_round,
+                    consistency_results=results.get('metric_consistency', {}),
+                    output_dir=output_dir
+                )
+            else:
+                 self.logger.warning("Matrizes de Transfer Entropy não disponíveis. Pulando agregação de consenso.")
+
+            # 6. Visualizações consolidadas
+            self.logger.info("Gerando visualizações consolidadas...")
+            results['visualization_paths'] = generate_round_consistency_visualizations(
+                df_long=df_filtered,
+                consistency_results=results.get('metric_consistency', {}),
                 causality_robustness=results.get('causality_robustness', {}),
                 output_dir=output_dir
             )
-            results['visualization_paths'] = visualization_paths
-            
-            # Armazenar resultados no contexto
+
+            # 6.1 Time Series Consolidados (NOVA FUNCIONALIDADE v2.0)
+            self.logger.info("Gerando time series consolidados para todas as métricas...")
+            try:
+                timeseries_paths = generate_all_consolidated_timeseries(
+                    df_long=df_filtered,
+                    output_dir=output_dir,
+                    rounds=rounds,
+                    tenants=tenants,
+                    normalize_time=True,
+                    add_confidence_bands=True,
+                    add_phase_annotations=True
+                )
+                results['consolidated_timeseries'] = timeseries_paths
+                self.logger.info(f"✅ Time series consolidados gerados: {len(timeseries_paths)} métricas")
+            except Exception as e:
+                self.logger.error(f"Erro ao gerar time series consolidados: {e}")
+                results['consolidated_timeseries'] = {}
+
+            # 7. Gerar relatório consolidado
+            self.logger.info("Gerando relatório consolidado da análise multi-round...")
+            self.generate_multi_round_report(results) # Passando todos os resultados
+
             context['multi_round_analysis'] = results
             context['multi_round_analysis_dir'] = output_dir
-            
-            self.logger.info(f"Análise multi-round concluída. Resultados salvos em {output_dir}")
-            
+            self.logger.info(f"Análise multi-round concluída com sucesso. Resultados em {output_dir}")
+
         except Exception as e:
-            self.logger.error(f"Erro durante análise multi-round: {str(e)}", exc_info=True)
+            self.logger.error(f"Erro fatal durante a análise multi-round: {str(e)}", exc_info=True)
             context['error'] = f"Erro na análise multi-round: {str(e)}"
-        
+
         return context
+
+    def analyze_causality_consistency(self, causality_matrices: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Analisa a consistência das matrizes de causalidade entre os rounds.
+        Calcula a similaridade de Jaccard para as relações causais (Granger)
+        e a correlação de Spearman para a força da causalidade (TE).
+        """
+        self.logger.info("Analisando a consistência da causalidade entre os rounds...")
+        
+        consistency_results = {
+            "granger_jaccard": pd.DataFrame(),
+            "te_spearman": pd.DataFrame()
+        }
+        
+        rounds = list(causality_matrices.keys())
+        if len(rounds) < 2:
+            self.logger.warning("São necessários pelo menos dois rounds para a análise de consistência.")
+            return consistency_results
+
+        # Extrai as matrizes de Granger e TE
+        granger_matrices_by_round = {r: v.get('granger_matrices', {}) for r, v in causality_matrices.items()}
+        te_matrices_by_round = {r: v.get('te_matrices', {}) for r, v in causality_matrices.items()}
+
+        metrics = list(granger_matrices_by_round[rounds[0]].keys())
+        
+        jaccard_scores = []
+        spearman_scores = []
+
+        for metric in metrics:
+            for i in range(len(rounds)):
+                for j in range(i + 1, len(rounds)):
+                    round1, round2 = rounds[i], rounds[j]
+                    
+                    # Consistência para Causalidade de Granger (Jaccard)
+                    g1 = granger_matrices_by_round.get(round1, {}).get(metric)
+                    g2 = granger_matrices_by_round.get(round2, {}).get(metric)
+                    
+                    if g1 is not None and g2 is not None:
+                        # Binariza a matriz com base no p-valor < 0.05
+                        g1_bin = (g1 < 0.05).values.flatten()
+                        g2_bin = (g2 < 0.05).values.flatten()
+                        
+                        jaccard_sim = 1 - distance.jaccard(g1_bin, g2_bin)
+                        jaccard_scores.append((metric, f"{round1}-{round2}", jaccard_sim))
+
+                    # Consistência para Entropia de Transferência (Spearman)
+                    te1 = te_matrices_by_round.get(round1, {}).get(metric)
+                    te2 = te_matrices_by_round.get(round2, {}).get(metric)
+
+                    if te1 is not None and te2 is not None:
+                        rho, _ = stats.spearmanr(te1.values.flatten(), te2.values.flatten())
+                        spearman_scores.append((metric, f"{round1}-{round2}", rho))
+
+        if jaccard_scores:
+            df_jaccard = pd.DataFrame(jaccard_scores, columns=['Metric', 'Round Pair', 'Jaccard Similarity'])
+            consistency_results['granger_jaccard'] = df_jaccard.pivot(index='Metric', columns='Round Pair', values='Jaccard Similarity')
+
+        if spearman_scores:
+            df_spearman = pd.DataFrame(spearman_scores, columns=['Metric', 'Round Pair', 'Spearman Correlation'])
+            consistency_results['te_spearman'] = df_spearman.pivot(index='Metric', columns='Round Pair', values='Spearman Correlation')
+            
+        self.logger.info("Análise de consistência de causalidade concluída.")
+        self.logger.debug(f"Resultados de Jaccard (Granger):\n{consistency_results['granger_jaccard']}")
+        self.logger.debug(f"Resultados de Spearman (TE):\n{consistency_results['te_spearman']}")
+
+        return consistency_results
+
+    def generate_consistency_visualizations(self, consistency_results: Dict[str, Any]):
+        """
+        Gera visualizações para os resultados da análise de consistência.
+        Cria heatmaps para a similaridade de Jaccard (Granger) e correlação de Spearman (TE).
+        """
+        self.logger.info("Gerando visualizações de consistência...")
+        
+        if not self.output_dir:
+            self.logger.warning("Diretório de saída não configurado. As visualizações não serão salvas.")
+            return
+
+        # Visualização para Jaccard (Granger)
+        df_jaccard = consistency_results.get('granger_jaccard')
+        if df_jaccard is not None and not df_jaccard.empty:
+            output_path = generate_consolidated_heatmap(
+                aggregated_matrix=df_jaccard,
+                output_dir=self.output_dir,
+                title="Consistência da Causalidade de Granger (Similaridade de Jaccard)",
+                filename="granger_consistency_heatmap.png"
+            )
+            if output_path:
+                self.logger.info(f"Heatmap de consistência de Granger salvo em: {output_path}")
+
+        # Visualização para Spearman (TE)
+        df_spearman = consistency_results.get('te_spearman')
+        if df_spearman is not None and not df_spearman.empty:
+            output_path = generate_consolidated_heatmap(
+                aggregated_matrix=df_spearman,
+                output_dir=self.output_dir,
+                title="Consistência da Força Causal (Correlação de Spearman para TE)",
+                filename="te_consistency_heatmap.png"
+            )
+            if output_path:
+                self.logger.info(f"Heatmap de consistência de TE salvo em: {output_path}")
+
+    def generate_multi_round_report(self, all_results: Dict[str, Any]):
+        """
+        Gera um relatório markdown consolidado com todos os resultados da análise multi-round.
+        """
+        self.logger.info("Gerando relatório multi-round consolidado...")
+        if not self.output_dir:
+            self.logger.warning("Diretório de saída não configurado. O relatório não será salvo.")
+            return
+
+        report_path = os.path.join(self.output_dir, "multi_round_analysis_report.md")
+        
+        with open(report_path, "w") as f:
+            f.write("# Relatório Consolidado de Análise Multi-Round\n\n")
+            f.write(f"Relatório gerado em: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+            f.write("Este relatório apresenta uma análise compreensiva de múltiplos rounds de um experimento, avaliando a consistência, robustez e divergências comportamentais para fornecer um veredito consolidado sobre os resultados.\n\n")
+
+            # --- Seção 1: Consistência da Estrutura Causal (Jaccard/Spearman) ---
+            f.write("## 1. Consistência da Estrutura Causal\n\n")
+            f.write("Avalia a consistência das relações causais identificadas entre os rounds.\n\n")
+            
+            graph_consistency = all_results.get('graph_consistency', {})
+            df_jaccard = graph_consistency.get('granger_jaccard')
+            if df_jaccard is not None and not df_jaccard.empty:
+                f.write("### 1.1. Causalidade de Granger (Similaridade de Jaccard)\n")
+                f.write("A tabela a seguir mostra a similaridade de Jaccard entre os conjuntos de relações causais (p < 0.05) para cada par de rounds. Valores mais próximos de 1 indicam maior consistência na ESTRUTURA do grafo causal.\n\n")
+                f.write(df_jaccard.to_markdown())
+                f.write("\n\n![Heatmap de Consistência de Granger](./granger_consistency_heatmap.png)\n\n")
+
+            df_spearman = graph_consistency.get('te_spearman')
+            if df_spearman is not None and not df_spearman.empty:
+                f.write("### 1.2. Força Causal - Transfer Entropy (Correlação de Spearman)\n")
+                f.write("A tabela a seguir mostra a correlação de Spearman entre as matrizes de Transferência de Entropia (TE). Esta métrica avalia a consistência na FORÇA da causalidade. Valores próximos de 1 indicam uma forte correlação positiva na força causal entre os rounds.\n\n")
+                f.write(df_spearman.to_markdown())
+                f.write("\n\n![Heatmap de Consistência de TE](./te_consistency_heatmap.png)\n\n")
+
+            # --- Seção 2: Robustez Causal e Grafos Robustos ---
+            f.write("## 2. Robustez das Relações Causais\n\n")
+            causality_robustness = all_results.get('causality_robustness', {})
+            if causality_robustness:
+                 f.write("Análise da robustez das relações causais individuais com base na sua consistência (baixo Coeficiente de Variação) através dos rounds.\n\n")
+                 f.write("### Relações Causais Robustas (Consenso)\n")
+                 f.write("Relações que aparecem consistentemente com força similar em múltiplos rounds.\n\n")
+                 # Link para o CSV
+                 f.write("Para uma lista detalhada, veja o arquivo `robust_causal_relationships.csv`.\n\n")
+                 
+                 robust_graphs = all_results.get('robust_causality_graphs', {})
+                 if robust_graphs:
+                     f.write("### Grafos de Causalidade Robustos\n")
+                     f.write("Grafos mostrando apenas as relações causais mais robustas para métricas selecionadas.\n\n")
+                     for metric, path in robust_graphs.items():
+                         f.write(f"**Métrica: {metric}**\n")
+                         f.write(f"![Grafo Robusto para {metric}](./{os.path.basename(path)})\n\n")
+            else:
+                f.write("Análise de robustez causal não foi executada ou não produziu resultados.\n\n")
+
+
+            # --- Seção 3: Consistência de Métricas (CV) ---
+            f.write("## 3. Consistência dos Valores de Métricas\n\n")
+            f.write("Análise da estabilidade dos valores das métricas através dos rounds, utilizando o Coeficiente de Variação (CV). Baixo CV indica alta consistência.\n\n")
+            f.write("![Heatmap de CV por Tenant e Métrica](./cv_heatmap_by_tenant_metric.png)\n\n")
+            f.write("Para dados detalhados, veja `round_consistency_cv.csv`.\n\n")
+
+            # --- Seção 4: Divergência Comportamental ---
+            f.write("## 4. Análise de Divergência Comportamental\n\n")
+            f.write("Identifica rounds com comportamento anômalo e mede a estabilidade do comportamento dos tenants através dos rounds usando a Divergência de Kullback-Leibler.\n\n")
+            f.write("Para dados detalhados, veja `tenant_stability_scores.csv`.\n\n")
+
+
+            # --- Seção 5: Veredictos de Consenso ---
+            f.write("## 5. Veredictos de Consenso\n\n")
+            consensus = all_results.get('consensus', {})
+            if consensus:
+                f.write("Agregação dos resultados de todos os rounds para produzir um veredito final.\n\n")
+                if consensus.get('noisy_tenants_consensus'):
+                    f.write("### Tenants Barulhentos (Consenso)\n")
+                    f.write("Tenants identificados como fontes de causalidade de forma consistente na maioria dos rounds. Veja `consensus_noisy_tenants.csv`.\n\n")
+                if consensus.get('tenant_influence_ranking'):
+                    f.write("### Ranking de Influência de Tenants (Consenso)\n")
+                    f.write("Ranking de tenants com base na sua influência causal consolidada. Veja `tenant_influence_ranking.csv`.\n\n")
+            else:
+                f.write("Análise de consenso não foi executada ou não produziu resultados.\n\n")
+
+            # --- Seção de Sumário ---
+            f.write("## Sumário Final\n\n")
+            f.write("A análise multi-round fornece insights sobre a estabilidade e reprodutibilidade dos resultados do experimento. Alta consistência sugere que as relações causais e comportamentos observados são robustos. Baixa consistência pode indicar que o sistema exibe comportamento variável ou que os resultados são sensíveis a condições iniciais, necessitando de investigação adicional.\n")
+
+        self.logger.info(f"Relatório consolidado de análise multi-round salvo em: {report_path}")
+
+    def _load_causality_matrices(self, context: Dict[str, Any], rounds: List[str]) -> Dict[str, Any]:
+        """
+        Carrega as matrizes de causalidade (TE e Granger) para cada round.
+        Primeiro, tenta carregar do contexto. Se não encontrar, busca os arquivos CSV
+        no diretório de saída do pipeline principal.
+        """
+        te_matrices_by_round = {}
+        granger_matrices_by_round = {}
+        
+        # Prioriza o diretório de saída principal do contexto para maior robustez
+        base_output_dir = context.get('output_dir')
+        if not base_output_dir:
+            # Fallback para o caso de o diretório do contexto não estar disponível
+            base_output_dir = os.path.dirname(self.output_dir) if self.output_dir else None
+
+        if not base_output_dir:
+            self.logger.warning("Não foi possível determinar o diretório base de saídas. Não será possível carregar matrizes de causalidade.")
+            return {}
+
+        causality_output_dir = os.path.join(base_output_dir, 'causality')
+        
+        self.logger.info(f"Procurando matrizes de causalidade em: {causality_output_dir}")
+
+        for round_id in rounds:
+            # Tenta carregar do contexto primeiro
+            te_key = f'te_matrices_round_{round_id}'
+            granger_key = f'granger_matrices_round_{round_id}'
+            
+            if te_key in context and granger_key in context:
+                te_matrices_by_round[round_id] = context[te_key]
+                granger_matrices_by_round[round_id] = context[granger_key]
+                self.logger.info(f"Matrizes de causalidade para o round '{round_id}' carregadas do contexto.")
+                continue
+
+            # Se não estiver no contexto, carregar dos arquivos
+            self.logger.info(f"Matrizes para o round '{round_id}' não encontradas no contexto. Tentando carregar de arquivos...")
+            round_causality_path = os.path.join(causality_output_dir, round_id)
+            
+            if not os.path.isdir(round_causality_path):
+                self.logger.warning(f"Diretório de causalidade para o round '{round_id}' não encontrado em '{round_causality_path}'.")
+                continue
+
+            te_matrices = {}
+            granger_matrices = {}
+            
+            try:
+                for file_name in os.listdir(round_causality_path):
+                    if file_name.startswith('te_matrix_') and file_name.endswith('.csv'):
+                        metric = file_name.replace('te_matrix_', '').replace('.csv', '')
+                        file_path = os.path.join(round_causality_path, file_name)
+                        te_matrices[metric] = pd.read_csv(file_path, index_col=0)
+                    elif file_name.startswith('granger_matrix_') and file_name.endswith('.csv'):
+                        metric = file_name.replace('granger_matrix_', '').replace('.csv', '')
+                        file_path = os.path.join(round_causality_path, file_name)
+                        granger_matrices[metric] = pd.read_csv(file_path, index_col=0)
+            except Exception as e:
+                self.logger.error(f"Erro ao carregar arquivos de matriz do diretório {round_causality_path}: {e}")
+
+            if te_matrices:
+                te_matrices_by_round[round_id] = te_matrices
+                self.logger.info(f"  - {len(te_matrices)} matrizes de Transfer Entropy carregadas para o round '{round_id}'.")
+            if granger_matrices:
+                granger_matrices_by_round[round_id] = granger_matrices
+                self.logger.info(f"  - {len(granger_matrices)} matrizes de Granger carregadas para o round '{round_id}'.")
+
+        return {
+            'te_matrices_by_round': te_matrices_by_round,
+            'granger_matrices_by_round': granger_matrices_by_round
+        }
+
+def generate_robust_causality_graph(
+    robust_relationships: Dict[str, Dict[Tuple[str, str], Dict[str, float]]],
+    output_dir: str,
+    metric: str
+) -> Optional[str]:
+    """
+    Gera um grafo de causalidade robusto para uma métrica específica.
+
+    Args:
+        robust_relationships: Dicionário com as relações causais robustas.
+        output_dir: Diretório para salvar o grafo.
+        metric: Métrica para a qual o grafo será gerado.
+
+    Returns:
+        Caminho do arquivo de imagem do grafo gerado ou None se não houver dados.
+    """
+    if not robust_relationships.get(metric):
+        logger.warning(f"Não há relações causais robustas para a métrica '{metric}'. O grafo não será gerado.")
+        return None
+
+    G = nx.DiGraph()
+    
+    # Adicionar arestas com pesos, ignorando NaNs, para garantir que os dados são numéricos
+    for (source, target), data in robust_relationships[metric].items():
+        weight = data.get('mean_te')
+        if weight is not None and pd.notna(weight):
+            G.add_edge(source, target, weight=float(weight))
+
+    if not G.nodes():
+        logger.warning(f"O grafo para a métrica '{metric}' não possui nós. A visualização será pulada.")
+        return None
+
+    plt.figure(figsize=(14, 10))
+    pos = nx.spring_layout(G, k=0.9, iterations=50)
+
+    # Desenhar nós com tamanho proporcional ao out-degree (influência).
+    node_sizes: List[int] = [int(500 + 1000 * G.out_degree(n)) for n in G.nodes()]
+    nx.draw_networkx_nodes(G, pos, node_size=node_sizes, node_color='skyblue', alpha=0.8)
+
+    # Desenhar arestas com espessura proporcional à força da causalidade (peso).
+    edge_weights: List[float] = [float(G[u][v]['weight']) for u, v in G.edges()]
+    
+    if edge_weights:
+        # Normalizar pesos para uma faixa de espessura visualmente agradável (e.g., 1 a 10).
+        min_w = min(edge_weights)
+        max_w = max(edge_weights)
+        
+        edge_widths: List[float]
+        if max_w > min_w:
+            edge_widths = [float(1.0 + 9.0 * (w - min_w) / (max_w - min_w)) for w in edge_weights]
+        else:
+            # Todos os pesos são iguais, usar uma espessura média.
+            edge_widths = [5.0] * len(edge_weights)
+            
+        nx.draw_networkx_edges(G, pos, width=edge_widths, alpha=0.6, edge_color='gray', arrowsize=20)
+
+    # Desenhar rótulos dos nós
+    nx.draw_networkx_labels(G, pos, font_size=10, font_weight='bold')
+
+    plt.title(f"Grafo de Causalidade Robusto para a Métrica: {metric}", fontsize=16)
+    plt.axis('off')
+    
+    output_path = os.path.join(output_dir, f"robust_causality_graph_{metric}.png")
+    try:
+        plt.savefig(output_path, dpi=300, bbox_inches='tight')
+        logger.info(f"Grafo de causalidade robusto para '{metric}' salvo em: {output_path}")
+        plt.close()
+        return output_path
+    except Exception as e:
+        logger.error(f"Erro ao salvar o grafo de causalidade para '{metric}': {e}")
+        plt.close()
+        return None
 
 
 def analyze_round_consistency(
@@ -611,17 +989,18 @@ def aggregate_round_consensus(
                         causal_relationship_votes[relationship] = 0
                     causal_relationship_votes[relationship] += 1
         
-        # Determinar consenso para "noisy tenants" (mais de 50% dos rounds)
-        min_votes = len(rounds) / 2
+        # Determinar consenso para "noisy tenants" (mais de 75% dos rounds)
+        min_votes_noisy = len(rounds) * 0.75
         consensus_noisy_tenants = {
             tenant: votes for tenant, votes in noisy_tenant_votes.items() 
-            if votes > min_votes
+            if votes > min_votes_noisy
         }
         
-        # Determinar consenso para relações causais (mais de 50% dos rounds)
+        # Determinar consenso para relações causais (mais de 75% dos rounds)
+        min_votes_causal = len(rounds) * 0.75
         consensus_causal_relationships = {
             relationship: votes for relationship, votes in causal_relationship_votes.items()
-            if votes > min_votes
+            if votes > min_votes_causal
         }
         
         # Armazenar resultados
@@ -726,7 +1105,7 @@ def generate_round_consistency_visualizations(
 ) -> List[str]:
     """
     Gera visualizações para análise de consistência entre rounds, incluindo
-    gráficos com intervalos de confiança, heatmaps, dendrogramas.
+    gráficos com intervalos de confiança e heatmaps.
     
     Args:
         df_long: DataFrame consolidado em formato long.
@@ -741,9 +1120,6 @@ def generate_round_consistency_visualizations(
     
     # 1. Gráfico de CV por métrica e tenant
     if consistency_results.get('cv_by_metric'):
-        plt.figure(figsize=(12, 8))
-        
-        # Preparar dados para plot
         cv_data = []
         for metric, tenant_cvs in consistency_results['cv_by_metric'].items():
             for tenant, cv in tenant_cvs.items():
@@ -756,8 +1132,6 @@ def generate_round_consistency_visualizations(
         
         if cv_data:
             cv_df = pd.DataFrame(cv_data)
-            
-            # Criar heatmap de CV
             pivot_table = cv_df.pivot_table(
                 index='tenant', 
                 columns='metric', 
@@ -765,6 +1139,7 @@ def generate_round_consistency_visualizations(
                 aggfunc='mean'
             )
             
+            plt.figure(figsize=(12, 8))
             sns.heatmap(
                 pivot_table,
                 annot=True,
@@ -773,133 +1148,27 @@ def generate_round_consistency_visualizations(
                 linewidths=0.5,
                 cbar_kws={'label': 'Coeficiente de Variação (%)'}
             )
-            
             plt.title('Coeficiente de Variação entre Rounds por Tenant e Métrica')
             plt.tight_layout()
             
-            # Salvar figura
             cv_heatmap_path = os.path.join(output_dir, 'cv_heatmap_by_tenant_metric.png')
             plt.savefig(cv_heatmap_path, dpi=300, bbox_inches='tight')
             plt.close()
-            
             visualization_paths.append(cv_heatmap_path)
     
-    # 2. Gráficos de intervalo de confiança para métricas importantes
+    # 2. Gerar boxplots consolidados
+    logger.info("Gerando boxplots consolidados...")
     metrics = df_long['metric_name'].unique()
-    tenants = df_long['tenant_id'].unique()
-    rounds = sorted(df_long['round_id'].unique())
-    
-    for metric in metrics[:5]:  # Limitar a 5 métricas para não gerar muitos gráficos
+    for metric in metrics:
         try:
-            plt.figure(figsize=(12, 8))
-            
-            for tenant in tenants[:8]:  # Limitar a 8 tenants por gráfico
-                tenant_data = []
-                confidence_intervals = []
-                
-                for round_id in rounds:
-                    # Filtrar dados
-                    data = df_long[
-                        (df_long['metric_name'] == metric) &
-                        (df_long['tenant_id'] == tenant) &
-                        (df_long['round_id'] == round_id)
-                    ]['metric_value']
-                    
-                    if not data.empty:
-                        mean_val = data.mean()
-                        std_val = data.std()
-                        tenant_data.append(mean_val)
-                        
-                        # Calcular intervalo de confiança de 95%
-                        n = len(data)
-                        ci = 1.96 * std_val / np.sqrt(n)
-                        confidence_intervals.append([mean_val - ci, mean_val + ci])
-                    else:
-                        tenant_data.append(np.nan)
-                        confidence_intervals.append([np.nan, np.nan])
-                
-                # Plotar linha com média
-                plt.plot(rounds, tenant_data, marker='o', label=tenant)
-                
-                # Adicionar intervalos de confiança
-                for i, (lower, upper) in enumerate(confidence_intervals):
-                    if not np.isnan(lower) and not np.isnan(upper):
-                        plt.fill_between([rounds[i]], [lower], [upper], alpha=0.2)
-            
-            plt.title(f'Comparação entre Rounds: {metric}')
-            plt.xlabel('Round')
-            plt.ylabel('Valor Médio')
-            plt.legend()
-            plt.grid(True, linestyle='--', alpha=0.6)
-            plt.tight_layout()
-            
-            # Salvar figura
-            ci_plot_path = os.path.join(output_dir, f'confidence_interval_{metric}.png')
-            plt.savefig(ci_plot_path, dpi=300, bbox_inches='tight')
-            plt.close()
-            
-            visualization_paths.append(ci_plot_path)
-            
+            path = generate_consolidated_boxplot(
+                df_long=df_long,
+                metric=metric,
+                output_dir=output_dir
+            )
+            if path:
+                visualization_paths.append(path)
         except Exception as e:
-            logger.warning(f"Erro ao gerar visualização de IC para {metric}: {str(e)}")
-    
-    # 3. Visualização de relações causais robustas
-    if causality_robustness and 'robust_causal_relationships' in causality_robustness:
-        for metric, relationships in causality_robustness['robust_causal_relationships'].items():
-            if not relationships:
-                continue
-                
-            try:
-                plt.figure(figsize=(10, 8))
-                
-                # Criar grafo direcionado
-                G = nx.DiGraph()
-                
-                # Adicionar nós e edges
-                nodes = set()
-                for (source, target), data in relationships.items():
-                    nodes.add(source)
-                    nodes.add(target)
-                    # Usar média do TE como peso da edge
-                    G.add_edge(source, target, weight=data['mean_te'])
-                
-                # Adicionar nós
-                for node in nodes:
-                    G.add_node(node)
-                
-                # Posicionamento dos nós
-                pos = nx.spring_layout(G, seed=42)
-                
-                # Desenhar nós
-                nx.draw_networkx_nodes(G, pos, node_size=700, node_color='skyblue')
-                
-                # Desenhar arestas com largura proporcional ao peso (TE)
-                edges = list(G.edges())
-                edge_weights = [G[u][v]['weight'] * 10 for u, v in edges]
-                nx.draw_networkx_edges(G, pos, edgelist=edges, width=1.0, arrowsize=20, alpha=0.7)
-                # Ou alternativamente, desenhar cada aresta individualmente com sua largura
-                # for i, (u, v) in enumerate(edges):
-                #     nx.draw_networkx_edges(G, pos, edgelist=[(u, v)], width=edge_weights[i], arrowsize=20, alpha=0.7)
-                
-                # Adicionar labels
-                nx.draw_networkx_labels(G, pos)
-                
-                # Adicionar edge labels (valores de TE)
-                edge_labels = {(u, v): f"{G[u][v]['weight']:.3f}" for u, v in G.edges()}
-                nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_size=8)
-                
-                plt.title(f'Relações Causais Robustas: {metric}')
-                plt.axis('off')
-                plt.tight_layout()
-                
-                # Salvar figura
-                causal_graph_path = os.path.join(output_dir, f'robust_causal_graph_{metric}.png')
-                plt.savefig(causal_graph_path, dpi=300, bbox_inches='tight')
-                plt.close()
-                
-                visualization_paths.append(causal_graph_path)
-                
-            except Exception as e:
-                logger.warning(f"Erro ao gerar grafo de causalidade para {metric}: {str(e)}")
-    
+            logger.warning(f"Erro ao gerar boxplot consolidado para a métrica {metric}: {e}")
+            
     return visualization_paths
