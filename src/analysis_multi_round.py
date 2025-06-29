@@ -33,6 +33,8 @@ from src.visualization.advanced_plots import (
 )
 from src.analysis_correlation import compute_aggregated_correlation
 from src.effect_size import extract_effect_sizes  # Importar o novo módulo
+from src.effect_aggregation import aggregate_effect_sizes  # Importar a função de agregação de efeitos
+from src.phase_correlation import extract_phase_correlations, analyze_correlation_stability  # Importar funções de correlação intra-fase
 
 # Configuração de logging e estilo
 logging.basicConfig(level=logging.INFO)
@@ -125,6 +127,37 @@ class MultiRoundAnalysisStage(PipelineStage):
                                                          (effect_sizes_df['effect_size'].abs() <= 0.8)].shape[0],
                         'small_effects': effect_sizes_df[(effect_sizes_df['effect_size'].abs() > 0.2) & 
                                                         (effect_sizes_df['effect_size'].abs() <= 0.5)].shape[0]
+                    }
+                }
+                
+                # 0.1 Agregação de tamanhos de efeito entre rounds
+                self.logger.info("Agregando tamanhos de efeito entre rounds...")
+                aggregated_effects_df = self._aggregate_effect_sizes(effect_sizes_df, config)
+                if not aggregated_effects_df.empty:
+                    results['aggregated_effects'] = {
+                        'dataframe': aggregated_effects_df,
+                        'summary': {
+                            'total_combinations': aggregated_effects_df.shape[0],
+                            'significant_combinations': aggregated_effects_df['is_significant'].sum(),
+                            'high_reliability': (aggregated_effects_df['reliability_category'] == 'high').sum(),
+                            'medium_reliability': (aggregated_effects_df['reliability_category'] == 'medium').sum(),
+                            'low_reliability': (aggregated_effects_df['reliability_category'] == 'low').sum()
+                        }
+                    }
+                    
+            # 0.2 Extração de correlações intra-fase
+            self.logger.info("Realizando extração de correlações intra-fase entre tenants...")
+            phase_correlations_df = self._extract_phase_correlations(context, config, df_filtered, rounds)
+            if not phase_correlations_df.empty:
+                results['phase_correlations'] = {
+                    'dataframe': phase_correlations_df,
+                    'summary': {
+                        'total_correlations': phase_correlations_df.shape[0],
+                        'strong_correlations': (phase_correlations_df['correlation_strength'] == 'strong').sum(),
+                        'moderate_correlations': (phase_correlations_df['correlation_strength'] == 'moderate').sum(),
+                        'weak_correlations': (phase_correlations_df['correlation_strength'] == 'weak').sum(),
+                        'positive_correlations': (phase_correlations_df['correlation'] > 0).sum(),
+                        'negative_correlations': (phase_correlations_df['correlation'] < 0).sum()
                     }
                 }
 
@@ -701,102 +734,209 @@ class MultiRoundAnalysisStage(PipelineStage):
         
         return effect_sizes_df
 
-
-def analyze_causality_robustness(te_matrices_by_round: Dict[str, Any], granger_matrices_by_round: Dict[str, Any], output_dir: str) -> Dict[str, Any]:
-    """
-    Analyzes the robustness of causal relationships across multiple rounds.
-    """
-    logger.info("Iniciando a análise de robustez da força causal...")
-    # Placeholder implementation
-    return {}
-
-def analyze_behavioral_divergence(df_long: pd.DataFrame, metrics: List[str], tenants: List[str], output_dir: str) -> Dict[str, Any]:
-    """
-    Analyzes the behavioral divergence of tenants across multiple rounds.
-    """
-    logger.info("Iniciando a análise de divergência comportamental...")
-    # Placeholder implementation
-    return {}
-
-def aggregate_round_consensus(df_long: pd.DataFrame, te_matrices_by_round: Dict[str, Any], consistency_results: Dict[str, Any], output_dir: str) -> Dict[str, Any]:
-    """
-    Aggregates the results from multiple rounds to form a consensus.
-    """
-    logger.info("Iniciando a agregação de consenso entre os rounds...")
-    # Placeholder implementation
-    return {}
-
-def generate_robust_causality_graph(robust_relationships: Dict[str, Any], output_dir: str, metric: str) -> Optional[str]:
-    """
-    Generates a graph of robust causal relationships.
-    """
-    logger.info(f"Gerando grafo de causalidade robusta para a métrica {metric}...")
-    # Placeholder implementation
-    return None
-
-def analyze_round_consistency(df_long: pd.DataFrame, metrics: List[str], tenants: List[str], output_dir: str) -> Dict[str, Any]:
-    """
-    Analyzes the consistency of metrics across multiple rounds using Coefficient of Variation (CV)
-    and the Friedman test.
-
-    Args:
-        df_long (pd.DataFrame): The long format DataFrame with all data.
-        metrics (List[str]): The list of metrics to analyze.
-        tenants (List[str]): The list of tenants to analyze.
-        output_dir (str): The directory to save visualizations.
-
-    Returns:
-        Dict[str, Any]: A dictionary containing the consistency results.
-    """
-    logger.info("Iniciando a análise de consistência de métricas entre rounds...")
-    results = {
-        'cv_results': {},
-        'friedman_results': {},
-        'significant_differences': {}
-    }
-    
-    for metric in metrics:
-        for tenant in tenants:
-            key = f"{metric}_{tenant}"
+    def _aggregate_effect_sizes(self, effect_sizes_df: pd.DataFrame, config: Dict[str, Any]) -> pd.DataFrame:
+        """
+        Agrega os tamanhos de efeito por métrica × fase × tenant através dos rounds,
+        calculando médias, desvios padrão, intervalos de confiança e p-valores combinados.
+        
+        Args:
+            effect_sizes_df: DataFrame com tamanhos de efeito por round
+            config: Configuração da análise
             
-            # Filter data for the specific metric and tenant
-            df_filtered = df_long[(df_long['metric_name'] == metric) & (df_long['tenant_id'] == tenant)]
+        Returns:
+            DataFrame com estatísticas agregadas
+        """
+        self.logger.info("Agregando tamanhos de efeito por métrica, fase e tenant...")
+        
+        if effect_sizes_df.empty:
+            self.logger.warning("DataFrame de tamanhos de efeito vazio. Pulando agregação.")
+            return pd.DataFrame()
+        
+        # Obtém parâmetros de configuração
+        multi_round_config = config.get('multi_round_analysis', {})
+        meta_config = multi_round_config.get('meta_analysis', {})
+        
+        # Define parâmetros para agregação
+        alpha = meta_config.get('alpha', 0.05)
+        p_value_method = meta_config.get('p_value_combination', 'fisher')
+        confidence_level = meta_config.get('confidence_level', 0.95)
+        use_bootstrap = meta_config.get('use_bootstrap', True)
+        n_bootstrap = meta_config.get('n_bootstrap', 1000)
+        
+        # Realiza agregação
+        aggregated_df = aggregate_effect_sizes(
+            effect_sizes_df=effect_sizes_df,
+            alpha=alpha,
+            p_value_method=p_value_method,
+            confidence_level=confidence_level,
+            use_bootstrap=use_bootstrap,
+            n_bootstrap=n_bootstrap
+        )
+        
+        if aggregated_df.empty:
+            self.logger.warning("Nenhuma estatística agregada calculada.")
+        else:
+            self.logger.info(f"Agregação concluída: {aggregated_df.shape[0]} estatísticas agregadas.")
             
-            if df_filtered.empty:
-                continue
+            # Salva os resultados em CSV se houver diretório de saída
+            if self.output_dir:
+                aggregated_path = os.path.join(self.output_dir, 'aggregated_effects.csv')
+                aggregated_df.to_csv(aggregated_path, index=False)
+                self.logger.info(f"Estatísticas agregadas salvas em: {aggregated_path}")
+                
+                # Gera um resumo das estatísticas
+                summary_path = os.path.join(self.output_dir, 'effect_size_summary.md')
+                with open(summary_path, 'w') as f:
+                    f.write("# Resumo da Análise de Tamanhos de Efeito\n\n")
+                    f.write(f"Gerado em: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+                    
+                    # Resumo de estatísticas gerais
+                    f.write("## Estatísticas Gerais\n\n")
+                    f.write(f"- Total de combinações analisadas: {aggregated_df.shape[0]}\n")
+                    f.write(f"- Efeitos estatisticamente significativos: {aggregated_df['is_significant'].sum()}\n")
+                    
+                    # Resumo por magnitude de efeito
+                    magnitude_counts = aggregated_df['effect_magnitude'].value_counts()
+                    f.write("\n### Distribuição por Magnitude de Efeito\n\n")
+                    for magnitude, count in magnitude_counts.items():
+                        f.write(f"- {str(magnitude).title()}: {count}\n")
+                    
+                    # Resumo por confiabilidade
+                    reliability_counts = aggregated_df['reliability_category'].value_counts()
+                    f.write("\n### Distribuição por Confiabilidade\n\n")
+                    for reliability, count in reliability_counts.items():
+                        f.write(f"- {str(reliability).title()}: {count}\n")
+                    
+                    # Top 5 efeitos mais fortes e significativos
+                    significant_df = aggregated_df[aggregated_df['is_significant']]
+                    if not significant_df.empty:
+                        top_effects = significant_df.sort_values('mean_effect_size', key=abs, ascending=False).head(5)
+                        f.write("\n## Top 5 Efeitos Mais Fortes (Significativos)\n\n")
+                        for _, row in top_effects.iterrows():
+                            f.write(f"- **{row['experimental_phase']} em {row['tenant_id']} (métrica: {row['metric_name']})**\n")
+                            f.write(f"  - Tamanho de efeito: {row['mean_effect_size']:.3f} (IC95%: {row['ci_lower']:.3f} a {row['ci_upper']:.3f})\n")
+                            f.write(f"  - p-valor combinado: {row['combined_p_value']:.6f} ({row['round_count']} rounds)\n")
+                            f.write(f"  - Confiabilidade: {row['reliability_category'].title()}\n")
+        
+        return aggregated_df
 
-            # Calculate Coefficient of Variation (CV)
-            cv = df_filtered.groupby('round_id')['metric_value'].mean().std() / df_filtered.groupby('round_id')['metric_value'].mean().mean()
-            results['cv_results'][key] = cv
-
-            # Friedman Test
-            rounds_data = [group['metric_value'].values for name, group in df_filtered.groupby('round_id')]
+    def _extract_phase_correlations(self, context: Dict[str, Any], config: Dict[str, Any], df_long: pd.DataFrame, rounds: List[str]) -> pd.DataFrame:
+        """
+        Extrai as correlações intra-fase entre tenants para cada 
+        combinação de métrica × fase × round.
+        
+        Args:
+            context: Contexto da análise
+            config: Configuração da análise
+            df_long: DataFrame em formato longo
+            rounds: Lista de rounds a analisar
             
-            # O teste de Friedman requer que cada amostra (round) tenha o mesmo número de observações.
-            # Para garantir isso, truncamos todas as amostras para o comprimento da mais curta.
-            if not rounds_data or any(len(x) == 0 for x in rounds_data):
-                min_len = 0
-            else:
-                min_len = min(len(x) for x in rounds_data)
-
-            # Prosseguir apenas se tivermos dados suficientes
-            if min_len > 1 and len(rounds_data) > 1:
-                try:
-                    # Truncar os dados para o comprimento mínimo
-                    truncated_rounds_data = [data[:min_len] for data in rounds_data]
-                    stat, p_value = stats.friedmanchisquare(*truncated_rounds_data)
-                    results['friedman_results'][key] = {'statistic': stat, 'p_value': p_value}
-                    if p_value < 0.05:
-                        results['significant_differences'][key] = p_value
-                except ValueError as e:
-                    logger.warning(f"Não foi possível realizar o teste de Friedman para {key} mesmo após o truncamento: {e}")
-                    results['friedman_results'][key] = {'statistic': np.nan, 'p_value': np.nan}
-            else:
-                logger.debug(f"Dados insuficientes para o teste de Friedman para {key} (min_len={min_len}, num_rounds={len(rounds_data)}). Pulando.")
-                results['friedman_results'][key] = {'statistic': np.nan, 'p_value': np.nan}
-
-    # Generate visualizations
-    # ... (add visualization generation if needed)
-
-    logger.info("Análise de consistência de métricas concluída.")
-    return results
+        Returns:
+            DataFrame com correlações intra-fase
+        """
+        self.logger.info("Extraindo correlações intra-fase para todas as combinações...")
+        
+        # Obtém parâmetros de configuração
+        multi_round_config = config.get('multi_round_analysis', {})
+        correlation_config = multi_round_config.get('correlation', {})
+        
+        # Define parâmetros para correlação
+        method = correlation_config.get('method', 'pearson')
+        min_periods = correlation_config.get('min_periods', 3)
+        
+        # Obtém métricas, fases e tenants
+        metrics = context.get('selected_metrics', sorted(df_long['metric_name'].unique()))
+        phases = sorted(df_long['experimental_phase'].unique())
+        tenants = context.get('selected_tenants', sorted(df_long['tenant_id'].unique()))
+        
+        # Configurações de cache e paralelismo
+        perf_config = multi_round_config.get('performance', {})
+        use_cache = perf_config.get('use_cache', True)
+        parallel = perf_config.get('parallel_processing', False)
+        cache_dir = os.path.join(self.output_dir, 'cache') if self.output_dir else None
+        
+        # Extrai correlações intra-fase
+        correlations_df = extract_phase_correlations(
+            df_long=df_long,
+            rounds=rounds,
+            metrics=metrics,
+            phases=phases,
+            tenants=tenants,
+            method=method,
+            min_periods=min_periods,
+            use_cache=use_cache,
+            parallel=parallel,
+            cache_dir=cache_dir
+        )
+        
+        if correlations_df.empty:
+            self.logger.warning("Nenhuma correlação intra-fase extraída. Verifique os dados e parâmetros.")
+        else:
+            self.logger.info(f"Extração concluída: {correlations_df.shape[0]} correlações intra-fase calculadas.")
+            
+            # Salva os resultados em CSV se houver diretório de saída
+            if self.output_dir:
+                correlations_path = os.path.join(self.output_dir, 'phase_correlations.csv')
+                correlations_df.to_csv(correlations_path, index=False)
+                self.logger.info(f"Correlações intra-fase salvas em: {correlations_path}")
+                
+                # Analisa a estabilidade das correlações entre rounds
+                min_rounds = correlation_config.get('min_stable_rounds', 2)
+                correlation_threshold = correlation_config.get('significance_threshold', 0.5)
+                
+                stability_results = analyze_correlation_stability(
+                    phase_correlations_df=correlations_df,
+                    min_rounds=min_rounds,
+                    correlation_threshold=correlation_threshold
+                )
+                
+                if stability_results:
+                    # Gera um resumo da estabilidade das correlações
+                    stability_path = os.path.join(self.output_dir, 'correlation_stability_summary.md')
+                    with open(stability_path, 'w') as f:
+                        f.write("# Resumo da Estabilidade das Correlações Intra-Fase\n\n")
+                        f.write(f"Gerado em: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+                        
+                        # Resumo de estatísticas gerais
+                        f.write("## Estatísticas Gerais\n\n")
+                        summary = stability_results.get('summary', {})
+                        f.write(f"- Total de pares analisados: {summary.get('total_pairs', 0)}\n")
+                        f.write(f"- Pares com correlação estável: {summary.get('stable_pairs', 0)}\n")
+                        f.write(f"- Pares com correlação instável: {summary.get('unstable_pairs', 0)}\n")
+                        
+                        # Correlações estáveis por métrica e fase
+                        stable_correlations = stability_results.get('stable_correlations', {})
+                        if stable_correlations:
+                            f.write("\n## Correlações Estáveis por Métrica e Fase\n\n")
+                            for (metric, phase), correlations in stable_correlations.items():
+                                f.write(f"### {metric} - {phase}\n\n")
+                                # Ordena por correlação média (valor absoluto) decrescente
+                                correlations.sort(key=lambda x: abs(x['mean_correlation']), reverse=True)
+                                for corr_info in correlations:
+                                    tenant_pair = corr_info['tenant_pair']
+                                    mean_corr = corr_info['mean_correlation']
+                                    std_corr = corr_info['std_correlation']
+                                    variability = corr_info['variability']
+                                    rounds_count = corr_info['round_count']
+                                    
+                                    f.write(f"- **{tenant_pair}**: {mean_corr:.3f} ± {std_corr:.3f} ({variability} variability, {rounds_count} rounds)\n")
+                                f.write("\n")
+                        
+                        # Variabilidade por métrica e fase
+                        variability = stability_results.get('correlation_variability', [])
+                        if variability:
+                            f.write("\n## Variabilidade da Correlação por Métrica e Fase\n\n")
+                            f.write("| Métrica | Fase | Desvio Padrão Médio | CV Médio | % Pares Estáveis |\n")
+                            f.write("|---------|------|---------------------|----------|------------------|\n")
+                            for var_info in variability:
+                                metric = var_info['metric_name']
+                                phase = var_info['experimental_phase']
+                                mean_std = var_info['mean_std']
+                                mean_cv = var_info['mean_cv']
+                                stable_ratio = var_info['stable_ratio'] * 100
+                                
+                                f.write(f"| {metric} | {phase} | {mean_std:.3f} | {mean_cv:.3f} | {stable_ratio:.1f}% |\n")
+                    
+                    self.logger.info(f"Resumo de estabilidade das correlações salvo em: {stability_path}")
+        
+        return correlations_df

@@ -135,6 +135,16 @@ def extract_phase_correlations(
     """
 ```
 
+### ✅ Status: Implementado
+A função `extract_phase_correlations` foi implementada no arquivo `src/phase_correlation.py`, com funcionalidade adicional para análise de estabilidade das correlações usando a função `analyze_correlation_stability`. O método `_extract_phase_correlations` foi adicionado à classe `MultiRoundAnalysisStage` em `src/analysis_multi_round.py` para integração com o pipeline.
+
+Recursos adicionais implementados:
+- Cache para evitar recálculos
+- Processamento paralelo para melhor performance
+- Análise de qualidade dos resultados (alta, média, baixa)
+- Análise de força da correlação (forte, moderada, fraca)
+- Análise de estabilidade entre rounds
+
 ## 3. Agregação de Tamanhos de Efeito (`aggregate_effect_sizes`)
 
 ### Assinatura da função

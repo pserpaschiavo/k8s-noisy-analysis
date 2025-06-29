@@ -55,6 +55,11 @@ multi_round_analysis:
     p_value_combination: "fisher"  # ou "stouffer"
     confidence_level: 0.95
     alpha: 0.05
+  correlation:
+    method: "pearson"  # ou "spearman", "kendall"
+    min_periods: 3
+    min_stable_rounds: 2  # Mínimo de rounds para considerar uma correlação estável
+    significance_threshold: 0.5  # Limiar de correlação significativa
   performance:
     use_cache: true
     parallel_processing: false

@@ -15,24 +15,34 @@ A análise multi-round consolida os resultados estatísticos obtidos de múltipl
 - Suporta cache para evitar recálculos
 - Paralelização opcional para maior desempenho
 
-### 2. Agregação Estatística
+### 2. Extração de Correlações Intra-Fase
+
+- Calcula correlações entre pares de tenants dentro de cada fase e round
+- Suporta diferentes métodos de correlação (Pearson, Spearman, Kendall)
+- Analisa a estabilidade das correlações entre rounds
+- Classifica correlações por força (forte, moderada, fraca) e qualidade (alta, média, baixa)
+
+### 3. Agregação Estatística
 
 - Calcula média, desvio padrão e intervalo de confiança (IC95%) dos tamanhos de efeito
 - Combina p-valores de múltiplos rounds usando os métodos de Fisher ou Stouffer
 - Calcula métricas de estabilidade (coeficiente de variação)
+- Identifica correlações estatisticamente consistentes entre rounds
 
-### 3. Visualização Consolidada
+### 4. Visualização Consolidada
 
 - Gera heatmaps dos tamanhos de efeito médios
 - Cria boxplots de variabilidade por round
 - Produz gráficos de error bars com IC95%
 - Disponibiliza scatter plots para relacionar efeito × p-valor × variabilidade
+- Visualiza redes de correlação intra-fase
 
-### 4. Análise de Robustez
+### 5. Análise de Robustez
 
 - Implementa análise leave-one-out para detectar dependência de rounds específicos
 - Calcula a estabilidade das conclusões com diferentes limiares de significância
 - Quantifica a incerteza usando métodos bayesianos ou bootstrap
+- Avalia a estabilidade das correlações entre tenants
 
 ## Uso
 
@@ -55,6 +65,11 @@ multi_round_analysis:
     p_value_combination: "fisher"  # ou "stouffer"
     confidence_level: 0.95
     alpha: 0.05
+  correlation:
+    method: "pearson"  # ou "spearman", "kendall"
+    min_periods: 3
+    min_stable_rounds: 2  # Mínimo de rounds para considerar uma correlação estável
+    significance_threshold: 0.5  # Limiar de correlação significativa
   performance:
     use_cache: true
     parallel_processing: false
@@ -81,6 +96,12 @@ multi_round_analysis:
 - 0.06 - 0.14: Efeito médio
 - > 0.14: Efeito grande
 
+### Correlação
+
+- < 0.3: Correlação fraca
+- 0.3 - 0.7: Correlação moderada
+- > 0.7: Correlação forte
+
 ### P-valor Combinado
 
 Um p-valor combinado < 0.05 indica que o efeito observado é estatisticamente significativo considerando todos os rounds analisados.
@@ -90,6 +111,8 @@ Um p-valor combinado < 0.05 indica que o efeito observado é estatisticamente si
 A análise multi-round gera os seguintes artefatos:
 
 - Arquivo CSV com todos os tamanhos de efeito calculados
+- Arquivo CSV com todas as correlações intra-fase calculadas
 - Gráficos de heatmap para visualização dos efeitos
 - Gráficos de boxplot e error bars
 - Relatório consolidado em formato Markdown
+- Análise de estabilidade das correlações entre tenants
