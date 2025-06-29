@@ -32,6 +32,7 @@ from src.visualization.advanced_plots import (
     plot_aggregated_correlation_graph
 )
 from src.analysis_correlation import compute_aggregated_correlation
+from src.effect_size import extract_effect_sizes  # Importar o novo módulo
 
 # Configuração de logging e estilo
 logging.basicConfig(level=logging.INFO)
@@ -109,6 +110,23 @@ class MultiRoundAnalysisStage(PipelineStage):
 
         try:
             results = {}
+
+            # 0. Extração de tamanhos de efeito para todos os rounds
+            self.logger.info("Realizando extração de tamanhos de efeito em todas as combinações...")
+            effect_sizes_df = self._extract_effect_sizes(context, config, df_filtered, rounds)
+            if not effect_sizes_df.empty:
+                results['effect_sizes'] = {
+                    'dataframe': effect_sizes_df,
+                    'summary': {
+                        'total_comparisons': effect_sizes_df.shape[0],
+                        'significant_effects': effect_sizes_df[effect_sizes_df['p_value'] < 0.05].shape[0],
+                        'large_effects': effect_sizes_df[effect_sizes_df['effect_size'].abs() > 0.8].shape[0],
+                        'medium_effects': effect_sizes_df[(effect_sizes_df['effect_size'].abs() > 0.5) & 
+                                                         (effect_sizes_df['effect_size'].abs() <= 0.8)].shape[0],
+                        'small_effects': effect_sizes_df[(effect_sizes_df['effect_size'].abs() > 0.2) & 
+                                                        (effect_sizes_df['effect_size'].abs() <= 0.5)].shape[0]
+                    }
+                }
 
             # 1. Análise de consistência de causalidade (Jaccard/Spearman)
             self.logger.info("Analisando a consistência da estrutura causal (Jaccard/Spearman)...")
@@ -445,7 +463,7 @@ class MultiRoundAnalysisStage(PipelineStage):
 
             # --- Seção 4: Divergência Comportamental ---
             f.write("## 4. Análise de Divergência Comportamental\n\n")
-            f.write("Identifica rounds com comportamento anômalo e mede a estabilidade do comportamento dos tenants através dos rounds usando a Divergência de Kullback-Leibler.\n\n")
+            f.write("Identifica rounds com comportamento anômalo e mede a estabilidade do comportamento dos tenants através dos rounds usando a Divergência de Kullback-Leibniz.\n\n")
             f.write("Para dados detalhados, veja `tenant_stability_scores.csv`.\n\n")
 
             # --- Seção 4.1: Boxplots Consolidados (Aprimorado v2.1) ---
@@ -612,6 +630,76 @@ class MultiRoundAnalysisStage(PipelineStage):
             'te_matrices_by_round': te_matrices_by_round,
             'granger_matrices_by_round': granger_matrices_by_round
         }
+
+
+    def _extract_effect_sizes(self, context: Dict[str, Any], config: Dict[str, Any], df_long: pd.DataFrame, rounds: List[str]) -> pd.DataFrame:
+        """
+        Extrai tamanhos de efeito e estatísticas relacionadas para cada 
+        combinação de métrica × fase × tenant × round.
+        
+        Args:
+            context: Contexto da análise
+            config: Configuração da análise
+            df_long: DataFrame em formato longo
+            rounds: Lista de rounds a analisar
+            
+        Returns:
+            DataFrame com tamanhos de efeito e estatísticas relacionadas
+        """
+        self.logger.info("Extraindo tamanhos de efeito para todas as combinações...")
+        
+        # Obtém parâmetros de configuração
+        multi_round_config = config.get('multi_round_analysis', {})
+        effect_size_config = multi_round_config.get('effect_size', {})
+        
+        # Define fase de baseline
+        baseline_phase = effect_size_config.get('baseline_phase', "1 - Baseline")
+        
+        # Verifica se a baseline existe nos dados
+        available_phases = df_long['experimental_phase'].unique()
+        if baseline_phase not in available_phases:
+            self.logger.warning(f"Fase de baseline '{baseline_phase}' não encontrada nos dados.")
+            available_phases_str = ", ".join(sorted(available_phases))
+            self.logger.info(f"Fases disponíveis: {available_phases_str}")
+            self.logger.info(f"Usando a primeira fase como baseline: {sorted(available_phases)[0]}")
+            baseline_phase = sorted(available_phases)[0]
+        
+        # Obtém métricas, fases e tenants
+        metrics = context.get('selected_metrics', sorted(df_long['metric_name'].unique()))
+        phases = sorted(df_long['experimental_phase'].unique())
+        tenants = context.get('selected_tenants', sorted(df_long['tenant_id'].unique()))
+        
+        # Configurações de cache e paralelismo
+        perf_config = multi_round_config.get('performance', {})
+        use_cache = perf_config.get('use_cache', True)
+        parallel = perf_config.get('parallel_processing', False)
+        cache_dir = os.path.join(self.output_dir, 'cache') if self.output_dir else None
+        
+        # Extrai tamanhos de efeito
+        effect_sizes_df = extract_effect_sizes(
+            df_long=df_long,
+            rounds=rounds,
+            metrics=metrics,
+            phases=phases,
+            tenants=tenants,
+            baseline_phase=baseline_phase,
+            use_cache=use_cache,
+            parallel=parallel,
+            cache_dir=cache_dir
+        )
+        
+        if effect_sizes_df.empty:
+            self.logger.warning("Nenhum tamanho de efeito extraído. Verifique os dados e parâmetros.")
+        else:
+            self.logger.info(f"Extração concluída: {effect_sizes_df.shape[0]} tamanhos de efeito calculados.")
+            
+            # Salva os resultados em CSV se houver diretório de saída
+            if self.output_dir:
+                effect_sizes_path = os.path.join(self.output_dir, 'effect_sizes.csv')
+                effect_sizes_df.to_csv(effect_sizes_path, index=False)
+                self.logger.info(f"Tamanhos de efeito salvos em: {effect_sizes_path}")
+        
+        return effect_sizes_df
 
 
 def analyze_causality_robustness(te_matrices_by_round: Dict[str, Any], granger_matrices_by_round: Dict[str, Any], output_dir: str) -> Dict[str, Any]:

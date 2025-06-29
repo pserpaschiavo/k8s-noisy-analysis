@@ -46,6 +46,26 @@ causality:
   granger_threshold: 0.05
   transfer_entropy_bins: 8
   
+# Configuração para análise multi-round
+multi_round_analysis:
+  effect_size:
+    methods: ["cohen_d", "eta_squared"]
+    baseline_phase: "1 - Baseline"
+  meta_analysis:
+    p_value_combination: "fisher"  # ou "stouffer"
+    confidence_level: 0.95
+    alpha: 0.05
+  performance:
+    use_cache: true
+    parallel_processing: false
+  visualization:
+    heatmap_colormap: "RdBu_r"
+    show_significance_markers: true
+    effect_size_thresholds:
+      small: 0.2
+      medium: 0.5
+      large: 0.8
+  
 # Opções de visualização
 plots:
   figure_size: [12, 7]
