@@ -35,6 +35,19 @@ from src.analysis_correlation import compute_aggregated_correlation
 from src.effect_size import extract_effect_sizes  # Importar o novo módulo
 from src.effect_aggregation import aggregate_effect_sizes  # Importar a função de agregação de efeitos
 from src.phase_correlation import extract_phase_correlations, analyze_correlation_stability  # Importar funções de correlação intra-fase
+from src.visualization.effect_plots import (
+    generate_effect_size_heatmap,
+    plot_effect_error_bars,
+    plot_effect_scatter,
+    generate_effect_forest_plot
+)
+from src.visualization.correlation_plots import (
+    plot_correlation_heatmap,
+    plot_correlation_network,
+    plot_correlation_stability
+)
+from src.robustness_analysis import perform_robustness_analysis, generate_robustness_summary
+from src.insights_generation import generate_automated_insights, generate_markdown_report
 
 # Configuração de logging e estilo
 logging.basicConfig(level=logging.INFO)
@@ -145,6 +158,77 @@ class MultiRoundAnalysisStage(PipelineStage):
                         }
                     }
                     
+                    # Realizar análise de robustez dos tamanhos de efeito
+                    self.logger.info("Realizando análise de robustez dos tamanhos de efeito...")
+                    robustness_output_dir = os.path.join(self.output_dir, 'robustness') if self.output_dir else None
+                    
+                    robustness_df, robustness_plots = perform_robustness_analysis(
+                        effect_sizes_df=effect_sizes_df,
+                        output_dir=robustness_output_dir
+                    )
+                    
+                    if not robustness_df.empty:
+                        results['effect_robustness'] = {
+                            'dataframe': robustness_df,
+                            'summary': {
+                                'total_analyzed': robustness_df.shape[0],
+                                'high_robustness': (robustness_df['overall_robustness'] == 'Alta').sum(),
+                                'medium_robustness': (robustness_df['overall_robustness'] == 'Média').sum(),
+                                'low_robustness': (robustness_df['overall_robustness'] == 'Baixa').sum()
+                            },
+                            'plots': robustness_plots
+                        }
+                        
+                        # Adicionar resumo de robustez ao relatório
+                        robustness_summary = generate_robustness_summary(robustness_df)
+                        results['effect_robustness']['report'] = robustness_summary
+                        
+                    # Gerar visualizações para os tamanhos de efeito agregados
+                    self.logger.info("Gerando visualizações para os tamanhos de efeito agregados...")
+                    
+                    if self.output_dir:
+                        effect_viz_dir = os.path.join(self.output_dir, 'effect_visualizations')
+                        os.makedirs(effect_viz_dir, exist_ok=True)
+                        
+                        # Heatmap de tamanhos de efeito
+                        heatmap_paths = []
+                        for metric in aggregated_effects_df['metric_name'].unique():
+                            path = generate_effect_size_heatmap(
+                                aggregated_effects_df=aggregated_effects_df,
+                                output_dir=effect_viz_dir,
+                                metric=metric
+                            )
+                            if path:
+                                heatmap_paths.append(path)
+                                
+                        # Error bars com IC95%
+                        error_bar_paths = []
+                        for metric in aggregated_effects_df['metric_name'].unique():
+                            path = plot_effect_error_bars(
+                                aggregated_effects_df=aggregated_effects_df,
+                                output_dir=effect_viz_dir,
+                                metric=metric
+                            )
+                            if path:
+                                error_bar_paths.append(path)
+                                
+                        # Gráficos de dispersão
+                        scatter_paths = []
+                        for metric in aggregated_effects_df['metric_name'].unique():
+                            path = plot_effect_scatter(
+                                aggregated_effects_df=aggregated_effects_df,
+                                output_dir=effect_viz_dir,
+                                metric=metric
+                            )
+                            if path:
+                                scatter_paths.append(path)
+                                
+                        results['aggregated_effects']['visualizations'] = {
+                            'heatmaps': heatmap_paths,
+                            'error_bars': error_bar_paths,
+                            'scatter_plots': scatter_paths
+                        }
+                    
             # 0.2 Extração de correlações intra-fase
             self.logger.info("Realizando extração de correlações intra-fase entre tenants...")
             phase_correlations_df = self._extract_phase_correlations(context, config, df_filtered, rounds)
@@ -160,6 +244,76 @@ class MultiRoundAnalysisStage(PipelineStage):
                         'negative_correlations': (phase_correlations_df['correlation'] < 0).sum()
                     }
                 }
+                
+                # Analisar estabilidade das correlações intra-fase
+                self.logger.info("Analisando estabilidade das correlações intra-fase...")
+                correlation_stability_df = analyze_correlation_stability(phase_correlations_df)
+                
+                if isinstance(correlation_stability_df, pd.DataFrame) and not correlation_stability_df.empty:
+                    results['phase_correlations']['stability'] = {
+                        'dataframe': correlation_stability_df,
+                        'summary': {
+                            'total_analyzed': correlation_stability_df.shape[0],
+                            'high_stability': len(correlation_stability_df[correlation_stability_df['stability_category'] == 'high']),
+                            'medium_stability': len(correlation_stability_df[correlation_stability_df['stability_category'] == 'medium']),
+                            'low_stability': len(correlation_stability_df[correlation_stability_df['stability_category'] == 'low'])
+                        }
+                    }
+                    
+                    # Gerar visualizações para as correlações intra-fase
+                    self.logger.info("Gerando visualizações para correlações intra-fase...")
+                    
+                    if self.output_dir:
+                        correlation_viz_dir = os.path.join(self.output_dir, 'correlation_visualizations')
+                        os.makedirs(correlation_viz_dir, exist_ok=True)
+                        
+                        # 1. Heatmaps de correlação para cada combinação de métrica, fase e round
+                        heatmap_paths = []
+                        for metric in phase_correlations_df['metric_name'].unique():
+                            for phase in phase_correlations_df['experimental_phase'].unique():
+                                for round_id in phase_correlations_df['round_id'].unique():
+                                    path = plot_correlation_heatmap(
+                                        correlation_df=phase_correlations_df,
+                                        output_dir=correlation_viz_dir,
+                                        metric=metric,
+                                        phase=phase,
+                                        round_id=round_id
+                                    )
+                                    if path:
+                                        heatmap_paths.append(path)
+                        
+                        # 2. Redes de correlação para cada combinação de métrica e fase
+                        network_paths = []
+                        for metric in phase_correlations_df['metric_name'].unique():
+                            for phase in phase_correlations_df['experimental_phase'].unique():
+                                path = plot_correlation_network(
+                                    correlation_df=phase_correlations_df,
+                                    output_dir=correlation_viz_dir,
+                                    metric=metric,
+                                    phase=phase
+                                )
+                                if path:
+                                    network_paths.append(path)
+                        
+                        # 3. Visualizações de estabilidade para cada combinação de métrica e fase
+                        stability_paths = []
+                        for metric in correlation_stability_df['metric_name'].unique():
+                            for phase in correlation_stability_df['experimental_phase'].unique():
+                                path = plot_correlation_stability(
+                                    correlation_df=phase_correlations_df,
+                                    stability_df=results['phase_correlations']['stability']['dataframe'],
+                                    output_dir=correlation_viz_dir,
+                                    metric=metric,
+                                    phase=phase
+                                )
+                                if path:
+                                    stability_paths.append(path)
+                        
+                        results['phase_correlations']['visualizations'] = {
+                            'heatmaps': heatmap_paths,
+                            'networks': network_paths,
+                            'stability_plots': stability_paths
+                        }
 
             # 1. Análise de consistência de causalidade (Jaccard/Spearman)
             self.logger.info("Analisando a consistência da estrutura causal (Jaccard/Spearman)...")
@@ -233,7 +387,64 @@ class MultiRoundAnalysisStage(PipelineStage):
             else:
                  self.logger.warning("Matrizes de Transfer Entropy não disponíveis. Pulando agregação de consenso.")
 
-            # 6. Visualizações consolidadas
+            # 6. Geração de insights automáticos
+            self.logger.info("Gerando insights automáticos...")
+            try:
+                # Determinar quais DataFrames estão disponíveis para insights
+                effect_sizes_available = 'effect_sizes' in results and 'dataframe' in results['effect_sizes']
+                aggregated_effects_available = 'aggregated_effects' in results and 'dataframe' in results['aggregated_effects']
+                robustness_available = 'effect_robustness' in results and 'dataframe' in results['effect_robustness']
+                correlations_available = 'phase_correlations' in results and 'dataframe' in results['phase_correlations']
+                correlation_stability_available = correlations_available and 'stability' in results['phase_correlations']
+                
+                # Gerar insights apenas se houver dados agregados disponíveis
+                if aggregated_effects_available:
+                    aggregated_effects_df = results['aggregated_effects']['dataframe']
+                    robustness_df = results['effect_robustness']['dataframe'] if robustness_available else None
+                    phase_correlations_df = results['phase_correlations']['dataframe'] if correlations_available else None
+                    correlation_stability_df = results['phase_correlations']['stability']['dataframe'] if correlation_stability_available else None
+                    
+                    # Gerar insights
+                    # Extrair fases experimentais dos dados para o contexto
+                    all_phases = sorted(aggregated_effects_df['experimental_phase'].unique().tolist())
+                    baseline_phases = aggregated_effects_df['baseline_phase'].unique().tolist()
+                    experimental_phases = [phase for phase in all_phases if phase not in baseline_phases]
+                    
+                    insights = generate_automated_insights(
+                        aggregated_effects_df=aggregated_effects_df,
+                        robustness_df=robustness_df,
+                        phase_correlations_df=phase_correlations_df,
+                        correlation_stability_df=correlation_stability_df,
+                        context={
+                            'experiment_name': context.get('experiment_name', 'Análise Multi-round'),
+                            'rounds': rounds,
+                            'metrics': metrics,
+                            'phases': experimental_phases,  # Agora definido corretamente
+                            'tenants': tenants
+                        }
+                    )
+                    
+                    # Adicionar insights aos resultados
+                    results['automated_insights'] = insights
+                    
+                    # Gerar relatório markdown
+                    if self.output_dir:
+                        insights_dir = os.path.join(self.output_dir, 'insights')
+                        os.makedirs(insights_dir, exist_ok=True)
+                        report_path = os.path.join(insights_dir, 'automated_insights_report.md')
+                        markdown_report = generate_markdown_report(insights, report_path)
+                        
+                        self.logger.info(f"✅ Insights automáticos gerados e salvos em: {report_path}")
+                    else:
+                        self.logger.info("✅ Insights automáticos gerados (sem diretório de saída definido)")
+                else:
+                    self.logger.warning("Não há tamanhos de efeito agregados disponíveis. Pulando geração de insights.")
+            except Exception as e:
+                self.logger.error(f"Erro ao gerar insights automáticos: {str(e)}")
+                import traceback
+                self.logger.error(traceback.format_exc())
+            
+            # 7. Visualizações consolidadas
             self.logger.info("Gerando visualizações consolidadas...")
             # Removido o antigo `generate_round_consistency_visualizations`
             # As visualizações agora são geradas por tipo.

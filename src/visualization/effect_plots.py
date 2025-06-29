@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+from scipy import stats
 from typing import Dict, List, Tuple, Any, Optional, Union
 from pathlib import Path
 
@@ -272,9 +273,9 @@ def plot_effect_error_bars(
         
         # Extrair dados para o gráfico
         phase_tenants = metric_df['phase_tenant'].values
-        mean_effects = metric_df['mean_effect_size'].values
-        ci_lowers = metric_df['ci_lower'].values
-        ci_uppers = metric_df['ci_upper'].values
+        mean_effects = metric_df['mean_effect_size'].to_numpy()
+        ci_lowers = metric_df['ci_lower'].to_numpy()
+        ci_uppers = metric_df['ci_upper'].to_numpy()
         is_significant = metric_df['is_significant'].values
         
         # Calcular barras de erro (diferença entre média e limites de IC)
@@ -408,9 +409,9 @@ def plot_effect_scatter(
             continue
         
         # Preparar dados para o gráfico
-        effect_sizes = metric_df['mean_effect_size'].values
-        log_p_values = -np.log10(metric_df['combined_p_value'].values)  # Transformação -log10 para p-valores
-        cv_values = np.abs(metric_df['coefficient_of_variation'].values)  # Valores absolutos do CV
+        effect_sizes = metric_df['mean_effect_size'].to_numpy()
+        log_p_values = -np.log10(metric_df['combined_p_value'].to_numpy())  # Transformação -log10 para p-valores
+        cv_values = np.abs(metric_df['coefficient_of_variation'].to_numpy())  # Valores absolutos do CV
         
         # Criar figura
         plt.figure(figsize=(10, 8))
@@ -528,11 +529,11 @@ def generate_effect_forest_plot(
     
     # Preparar dados para o forest plot
     rounds = individual_df['round_id'].values
-    effects = individual_df['effect_size'].values
+    effects = individual_df['effect_size'].to_numpy()
     
     # Estimar intervalos de confiança para rounds individuais
     # Usamos uma aproximação simples baseada no p-valor
-    p_values = individual_df['p_value'].values
+    p_values = individual_df['p_value'].to_numpy()
     z_scores = stats.norm.ppf(1 - p_values/2)  # Two-tailed z-score
     std_errs = np.abs(effects / z_scores)
     ci_lowers = effects - 1.96 * std_errs

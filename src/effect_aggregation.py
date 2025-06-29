@@ -16,55 +16,98 @@ def combine_pvalues_fisher(p_values):
     Combina múltiplos p-valores usando o método de Fisher.
     
     Args:
-        p_values: Lista de p-valores a combinar
+        p_values: Lista ou array de p-valores a combinar
         
     Returns:
         float: p-valor combinado
     """
-    # Substituir valores zero ou nan para evitar problemas
-    p_values = np.array(p_values)
-    p_values = np.nan_to_num(p_values, nan=0.5)  # Substitui NaN por 0.5 (neutro)
-    p_values = np.clip(p_values, 1e-10, 1.0)  # Limita entre 1e-10 e 1.0
+    # Converter para numpy array para processamento mais eficiente
+    p_values = np.asarray(p_values, dtype=float)
     
-    # Estatística de teste de Fisher
-    chi_square = -2 * np.sum(np.log(p_values))
+    # Remover valores NaN
+    p_values = p_values[~np.isnan(p_values)]
     
-    # Graus de liberdade = 2 * número de p-valores
-    df = 2 * len(p_values)
+    # Verificar se há p-valores válidos
+    if len(p_values) == 0:
+        return np.nan
     
-    # p-valor combinado
-    combined_p = 1.0 - stats.chi2.cdf(chi_square, df)
-    return combined_p
+    # Substituir valores zero ou muito próximos por um valor mínimo
+    # para evitar problemas com o logaritmo
+    min_p = 1e-10
+    p_values = np.clip(p_values, min_p, 1.0)
+    
+    try:
+        # Estatística de teste de Fisher
+        chi_square = -2 * np.sum(np.log(p_values))
+        
+        # Graus de liberdade = 2 * número de p-valores
+        df = 2 * len(p_values)
+        
+        # p-valor combinado
+        combined_p = 1.0 - stats.chi2.cdf(chi_square, df)
+        
+        # Verificar resultado
+        if np.isnan(combined_p) or np.isinf(combined_p):
+            return min_p if chi_square > 0 else 1.0
+        
+        return combined_p
+    except Exception as e:
+        logger.warning(f"Erro ao combinar p-valores com método de Fisher: {e}")
+        return np.nan
 
 def combine_pvalues_stouffer(p_values, weights=None):
     """
     Combina múltiplos p-valores usando o método de Stouffer.
     
     Args:
-        p_values: Lista de p-valores a combinar
+        p_values: Lista ou array de p-valores a combinar
         weights: Pesos para cada p-valor (opcional)
         
     Returns:
         float: p-valor combinado
     """
+    # Converter para numpy array para processamento mais eficiente
+    p_values = np.asarray(p_values, dtype=float)
+    
+    # Remover valores NaN
+    mask = ~np.isnan(p_values)
+    p_values = p_values[mask]
+    
+    # Verificar se há p-valores válidos
+    if len(p_values) == 0:
+        return np.nan
+    
+    # Ajustar pesos se fornecidos
+    if weights is not None:
+        weights = np.asarray(weights, dtype=float)
+        weights = weights[mask]  # Aplicar mesma máscara usada para p_values
+    else:
+        weights = np.ones_like(p_values)
+    
     # Substituir valores problemáticos
-    p_values = np.array(p_values)
-    p_values = np.nan_to_num(p_values, nan=0.5)  # Substitui NaN por 0.5 (neutro)
-    p_values = np.clip(p_values, 1e-10, 1.0)  # Limita entre 1e-10 e 1.0
+    min_p = 1e-10
+    max_p = 1.0 - min_p
+    p_values = np.clip(p_values, min_p, max_p)
     
-    # Converter p-valores para z-scores
-    z_scores = stats.norm.ppf(1 - p_values)
-    
-    if weights is None:
-        weights = np.ones_like(z_scores)
-    weights = np.array(weights)
-    
-    # Z-score combinado
-    z_combined = np.sum(weights * z_scores) / np.sqrt(np.sum(weights**2))
-    
-    # p-valor combinado
-    combined_p = 1 - stats.norm.cdf(z_combined)
-    return combined_p
+    try:
+        # Converter p-valores para z-scores
+        # Usamos o inverso da CDF da distribuição normal
+        z_scores = stats.norm.ppf(1 - p_values)
+        
+        # Z-score combinado
+        z_combined = np.sum(weights * z_scores) / np.sqrt(np.sum(weights**2))
+        
+        # p-valor combinado
+        combined_p = 1 - stats.norm.cdf(z_combined)
+        
+        # Verificar resultado
+        if np.isnan(combined_p) or np.isinf(combined_p):
+            return min_p if z_combined > 0 else 1.0
+        
+        return combined_p
+    except Exception as e:
+        logger.warning(f"Erro ao combinar p-valores com método de Stouffer: {e}")
+        return np.nan
 
 def calculate_confidence_interval(values, confidence_level=0.95):
     """
@@ -100,8 +143,26 @@ def bootstrap_confidence_interval(values, confidence_level=0.95, n_resamples=100
     Returns:
         Tuple[float, float]: Limites inferior e superior do intervalo de confiança
     """
+    # Verificações iniciais
+    values = np.array(values)
     if len(values) < 2:
         return np.nan, np.nan
+    
+    # Verifica valores ausentes
+    values = values[~np.isnan(values)]
+    if len(values) < 2:
+        return np.nan, np.nan
+    
+    # Tratamento de outliers extremos (opcional)
+    q1, q3 = np.percentile(values, [25, 75])
+    iqr = q3 - q1
+    lower_bound = q1 - 3.0 * iqr
+    upper_bound = q3 + 3.0 * iqr
+    filtered_values = values[(values >= lower_bound) & (values <= upper_bound)]
+    
+    # Se o filtro removeu todos ou quase todos os dados, usar os originais
+    if len(filtered_values) < 2 or len(filtered_values) < 0.5 * len(values):
+        filtered_values = values
     
     # Configurar gerador de números aleatórios para reprodutibilidade
     rng = np.random.RandomState(random_state)
@@ -109,13 +170,19 @@ def bootstrap_confidence_interval(values, confidence_level=0.95, n_resamples=100
     # Realizar bootstrapping
     bootstrap_means = []
     for _ in range(n_resamples):
-        resample = rng.choice(values, size=len(values), replace=True)
+        # Garantir que o resampling é feito com replacement
+        resample = rng.choice(filtered_values, size=len(filtered_values), replace=True)
         bootstrap_means.append(np.mean(resample))
     
     # Calcular percentis para o intervalo de confiança
     alpha = (1 - confidence_level) / 2
     lower = np.percentile(bootstrap_means, 100 * alpha)
     upper = np.percentile(bootstrap_means, 100 * (1 - alpha))
+    
+    # Validação final dos resultados
+    if np.isinf(lower) or np.isinf(upper) or np.isnan(lower) or np.isnan(upper):
+        # Fallback para método não paramétrico mais simples
+        lower, upper = calculate_confidence_interval(filtered_values, confidence_level)
     
     return lower, upper
 
@@ -200,10 +267,15 @@ def aggregate_effect_sizes(
     
     results = []
     for (metric, phase, tenant, baseline), group in grouped:
-        # Extrair valores para cálculos
-        effect_sizes = group['effect_size'].values
-        p_values = group['p_value'].values
-        eta_squared_values = group['eta_squared'].values if 'eta_squared' in group.columns else None
+        # Extrair valores para cálculos e convertê-los para arrays numpy
+        effect_sizes = np.asarray(group['effect_size'].values, dtype=float)
+        p_values = np.asarray(group['p_value'].values, dtype=float)
+        
+        # Extrair eta_squared se disponível
+        if 'eta_squared' in group.columns:
+            eta_squared_values = np.asarray(group['eta_squared'].values, dtype=float)
+        else:
+            eta_squared_values = None
         
         # Verificar se há dados suficientes
         if len(effect_sizes) < 1:
@@ -211,8 +283,8 @@ def aggregate_effect_sizes(
             continue
         
         # Calcular estatísticas básicas
-        mean_effect = np.mean(effect_sizes)
-        std_effect = np.std(effect_sizes, ddof=1) if len(effect_sizes) > 1 else np.nan
+        mean_effect = np.nanmean(effect_sizes)
+        std_effect = np.nanstd(effect_sizes, ddof=1) if len(effect_sizes) > 1 else np.nan
         
         # Calcular intervalo de confiança (IC)
         if use_bootstrap and len(effect_sizes) >= 3:
@@ -236,8 +308,8 @@ def aggregate_effect_sizes(
         
         # Estatísticas para eta_squared se disponíveis
         if eta_squared_values is not None:
-            mean_eta = np.mean(eta_squared_values)
-            std_eta = np.std(eta_squared_values, ddof=1) if len(eta_squared_values) > 1 else np.nan
+            mean_eta = np.nanmean(eta_squared_values)
+            std_eta = np.nanstd(eta_squared_values, ddof=1) if len(eta_squared_values) > 1 else np.nan
         else:
             mean_eta = np.nan
             std_eta = np.nan
@@ -256,9 +328,10 @@ def aggregate_effect_sizes(
             effect_magnitude = "large"
         
         # Número de rounds com valor significativo
-        if not np.isnan(p_values).all():
-            significant_count = np.sum(p_values < alpha)
-            total_count = np.sum(~np.isnan(p_values))
+        valid_p_values = ~np.isnan(p_values)
+        if np.any(valid_p_values):
+            significant_count = np.sum(p_values[valid_p_values] < alpha)
+            total_count = np.sum(valid_p_values)
             significance_ratio = significant_count / total_count if total_count > 0 else np.nan
         else:
             significant_count = 0
