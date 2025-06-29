@@ -6,8 +6,10 @@ seaborn>=0.11.0
 networkx>=2.6.0
 numpy>=1.20.0
 pyinform>=0.2.0  # Para Transfer Entropy
-statsmodels>=0.13.0  # Para análise de causalidade de Granger
+statsmodels==0.14.2  # Para análise de causalidade de Granger
+scipy==1.13.1
 pyarrow>=8.0.0  # Para trabalhar com formato Parquet
 jupyter>=1.0.0   # Para notebooks (opcional)
 scikit-learn>=1.0.0  # Para análises avançadas
 tqdm>=4.62.0  # Para barras de progresso
+tabulate>=0.8.9 # Para gerar tabelas formatadas

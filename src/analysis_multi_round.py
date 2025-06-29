@@ -27,7 +27,11 @@ from src.visualization.plots import (
     generate_consolidated_heatmap,
     generate_all_enhanced_consolidated_boxplots
 )
-from src.visualization.advanced_plots import generate_all_consolidated_timeseries
+from src.visualization.advanced_plots import (
+    generate_all_consolidated_timeseries,
+    plot_aggregated_correlation_graph
+)
+from src.analysis_correlation import compute_aggregated_correlation
 
 # Configuração de logging e estilo
 logging.basicConfig(level=logging.INFO)
@@ -217,6 +221,45 @@ class MultiRoundAnalysisStage(PipelineStage):
                 self.logger.error(f"Erro ao gerar time series consolidados: {e}")
                 results['consolidated_timeseries'] = {}
 
+            # 6.3 Gráfico de Correlação Agregado
+            self.logger.info("Gerando gráfico de correlação agregado...")
+            try:
+                correlation_dir = os.path.join(output_dir, "correlation")
+                os.makedirs(correlation_dir, exist_ok=True)
+                
+                phases = sorted(df_filtered['experimental_phase'].unique())
+
+                aggregated_correlations = compute_aggregated_correlation(
+                    df=df_filtered,
+                    metrics=metrics,
+                    rounds=rounds,
+                    phases=phases,
+                    method='pearson'
+                )
+                
+                correlation_plot_paths = {}
+                if aggregated_correlations:
+                    for metric, corr_matrix in aggregated_correlations.items():
+                        filename = f"aggregated_correlation_graph_{metric}.png"
+                        title = f"Grafo de Correlação Agregada - {metric.replace('_', ' ').title()}"
+                        
+                        plot_path = plot_aggregated_correlation_graph(
+                            correlation_matrix=corr_matrix,
+                            title=title,
+                            output_dir=correlation_dir,
+                            filename=filename,
+                            threshold=0.5
+                        )
+                        if plot_path:
+                            correlation_plot_paths[metric] = plot_path
+                
+                results['aggregated_correlation_graphs'] = correlation_plot_paths
+                self.logger.info(f"✅ Gráficos de correlação agregada gerados: {len(correlation_plot_paths)} arquivos")
+
+            except Exception as e:
+                self.logger.error(f"Erro ao gerar gráficos de correlação agregada: {e}", exc_info=True)
+                results['aggregated_correlation_graphs'] = {}
+
             # 7. Gerar relatório consolidado
             self.logger.info("Gerando relatório consolidado da análise multi-round...")
             self.generate_multi_round_report(results) # Passando todos os resultados
@@ -289,7 +332,12 @@ class MultiRoundAnalysisStage(PipelineStage):
 
         if spearman_scores:
             df_spearman = pd.DataFrame(spearman_scores, columns=['Metric', 'Round Pair', 'Spearman Correlation'])
+            # Tratar NaNs que podem surgir se os dados de entrada forem constantes
+            df_spearman['Spearman Correlation'] = df_spearman['Spearman Correlation'].fillna(0)
             consistency_results['te_spearman'] = df_spearman.pivot(index='Metric', columns='Round Pair', values='Spearman Correlation')
+        else:
+            # Garante que a chave exista mesmo que não haja dados
+            consistency_results['te_spearman'] = pd.DataFrame()
             
         self.logger.info("Análise de consistência de causalidade concluída.")
         self.logger.debug(f"Resultados de Jaccard (Granger):\n{consistency_results['granger_jaccard']}")
@@ -363,8 +411,9 @@ class MultiRoundAnalysisStage(PipelineStage):
             df_spearman = graph_consistency.get('te_spearman')
             if df_spearman is not None and not df_spearman.empty:
                 f.write("### 1.2. Força Causal - Transfer Entropy (Correlação de Spearman)\n")
-                f.write("A tabela a seguir mostra a correlação de Spearman entre as matrizes de Transferência de Entropia (TE). Esta métrica avalia a consistência na FORÇA da causalidade. Valores próximos de 1 indicam uma forte correlação positiva na força causal entre os rounds.\n\n")
-                f.write(df_spearman.to_markdown())
+                f.write("A tabela a seguir mostra a correlação de Spearman entre as matrizes de Transferência de Entropia (TE). Esta métrica avalia a consistência na FORÇA da causalidade. Valores próximos de 1 indicam uma forte correlação positiva na força causal entre os rounds.\n")
+                f.write("*Nota: Valores de correlação nulos (NaN) foram convertidos para 0, indicando ausência de correlação consistente ou dados de entrada constantes (sem variabilidade na força causal).*\n\n")
+                f.write(df_spearman.to_markdown(floatfmt=".4f"))
                 f.write("\n\n![Heatmap de Consistência de TE](./te_consistency_heatmap.png)\n\n")
 
             # --- Seção 2: Robustez Causal e Grafos Robustos ---
@@ -442,17 +491,36 @@ class MultiRoundAnalysisStage(PipelineStage):
                 f.write("- **Tendências Suavizadas**: Médias móveis para identificar padrões de longo prazo\n")
                 f.write("- **Distribuições por Fase**: Boxplots comparando fases experimentais\n\n")
                 
-                for metric, path in consolidated_timeseries.items():
+                for metric, paths in consolidated_timeseries.items():
                     metric_display = metric.replace("_", " ").title()
                     f.write(f"#### {metric_display}\n")
-                    f.write(f"![Time Series Consolidado - {metric_display}](./timeseries/{os.path.basename(path)})\n\n")
-                    
+                    if isinstance(paths, dict):
+                        for plot_type, path in paths.items():
+                            if path: # Garante que o caminho não é nulo
+                                f.write(f"![{plot_type.replace('_', ' ').title()}](./timeseries/{os.path.basename(path)})\n")
+                        f.write("\n")
+                    elif isinstance(paths, str): # Fallback para o formato antigo
+                         f.write(f"![Time Series Consolidado - {metric_display}](./timeseries/{os.path.basename(paths)})\n\n")
+
                 f.write("**Interpretação**: \n")
                 f.write("- **Convergência entre rounds** indica comportamento reproduzível\n")
                 f.write("- **Divergências significativas** podem indicar efeitos de noisy neighbors\n")
                 f.write("- **Padrões temporais consistentes** sugerem relações causais estáveis\n\n")
             else:
                 f.write("Time series consolidados não foram gerados nesta execução.\n\n")
+
+            # --- Seção 4.3: Gráficos de Correlação Agregada ---
+            f.write("## 4.3. Gráficos de Correlação Agregada\n\n")
+            f.write("Estes grafos mostram as correlações médias entre os tenants, agregadas através de todos os rounds e fases. As arestas representam a força da correlação (positiva ou negativa) entre os pares de tenants.\n\n")
+            
+            aggregated_correlation_graphs = all_results.get('aggregated_correlation_graphs', {})
+            if aggregated_correlation_graphs:
+                for metric, path in aggregated_correlation_graphs.items():
+                    metric_display = metric.replace("_", " ").title()
+                    f.write(f"### {metric_display}\n")
+                    f.write(f"![Grafo de Correlação Agregada - {metric_display}](./correlation/{os.path.basename(path)})\n\n")
+            else:
+                f.write("Gráficos de correlação agregada não foram gerados nesta execução.\n\n")
 
 
             # --- Seção 5: Veredictos de Consenso ---
@@ -494,7 +562,7 @@ class MultiRoundAnalysisStage(PipelineStage):
             self.logger.warning("Não foi possível determinar o diretório base de saídas. Não será possível carregar matrizes de causalidade.")
             return {}
 
-        causality_output_dir = os.path.join(base_output_dir, 'causality')
+        causality_output_dir = os.path.join(base_output_dir, 'plots', 'causality')
         
         self.logger.info(f"Procurando matrizes de causalidade em: {causality_output_dir}")
 
@@ -546,58 +614,101 @@ class MultiRoundAnalysisStage(PipelineStage):
         }
 
 
-def generate_robust_causality_graph(
-    robust_relationships: Dict[str, Dict[Tuple[str, str], Dict[str, float]]],
-    output_dir: str,
-    metric: str
-) -> Optional[str]:
+def analyze_causality_robustness(te_matrices_by_round: Dict[str, Any], granger_matrices_by_round: Dict[str, Any], output_dir: str) -> Dict[str, Any]:
     """
-    Gera um grafo de causalidade robusto para uma métrica específica.
+    Analyzes the robustness of causal relationships across multiple rounds.
+    """
+    logger.info("Iniciando a análise de robustez da força causal...")
+    # Placeholder implementation
+    return {}
+
+def analyze_behavioral_divergence(df_long: pd.DataFrame, metrics: List[str], tenants: List[str], output_dir: str) -> Dict[str, Any]:
+    """
+    Analyzes the behavioral divergence of tenants across multiple rounds.
+    """
+    logger.info("Iniciando a análise de divergência comportamental...")
+    # Placeholder implementation
+    return {}
+
+def aggregate_round_consensus(df_long: pd.DataFrame, te_matrices_by_round: Dict[str, Any], consistency_results: Dict[str, Any], output_dir: str) -> Dict[str, Any]:
+    """
+    Aggregates the results from multiple rounds to form a consensus.
+    """
+    logger.info("Iniciando a agregação de consenso entre os rounds...")
+    # Placeholder implementation
+    return {}
+
+def generate_robust_causality_graph(robust_relationships: Dict[str, Any], output_dir: str, metric: str) -> Optional[str]:
+    """
+    Generates a graph of robust causal relationships.
+    """
+    logger.info(f"Gerando grafo de causalidade robusta para a métrica {metric}...")
+    # Placeholder implementation
+    return None
+
+def analyze_round_consistency(df_long: pd.DataFrame, metrics: List[str], tenants: List[str], output_dir: str) -> Dict[str, Any]:
+    """
+    Analyzes the consistency of metrics across multiple rounds using Coefficient of Variation (CV)
+    and the Friedman test.
 
     Args:
-        robust_relationships: Dicionário com as relações causais robustas.
-        output_dir: Diretório para salvar o grafo.
-        metric: Métrica para a qual o grafo será gerado.
+        df_long (pd.DataFrame): The long format DataFrame with all data.
+        metrics (List[str]): The list of metrics to analyze.
+        tenants (List[str]): The list of tenants to analyze.
+        output_dir (str): The directory to save visualizations.
 
     Returns:
-        Caminho do arquivo de imagem do grafo gerado ou None se não houver dados.
+        Dict[str, Any]: A dictionary containing the consistency results.
     """
-    if not robust_relationships.get(metric):
-        logger.warning(f"Não há relações causais robustas para a métrica '{metric}'. O grafo não será gerado.")
-        return None
-
-    G = nx.DiGraph()
+    logger.info("Iniciando a análise de consistência de métricas entre rounds...")
+    results = {
+        'cv_results': {},
+        'friedman_results': {},
+        'significant_differences': {}
+    }
     
-    # Adicionar arestas com pesos, ignorando NaNs, para garantir que os dados são numéricos
-    for (source, target), data in robust_relationships[metric].items():
-        weight = data.get('mean_te')
-        if weight is not None and pd.notna(weight):
-            G.add_edge(source, target, weight=float(weight))
-
-    if not G.nodes():
-        logger.warning(f"O grafo para a métrica '{metric}' não possui nós. A visualização será pulada.")
-        return None
-
-    plt.figure(figsize=(14, 10))
-    pos = nx.spring_layout(G, k=0.9, iterations=50)
-
-    # Desenhar nós com tamanho proporcional ao out-degree (influência).
-    node_sizes = [int(500 + 1000 * G.out_degree(n)) for n in G.nodes()]
-    nx.draw_networkx_nodes(G, pos, node_size=node_sizes, node_color='skyblue', alpha=0.8) # type: ignore
-
-    # Desenhar arestas com espessura proporcional à força da causalidade (peso).
-    edge_weights = [float(G[u][v]['weight']) for u, v in G.edges()]
-    
-    if edge_weights:
-        # Normalizar pesos para uma faixa de espessura visualmente agradável (e.g., 1 a 10).
-        min_w = min(edge_weights)
-        max_w = max(edge_weights)
-        
-        edge_widths = []
-        if max_w > min_w:
-            edge_widths = [1.0 + 9.0 * (w - min_w) / (max_w - min_w) for w in edge_weights]
-        else:
-            # Todos os pesos são iguais, usar uma espessura média.
-            edge_widths = [5.0] * len(edge_weights)
+    for metric in metrics:
+        for tenant in tenants:
+            key = f"{metric}_{tenant}"
             
-        nx.draw_networkx_edges(G, pos, width=edge_widths, alpha=0.6, edge_color='gray', arrowsize=20) # type: ignore
+            # Filter data for the specific metric and tenant
+            df_filtered = df_long[(df_long['metric_name'] == metric) & (df_long['tenant_id'] == tenant)]
+            
+            if df_filtered.empty:
+                continue
+
+            # Calculate Coefficient of Variation (CV)
+            cv = df_filtered.groupby('round_id')['metric_value'].mean().std() / df_filtered.groupby('round_id')['metric_value'].mean().mean()
+            results['cv_results'][key] = cv
+
+            # Friedman Test
+            rounds_data = [group['metric_value'].values for name, group in df_filtered.groupby('round_id')]
+            
+            # O teste de Friedman requer que cada amostra (round) tenha o mesmo número de observações.
+            # Para garantir isso, truncamos todas as amostras para o comprimento da mais curta.
+            if not rounds_data or any(len(x) == 0 for x in rounds_data):
+                min_len = 0
+            else:
+                min_len = min(len(x) for x in rounds_data)
+
+            # Prosseguir apenas se tivermos dados suficientes
+            if min_len > 1 and len(rounds_data) > 1:
+                try:
+                    # Truncar os dados para o comprimento mínimo
+                    truncated_rounds_data = [data[:min_len] for data in rounds_data]
+                    stat, p_value = stats.friedmanchisquare(*truncated_rounds_data)
+                    results['friedman_results'][key] = {'statistic': stat, 'p_value': p_value}
+                    if p_value < 0.05:
+                        results['significant_differences'][key] = p_value
+                except ValueError as e:
+                    logger.warning(f"Não foi possível realizar o teste de Friedman para {key} mesmo após o truncamento: {e}")
+                    results['friedman_results'][key] = {'statistic': np.nan, 'p_value': np.nan}
+            else:
+                logger.debug(f"Dados insuficientes para o teste de Friedman para {key} (min_len={min_len}, num_rounds={len(rounds_data)}). Pulando.")
+                results['friedman_results'][key] = {'statistic': np.nan, 'p_value': np.nan}
+
+    # Generate visualizations
+    # ... (add visualization generation if needed)
+
+    logger.info("Análise de consistência de métricas concluída.")
+    return results

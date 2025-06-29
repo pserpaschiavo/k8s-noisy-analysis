@@ -16,7 +16,7 @@ import matplotlib.lines as mlines
 import networkx as nx
 import statsmodels.api as sm
 from statsmodels.tsa.stattools import grangercausalitytests
-from statsmodels.tools.sm_exceptions import MissingDataError
+from statsmodels.tools.sm_exceptions import MissingDataError, InfeasibleTestError
 from functools import lru_cache
 import warnings
 
@@ -344,9 +344,13 @@ class CausalityAnalyzer:
                 
                 try:
                     # Select only data with overlapping timestamps
-                    data = pd.concat([wide[target], wide[source]], axis=1)
-                    data = data.dropna()
+                    data = pd.concat([wide[target], wide[source]], axis=1).dropna()
                     
+                    # Check for constant series before any other processing
+                    if data[source].std() < 1e-9 or data[target].std() < 1e-9:
+                        logger.warning(f"Skipping Granger for {source}->{target}: At least one series is constant.")
+                        continue
+
                     # Additional check to ensure sufficient data
                     if len(data) < maxlag + 5:  # Requires at least 5 points beyond maxlag
                         logger.warning(f"Insufficient data for Granger test {source}->{target}: {len(data)} points, minimum {maxlag+5}")
@@ -355,24 +359,33 @@ class CausalityAnalyzer:
                     # Check for stationarity before the test
                     from statsmodels.tsa.stattools import adfuller
                     # First-order differentiation if not stationary
-                    for col_idx, col_name in enumerate(data.columns):
-                        adf_result = adfuller(data[col_name], autolag='AIC')
-                        if adf_result[1] > 0.05:  # p-value > 0.05 indicates non-stationarity
-                            original_len = len(data)
-                            data[col_name] = data[col_name].diff().dropna()
-                            logger.warning(f"Series {col_name} was not stationary. Differentiated and reduced from {original_len} to {len(data)} points.")
+                    for col_name in data.columns:
+                        try:
+                            adf_result = adfuller(data[col_name], autolag='AIC')
+                            if adf_result[1] > 0.05:  # p-value > 0.05 indicates non-stationarity
+                                original_len = len(data)
+                                data[col_name] = data[col_name].diff()
+                                logger.warning(f"Series {col_name} for {source}->{target} was not stationary. Differentiated and reduced from {original_len} to {len(data.dropna())} points.")
+                        except Exception as adf_error:
+                            logger.error(f"Error during stationarity check for {col_name} in {source}->{target}: {adf_error}")
+                            continue # Skip to next column
                             
                     data = data.dropna()  # Remove NaN values after differentiation
                     
+                    # Check for constant series again after differentiation to avoid errors
+                    if data[source].std() < 1e-9 or data[target].std() < 1e-9:
+                        logger.warning(f"Skipping Granger for {source}->{target}: At least one series is constant after differentiation.")
+                        continue
+                    
                     if len(data) <= maxlag + 3:  # Check again after differentiation
-                        logger.warning(f"Insufficient data after differentiation: {len(data)} points")
+                        logger.warning(f"Insufficient data for {source}->{target} after differentiation: {len(data)} points")
                         continue
                         
                     with warnings.catch_warnings():
                         warnings.simplefilter('ignore')
                         # Perform Granger test with improved error handling
                         test_results = grangercausalitytests(
-                            data, 
+                            data[[target, source]], 
                             maxlag=maxlag, 
                             verbose=False
                         )
@@ -383,12 +396,17 @@ class CausalityAnalyzer:
                     
                     # Store the result in the matrix
                     mat.loc[target, source] = min_p_value
-                except KeyError:
+                except (KeyError, MissingDataError):
+                    logger.warning(f"Skipping Granger for {source}->{target} due to missing data or key errors.")
                     continue
-                except MissingDataError:
+                except (ValueError, np.linalg.LinAlgError) as e:
+                    logger.warning(f"Could not calculate Granger for {source}->{target}. This is often due to constant data after processing. Details: {str(e)}")
+                    continue
+                except InfeasibleTestError as e:
+                    logger.warning(f"Infeasible Granger test for {source}->{target}: {e}")
                     continue
                 except Exception as e:
-                    logging.warning(f"Error calculating Granger for {source}->{target}: {str(e)}")
+                    logger.error(f"An unexpected error occurred calculating Granger for {source}->{target}: {str(e)}", exc_info=True)
                     continue
                     
         return mat

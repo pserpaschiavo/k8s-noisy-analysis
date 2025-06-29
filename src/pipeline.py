@@ -1016,7 +1016,7 @@ class Pipeline:
 def main():
     """Main function to configure and run the pipeline."""
     parser = argparse.ArgumentParser(description="Run the multi-tenant time series analysis pipeline.")
-    parser.add_argument("--config", type=str, default="config/pipeline_config.yaml", help="Path to the pipeline configuration file.")
+    parser.add_argument("--config", type=str, default="config/pipeline_config_sfi2.yaml", help="Path to the pipeline configuration file.")
     parser.add_argument("--force-reprocess", action="store_true", help="Force reprocessing of all data, ignoring existing consolidated files.")
     
     args = parser.parse_args()

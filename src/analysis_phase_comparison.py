@@ -19,6 +19,7 @@ import seaborn as sns
 from typing import Dict, List, Tuple, Any, Optional, Union
 
 from src.visualization_config import PUBLICATION_CONFIG
+from src.utils import normalize_phase_name
 
 def compute_phase_stats_comparison(df: pd.DataFrame, metric: str, round_id: str, tenants: Optional[List[str]] = None) -> pd.DataFrame:
     """
@@ -43,84 +44,70 @@ def compute_phase_stats_comparison(df: pd.DataFrame, metric: str, round_id: str,
     
     assert tenants is not None
 
-    # Standardized mapping from internal phase keys to data phase names
-    phase_mapping = {
-        'baseline': '1 - Baseline',
-        'cpu-noise': '2 - CPU Noise',
-        'memory-noise': '3 - Memory Noise',
-        'network-noise': '4 - Network Noise',
-        'disk-noise': '5 - Disk Noise',
-        'combined-noise': '6 - Combined Noise',
-        'recovery': '7 - Recovery'
-    }
-    
-    available_data_phases = subset['experimental_phase'].unique()
-    
-    # Filter phases from config that are actually in the data
-    available_phases = {
-        key: name for key, name in phase_mapping.items() 
-        if name in available_data_phases
-    }
-    
-    # Structure to store results
+    # A normalização agora é feita na ingestão. O código pode confiar nos nomes canônicos.
+    available_phases = sorted(subset['experimental_phase'].unique())
+    baseline_phase_name = normalize_phase_name('Baseline') # Obtém o nome canônico da baseline
+
+    if baseline_phase_name not in available_phases:
+        logging.warning(f"Fase de baseline canônica '\'{baseline_phase_name}\'' não encontrada para a métrica {metric} no round {round_id}. A análise de variação de fase será pulada.")
+        return pd.DataFrame()
+
+    # Estrutura para armazenar resultados
     results = []
     
     # For each combination of tenant and phase
     for tenant in tenants:
         tenant_data = {'tenant_id': tenant}
         
-        # Base metrics for the tenant (in baseline)
-        baseline_phase_name = phase_mapping.get('baseline')
-        if not baseline_phase_name:
-            logging.error("Baseline phase 'baseline' not found in phase_mapping.")
-            continue
-
+        # Métricas base para o tenant (na baseline)
         baseline_data = subset[(subset['tenant_id'] == tenant) & 
                               (subset['experimental_phase'] == baseline_phase_name)]
         
-        baseline_stats = {}
-        if not baseline_data.empty:
-            baseline_stats = {
-                'mean': baseline_data['metric_value'].mean(),
-                'std': baseline_data['metric_value'].std(),
-                'median': baseline_data['metric_value'].median(),
-                'min': baseline_data['metric_value'].min(),
-                'max': baseline_data['metric_value'].max()
-            }
+        if baseline_data.empty:
+            logging.warning(f"Sem dados para o tenant {tenant} na fase baseline.")
+            continue
 
-        # For each phase, calculate statistics and relative variation to baseline
-        for phase_key, phase_name in available_phases.items():
-            phase_data = subset[(subset['tenant_id'] == tenant) & 
-                               (subset['experimental_phase'] == phase_name)]
-            
-            phase_key_present = f'{phase_key}_present'
+        base_mean = baseline_data['metric_value'].mean()
+        base_std = baseline_data['metric_value'].std()
+        
+        tenant_data[f'{baseline_phase_name}_mean'] = base_mean
+        tenant_data[f'{baseline_phase_name}_std'] = base_std
+
+        # Para cada fase de stress, compara com a baseline
+        for phase in available_phases:
+            if phase == baseline_phase_name:
+                continue
+
+            phase_data = subset[(subset['tenant_id'] == tenant) & (subset['experimental_phase'] == phase)]
             
             if phase_data.empty:
-                tenant_data[phase_key_present] = False
-                continue
+                tenant_data[f'{phase}_mean'] = 'N/A'
+                tenant_data[f'{phase}_std'] = 'N/A'
+                tenant_data[f'{phase}_vs_baseline_pct'] = 'N/A'
+            else:
+                phase_mean = phase_data['metric_value'].mean()
+                phase_std = phase_data['metric_value'].std()
                 
-            tenant_data[phase_key_present] = True
-            tenant_data[f'{phase_key}_mean'] = phase_data['metric_value'].mean()
-            tenant_data[f'{phase_key}_std'] = phase_data['metric_value'].std()
-            tenant_data[f'{phase_key}_median'] = phase_data['metric_value'].median()
-            tenant_data[f'{phase_key}_min'] = phase_data['metric_value'].min()
-            tenant_data[f'{phase_key}_max'] = phase_data['metric_value'].max()
-            
-            # Calculate percentage change relative to baseline
-            if phase_key != 'baseline' and baseline_stats:
-                baseline_mean = baseline_stats.get('mean', 0)
-                if baseline_mean != 0:
-                    change_pct = ((tenant_data[f'{phase_key}_mean'] - baseline_mean) / abs(baseline_mean)) * 100
-                    tenant_data[f'{phase_key}_vs_baseline_pct'] = change_pct
+                tenant_data[f'{phase}_mean'] = phase_mean
+                tenant_data[f'{phase}_std'] = phase_std
+                
+                # Calculate percentage change relative to baseline, ensuring values are numeric
+                if isinstance(phase_mean, (int, float)) and isinstance(base_mean, (int, float)):
+                    if abs(base_mean) > 1e-9:  # Avoid division by zero
+                        change_pct = ((phase_mean - base_mean) / abs(base_mean)) * 100
+                        tenant_data[f'{phase}_vs_baseline_pct'] = change_pct
+                    else:
+                        tenant_data[f'{phase}_vs_baseline_pct'] = 0.0
                 else:
-                    tenant_data[f'{phase_key}_vs_baseline_pct'] = np.nan
+                    tenant_data[f'{phase}_vs_baseline_pct'] = 'N/A'
         
         results.append(tenant_data)
+
+    if not results:
+        return pd.DataFrame()
     
-    # Convert to DataFrame
-    result_df = pd.DataFrame(results)
+    return pd.DataFrame(results)
     
-    return result_df
 
 
 def plot_phase_comparison(stats_df: pd.DataFrame, metric: str, out_path: str) -> None:

@@ -7,6 +7,8 @@ import pandas as pd
 from typing import List, Optional, Dict
 import logging
 
+from src.utils import normalize_phase_name
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 
@@ -60,22 +62,28 @@ def list_phases(round_path: str) -> List[str]:
         logging.error(f"Round path not found: {round_path}")
         return []
 
+    # Normalize phase names before sorting and returning
+    normalized_dirs = {}
+    for d in dirs:
+        normalized_name = normalize_phase_name(d)
+        if normalized_name:
+            if normalized_name not in normalized_dirs: # Keep the first encountered directory for a given canonical name
+                normalized_dirs[normalized_name] = d
+        else:
+            logging.warning(f"Found and ignored unexpected phase directory in {round_path}: {d}")
+
     # Sort the found directories based on the predefined PHASE_ORDER
-    def sort_key(d):
+    def sort_key(normalized_name):
         try:
-            return PHASE_ORDER.index(d)
+            return PHASE_ORDER.index(normalized_name)
         except ValueError:
             return float('inf')  # Place unknown phases at the end
 
-    sorted_dirs = sorted(dirs, key=sort_key)
-    
-    known_phases = [d for d in sorted_dirs if d in PHASE_ORDER]
-    unknown_dirs = [d for d in sorted_dirs if d not in PHASE_ORDER]
-    
-    if unknown_dirs:
-        logging.warning(f"Found and ignored unexpected phase directories in {round_path}: {unknown_dirs}")
+    sorted_normalized_names = sorted(normalized_dirs.keys(), key=sort_key)
 
-    return [os.path.join(round_path, d) for d in known_phases]
+    # Return the original directory names in the correct order
+    return [os.path.join(round_path, normalized_dirs[name]) for name in sorted_normalized_names]
+
 
 def list_tenants(phase_path: str, tenant_prefix: str = "tenant-") -> List[str]:
     """List all tenant directories under a phase, filtering by prefix."""

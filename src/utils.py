@@ -7,6 +7,7 @@ Description: General utilities for the analysis pipeline.
 import warnings
 import contextlib
 import logging
+from typing import Dict, List, Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -92,3 +93,33 @@ def validate_data_availability(config: dict) -> bool:
     else:
         logger.info("Pre-flight check successful. All expected raw data files were found.")
         return True
+
+# Mapeamento Canônico de Fases
+# Este dicionário define o mapeamento de vários possíveis nomes de fase para um único nome canônico.
+# O nome canônico é a chave do dicionário.
+CANONICAL_PHASE_MAPPING = {
+    '1 - Baseline': ['baseline', '1 - baseline', 'Baseline'],
+    '2 - CPU Noise': ['cpu-noise', '2 - cpu noise', 'CPU Noise'],
+    '3 - Memory Noise': ['memory-noise', '3 - memory noise', 'Memory Noise'],
+    '4 - Network Noise': ['network-noise', '4 - network noise', 'Network Noise'],
+    '5 - Disk Noise': ['disk-noise', '5 - disk noise', 'Disk Noise', 'Disk I/O Noise'],
+    '6 - Combined Noise': ['combined-noise', '6 - combined noise', 'Combined Noise'],
+    '7 - Recovery': ['recovery', '7 - recovery', 'Recovery']
+}
+
+# Invertendo o mapeamento para busca rápida
+_REVERSE_CANONICAL_MAPPING = {alias.lower(): canonical 
+                             for canonical, aliases in CANONICAL_PHASE_MAPPING.items() 
+                             for alias in aliases + [canonical]}
+
+def normalize_phase_name(name: str) -> Optional[str]:
+    """
+    Normaliza um nome de fase para o formato canônico.
+
+    Args:
+        name: O nome da fase a ser normalizado.
+
+    Returns:
+        O nome da fase canônico ou None se não for encontrado.
+    """
+    return _REVERSE_CANONICAL_MAPPING.get(name.lower())

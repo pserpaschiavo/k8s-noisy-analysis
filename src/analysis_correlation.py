@@ -197,3 +197,42 @@ def compute_cross_correlation(df: pd.DataFrame, metric: str, phase: str, round_i
             ccf_results[(tenant1, tenant2)] = full_ccf
     
     return ccf_results
+
+
+def compute_aggregated_correlation(df: pd.DataFrame, metrics: list[str], rounds: list[str], phases: list[str], method: str = 'pearson') -> dict[str, pd.DataFrame]:
+    """
+    Computes the aggregated correlation matrix across multiple rounds and phases for each metric.
+    
+    Args:
+        df (pd.DataFrame): The input DataFrame.
+        metrics (list[str]): A list of metrics to analyze.
+        rounds (list[str]): A list of round IDs to include.
+        phases (list[str]): A list of experimental phases to include.
+        method (str): The correlation method to use ('pearson', 'spearman', etc.).
+
+    Returns:
+        dict[str, pd.DataFrame]: A dictionary mapping each metric to its aggregated correlation matrix.
+    """
+    aggregated_correlations = {}
+    for metric in metrics:
+        all_correlations = []
+        for round_id in rounds:
+            for phase in phases:
+                # Assuming compute_correlation_matrix is available in this module
+                corr_matrix = compute_correlation_matrix(df, metric, phase, round_id, method)
+                if not corr_matrix.empty:
+                    all_correlations.append(corr_matrix)
+        
+        if all_correlations:
+            # Use pd.concat and groupby to calculate the mean of all correlation matrices
+            aggregated_matrix = pd.concat(all_correlations).groupby(level=0).mean()
+            
+            # Clear the index name to prevent conflicts when resetting the index later
+            aggregated_matrix.index.name = None
+            
+            aggregated_correlations[metric] = aggregated_matrix
+            logger.info(f"Aggregated correlation matrix for metric '{metric}' computed with shape {aggregated_matrix.shape}.")
+        else:
+            logger.warning(f"No correlation matrices could be computed for metric '{metric}' across the specified rounds and phases.")
+
+    return aggregated_correlations

@@ -600,14 +600,21 @@ def generate_enhanced_consolidated_boxplot(
     plot_title = f"Distribution of {metric_name} by Phase"
 
     if normalize:
-        if baseline_phase_name not in metric_df['experimental_phase'].unique():
-            logger.error(f"Baseline phase '{baseline_phase_name}' not found for metric '{metric}'. Cannot normalize.")
+        # Find the actual baseline phase name (e.g., "1 - Baseline")
+        actual_baseline_phase = None
+        for phase in metric_df['experimental_phase'].unique():
+            if baseline_phase_name in phase:
+                actual_baseline_phase = phase
+                break
+        
+        if not actual_baseline_phase:
+            logger.error(f"Baseline phase containing '{baseline_phase_name}' not found for metric '{metric}'. Cannot normalize.")
             return None
 
         # Calculate the mean of the baseline phase for each tenant
-        baseline_means = metric_df[metric_df['experimental_phase'] == baseline_phase_name]
+        baseline_means = metric_df[metric_df['experimental_phase'] == actual_baseline_phase]
         if baseline_means.empty:
-            logger.warning(f"No data for baseline phase '{baseline_phase_name}' in metric '{metric}'. Skipping normalization.")
+            logger.warning(f"No data for baseline phase '{actual_baseline_phase}' in metric '{metric}'. Skipping normalization.")
         else:
             tenant_baselines = baseline_means.groupby('tenant_id')['metric_value'].mean().to_dict()
             

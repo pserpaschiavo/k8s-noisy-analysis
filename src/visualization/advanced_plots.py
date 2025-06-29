@@ -13,6 +13,7 @@ import logging
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 import warnings
+import networkx as nx
 
 from src.visualization_config import PUBLICATION_CONFIG
 
@@ -256,3 +257,61 @@ def generate_all_consolidated_timeseries(
     
     logger.info(f"Time series consolidados concluídos: {len(results)} métricas processadas")
     return results
+
+def plot_aggregated_correlation_graph(correlation_matrix: pd.DataFrame, title: str, output_dir: str, filename: str, threshold: float = 0.5):
+    """
+    Plota um grafo de correlações agregadas entre tenants.
+
+    Args:
+        correlation_matrix: DataFrame contendo a matriz de correlação.
+        title: Título do gráfico.
+        output_dir: Diretório para salvar o gráfico.
+        filename: Nome do arquivo de saída.
+        threshold: Limiar para exibir apenas correlações acima deste valor (em módulo).
+    """
+    if correlation_matrix.empty:
+        logger.warning(f"Skipping correlation graph for {filename}: matrix is empty.")
+        return None
+
+    # Filtrar a matriz para remover auto-correlações e aplicar o threshold
+    corr_graph_data = correlation_matrix.stack().reset_index()
+    corr_graph_data.columns = ['tenant_a', 'tenant_b', 'correlation']
+    corr_graph_data = corr_graph_data[corr_graph_data['tenant_a'] != corr_graph_data['tenant_b']]
+    corr_graph_data = corr_graph_data[abs(corr_graph_data['correlation']) >= threshold]
+
+    if corr_graph_data.empty:
+        logger.info(f"No correlations above threshold {threshold} for {filename}. Skipping graph.")
+        return None
+
+    # Criar o grafo
+    G = nx.from_pandas_edgelist(corr_graph_data, 'tenant_a', 'tenant_b', edge_attr='correlation')
+
+    # Configurações de visualização
+    fig, ax = plt.subplots(figsize=PUBLICATION_CONFIG.get('graph_figsize', (14, 14)))
+    pos = nx.spring_layout(G, k=0.7, iterations=50, seed=42)
+
+    # Pesos e cores das arestas
+    edges = G.edges()
+    weights = [abs(G[u][v]['correlation']) * 5 for u, v in edges]  # Multiplicador para visibilidade
+    edge_colors = [G[u][v]['correlation'] for u, v in edges]
+
+    # Desenhar o grafo
+    nodes = nx.draw_networkx_nodes(G, pos, node_size=3000, node_color=PUBLICATION_CONFIG.get('node_color', '#B4C8E4'), ax=ax)
+    edges = nx.draw_networkx_edges(G, pos, width=weights, edge_color=edge_colors, edge_cmap=plt.cm.coolwarm,
+                                   edge_vmin=-1, edge_vmax=1, alpha=0.7, ax=ax)
+    labels = nx.draw_networkx_labels(G, pos, font_size=12, font_family='sans-serif', ax=ax)
+
+    # Estilo dos nós
+    nodes.set_edgecolor(PUBLICATION_CONFIG.get('node_edge_color', '#3B5998'))
+    nodes.set_linewidth(1.5)
+
+    # Adicionar uma colorbar para a legenda das arestas
+    sm = plt.cm.ScalarMappable(cmap=plt.cm.coolwarm, norm=plt.Normalize(vmin=-1, vmax=1))
+    sm.set_array([])
+    cbar = plt.colorbar(sm, ax=ax, orientation='vertical', fraction=0.046, pad=0.04)
+    cbar.set_label('Força da Correlação', weight='bold')
+
+    ax.set_title(title, fontsize=20, weight='bold')
+    plt.axis('off')
+    
+    return _save_figure(fig, output_dir, filename)

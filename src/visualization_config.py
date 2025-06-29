@@ -40,54 +40,41 @@ PUBLICATION_CONFIG = {
     
     # Standardized color scheme for experimental phases
     'phase_colors': {
-        'baseline': '#7f7f7f',       # Medium Gray
-        'cpu-noise': '#e41a1c',      # Red
-        'memory-noise': '#377eb8',   # Blue
-        'network-noise': '#4daf4a',  # Green
-        'disk-noise': '#984ea3',     # Purple
-        'combined-noise': '#ff7f00', # Orange
-        'recovery': '#a65628',       # Brown
-    },
-    
-    # Standardized display names in English for phases
-    'phase_display_names': {
-        'baseline': 'Baseline',
-        'cpu-noise': 'CPU Noise',
-        'memory-noise': 'Memory Noise',
-        'network-noise': 'Network Noise',
-        'disk-noise': 'Disk I/O Noise',
-        'combined-noise': 'Combined Noise',
-        'recovery': 'Recovery',
+        '1 - Baseline': '#7f7f7f',       # Medium Gray
+        '2 - CPU Noise': '#e41a1c',      # Red
+        '3 - Memory Noise': '#377eb8',   # Blue
+        '4 - Network Noise': '#4daf4a',  # Green
+        '5 - Disk Noise': '#984ea3',     # Purple
+        '6 - Combined Noise': '#ff7f00', # Orange
+        '7 - Recovery': '#a65628',       # Brown
     },
 
-    # Centralized colormaps for heatmaps
-    'heatmap_colormaps': {
-        'correlation': 'vlag',
-        'covariance': 'crest',
-        'p_value': 'viridis_r',
-        'score': 'viridis',
-    },
-
-    # Standardization of metric names and units
+    # Standardized display names for metrics
     'metric_display_names': {
-        'cpu_usage': {'name': 'CPU Usage', 'unit': 'Cores'},
-        'memory_usage': {'name': 'Memory Usage', 'unit': 'GB'},
-        'network_io': {'name': 'Network I/O', 'unit': 'MB/s'},
-        'disk_io': {'name': 'Disk I/O', 'unit': 'MB/s'},
-        'network_usage': {'name': 'Network Usage', 'unit': 'MB/s'},
-        'disk_usage': {'name': 'Disk Usage', 'unit': 'MB/s'},
-        'memory_usage_bytes': {'name': 'Memory Usage', 'unit': 'GB'},
-        'network_transmit_bytes_per_second': {'name': 'Network Transmit', 'unit': 'MB/s'},
-        'network_receive_bytes_per_second': {'name': 'Network Receive', 'unit': 'MB/s'},
-        'disk_read_bytes_per_second': {'name': 'Disk Read', 'unit': 'MB/s'},
-        'disk_write_bytes_per_second': {'name': 'Disk Write', 'unit': 'MB/s'},
+        'cpu_usage': {'name': 'CPU Usage', 'unit': '%'},
+        'memory_usage': {'name': 'Memory Usage', 'unit': 'Bytes'},
+        'network_io': {'name': 'Network I/O', 'unit': 'Bytes/s'},
+        'disk_io': {'name': 'Disk I/O', 'unit': 'Bytes/s'},
+        'network_usage': {'name': 'Network Usage', 'unit': 'Bytes/s'},
+        'disk_usage': {'name': 'Disk Usage', 'unit': 'Bytes/s'},
+        'memory_usage_bytes': {'name': 'Memory Usage', 'unit': 'Bytes'},
+    },
+
+    # Standardized display names for experimental phases
+    'phase_display_names': {
+        '1 - Baseline': 'Baseline',
+        '2 - CPU Noise': 'CPU Noise',
+        '3 - Memory Noise': 'Memory Noise',
+        '4 - Network Noise': 'Network Noise',
+        '5 - Disk Noise': 'Disk Noise',
+        '6 - Combined Noise': 'Combined Noise',
+        '7 - Recovery': 'Recovery',
     },
     
-    # Matplotlib style configuration for high-quality figures
+    # Font and style settings for figures
     'figure_style': {
-        'figure.dpi': 300,
-        'font.family': 'sans-serif',
-        'font.sans-serif': ['DejaVu Sans'],
+        'font.family': 'serif',
+        'font.serif': ['Times New Roman'],
         'font.size': 12,
         'axes.titlesize': 14,
         'axes.labelsize': 12,
