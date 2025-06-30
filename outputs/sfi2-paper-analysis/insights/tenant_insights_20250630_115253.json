@@ -1,0 +1,69 @@
+{
+    "tenant-mem": {
+        "name": "tenant-mem",
+        "rank": 1,
+        "noisy_score": 0.08168204470156204,
+        "is_noisy_tenant": true,
+        "is_victim_tenant": false,
+        "main_impacted_tenants": [],
+        "main_impact_sources": [],
+        "anomalous_metrics": [],
+        "noise_sensitivity": {},
+        "correlation_patterns": [],
+        "recommendations": [
+            "Consider adjusting resource limits to avoid impacting other tenants."
+        ]
+    },
+    "tenant-ntk": {
+        "name": "tenant-ntk",
+        "rank": 2,
+        "noisy_score": 0.07681464912089077,
+        "is_noisy_tenant": false,
+        "is_victim_tenant": false,
+        "main_impacted_tenants": [],
+        "main_impact_sources": [],
+        "anomalous_metrics": [],
+        "noise_sensitivity": {},
+        "correlation_patterns": [],
+        "recommendations": []
+    },
+    "tenant-dsk": {
+        "name": "tenant-dsk",
+        "rank": 3,
+        "noisy_score": 0.073880303666089,
+        "is_noisy_tenant": false,
+        "is_victim_tenant": false,
+        "main_impacted_tenants": [],
+        "main_impact_sources": [],
+        "anomalous_metrics": [],
+        "noise_sensitivity": {},
+        "correlation_patterns": [],
+        "recommendations": []
+    },
+    "tenant-nsy": {
+        "name": "tenant-nsy",
+        "rank": 4,
+        "noisy_score": 0.058082291149053195,
+        "is_noisy_tenant": false,
+        "is_victim_tenant": false,
+        "main_impacted_tenants": [],
+        "main_impact_sources": [],
+        "anomalous_metrics": [],
+        "noise_sensitivity": {},
+        "correlation_patterns": [],
+        "recommendations": []
+    },
+    "tenant-cpu": {
+        "name": "tenant-cpu",
+        "rank": 5,
+        "noisy_score": 0.04945569377838624,
+        "is_noisy_tenant": false,
+        "is_victim_tenant": false,
+        "main_impacted_tenants": [],
+        "main_impact_sources": [],
+        "anomalous_metrics": [],
+        "noise_sensitivity": {},
+        "correlation_patterns": [],
+        "recommendations": []
+    }
+}

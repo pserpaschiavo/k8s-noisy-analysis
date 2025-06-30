@@ -20,12 +20,17 @@ def main():
     config = load_parse_config(args.config)
 
     # Carregar dados processados
-    input_parquet_path = config.get('output_parquet_name', './data/processed/sfi2_paper.parquet')
-    fallback_path = './data/processed/data/processed/sfi2_paper.parquet'
+    processed_data_dir = config.get('processed_data_dir', './data/processed')
+    output_parquet_name = config.get('output_parquet_name', 'sfi2_paper.parquet')
+    
+    # Construir o caminho completo para o arquivo parquet
+    input_parquet_path = f"{processed_data_dir}/{output_parquet_name}"
+    fallback_path = f"./data/processed/{output_parquet_name}"
     
     logger.info(f"Tentando carregar dados processados de {input_parquet_path}")
     try:
         df_long = pd.read_parquet(input_parquet_path)
+        logger.info(f"Dados processados carregados com sucesso de {input_parquet_path}")
     except FileNotFoundError:
         logger.warning(f"Arquivo não encontrado em {input_parquet_path}. Tentando caminho alternativo: {fallback_path}")
         try:

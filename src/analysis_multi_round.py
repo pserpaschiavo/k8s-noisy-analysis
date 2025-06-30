@@ -1026,7 +1026,7 @@ class MultiRoundAnalysisStage(PipelineStage):
                         for _, row in top_effects.iterrows():
                             f.write(f"- **{row['experimental_phase']} em {row['tenant_id']} (métrica: {row['metric_name']})**\n")
                             f.write(f"  - Tamanho de efeito: {row['mean_effect_size']:.3f} (IC95%: {row['ci_lower']:.3f} a {row['ci_upper']:.3f})\n")
-                            f.write(f"  - p-valor combinado: {row['combined_p_value']:.6f} ({row['round_count']} rounds)\n")
+                            f.write(f"  - p-valor combinado: {row['combined_p_value']:.6f} ({row['rounds_count']} rounds)\n")
                             f.write(f"  - Confiabilidade: {row['reliability_category'].title()}\n")
         
         return aggregated_df
@@ -1151,3 +1151,559 @@ class MultiRoundAnalysisStage(PipelineStage):
                     self.logger.info(f"Resumo de estabilidade das correlações salvo em: {stability_path}")
         
         return correlations_df
+
+def analyze_round_consistency(df_long: pd.DataFrame, metrics: List[str], tenants: List[str], output_dir: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Analisa a consistência das métricas entre os rounds usando o Coeficiente de Variação (CV)
+    e testes estatísticos de Friedman para diferenças entre rounds.
+    
+    Args:
+        df_long: DataFrame em formato longo
+        metrics: Lista de métricas para análise
+        tenants: Lista de tenants para análise
+        output_dir: Diretório para salvar os resultados
+        
+    Returns:
+        Dict[str, Any]: Dicionário com resultados da análise
+    """
+    logger.info("Analisando a consistência das métricas entre os rounds...")
+    
+    results = {
+        'cv_by_metric_tenant': {},
+        'friedman_tests': {},
+        'round_outliers': {}
+    }
+    
+    # Verificar se há mais de um round para análise
+    rounds = sorted(df_long['round_id'].unique())
+    if len(rounds) < 2:
+        logger.warning("Pelo menos dois rounds são necessários para análise de consistência. Pulando.")
+        return results
+    
+    # Calcular CV para cada combinação de métrica x tenant x fase
+    cv_results = []
+    
+    for metric in metrics:
+        for tenant in tenants:
+            df_filtered = df_long[(df_long['metric_name'] == metric) & 
+                                 (df_long['tenant_id'] == tenant)]
+            
+            if df_filtered.empty:
+                continue
+            
+            for phase in df_filtered['experimental_phase'].unique():
+                phase_data = df_filtered[df_filtered['experimental_phase'] == phase]
+                
+                # Agregar por round para obter um valor médio por round
+                agg_by_round = phase_data.groupby('round_id')['metric_value'].mean()
+                
+                if len(agg_by_round) > 1:  # Só podemos calcular CV se tivermos mais de um valor
+                    mean_val = agg_by_round.mean()
+                    std_val = agg_by_round.std()
+                    cv = (std_val / mean_val) if mean_val != 0 else float('inf')
+                    
+                    cv_results.append({
+                        'metric_name': metric,
+                        'tenant_id': tenant,
+                        'experimental_phase': phase,
+                        'mean': mean_val,
+                        'std': std_val,
+                        'cv': cv,
+                        'rounds_count': len(agg_by_round),
+                        'rounds': ','.join(agg_by_round.index.tolist())
+                    })
+    
+    # Converter para DataFrame
+    if cv_results:
+        cv_df = pd.DataFrame(cv_results)
+        results['cv_by_metric_tenant'] = cv_df
+        
+        # Salvar resultados
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
+            cv_path = os.path.join(output_dir, 'round_consistency_cv.csv')
+            cv_df.to_csv(cv_path, index=False)
+            logger.info(f"Resultados de CV salvos em: {cv_path}")
+            
+            # Gerar visualização de heatmap para CV
+            try:
+                # Preparar dados para heatmap
+                pivot_df = cv_df.pivot_table(
+                    index='tenant_id', 
+                    columns='metric_name', 
+                    values='cv', 
+                    aggfunc='mean'
+                )
+                
+                # Criar diretório para visualizações
+                os.makedirs(os.path.join(output_dir, 'visualizations'), exist_ok=True)
+                
+                # Gerar heatmap
+                plt.figure(figsize=(10, 8))
+                sns.heatmap(
+                    pivot_df, 
+                    annot=True, 
+                    fmt=".2f", 
+                    cmap='viridis_r',  # Invertido para que valores baixos (mais consistentes) sejam verde escuro
+                    linewidths=0.5
+                )
+                plt.title('Coeficiente de Variação (CV) por Tenant e Métrica\nValores mais baixos indicam maior consistência entre rounds')
+                plt.tight_layout()
+                
+                heatmap_path = os.path.join(output_dir, 'cv_heatmap_by_tenant_metric.png')
+                plt.savefig(heatmap_path, dpi=300)
+                plt.close()
+                
+                results['heatmap_path'] = heatmap_path
+                logger.info(f"Heatmap de CV salvo em: {heatmap_path}")
+            
+            except Exception as e:
+                logger.error(f"Erro ao gerar heatmap de CV: {str(e)}")
+    
+    # Realizar testes de Friedman para cada métrica e tenant
+    # Apenas se tivermos pelo menos 3 rounds (requisito do teste de Friedman)
+    if len(rounds) >= 3:
+        friedman_results = []
+        
+        for metric in metrics:
+            for tenant in tenants:
+                # Preparar dados para o teste de Friedman
+                # Precisa de uma matriz com fases nas linhas e rounds nas colunas
+                phases_data = {}
+                
+                for phase in df_long['experimental_phase'].unique():
+                    phase_by_round = {}
+                    
+                    for round_id in rounds:
+                        data = df_long[
+                            (df_long['metric_name'] == metric) & 
+                            (df_long['tenant_id'] == tenant) &
+                            (df_long['experimental_phase'] == phase) &
+                            (df_long['round_id'] == round_id)
+                        ]
+                        
+                        if not data.empty:
+                            phase_by_round[round_id] = data['metric_value'].mean()
+                    
+                    if len(phase_by_round) == len(rounds):  # Temos dados para todos os rounds
+                        phases_data[phase] = [phase_by_round[r] for r in rounds]
+                
+                if phases_data:
+                    try:
+                        phases_df = pd.DataFrame(phases_data).T  # Transpor para ter fases nas linhas
+                        
+                        # Realizar teste de Friedman
+                        friedman_stat, p_value = stats.friedmanchisquare(*[phases_df[col] for col in phases_df.columns])
+                        
+                        friedman_results.append({
+                            'metric_name': metric,
+                            'tenant_id': tenant,
+                            'friedman_statistic': friedman_stat,
+                            'p_value': p_value,
+                            'significant': p_value < 0.05,
+                            'phases_count': len(phases_data)
+                        })
+                    except Exception as e:
+                        logger.warning(f"Erro no teste de Friedman para {metric}, {tenant}: {str(e)}")
+        
+        if friedman_results:
+            friedman_df = pd.DataFrame(friedman_results)
+            results['friedman_tests'] = friedman_df
+            
+            # Salvar resultados
+            if output_dir:
+                friedman_path = os.path.join(output_dir, 'friedman_tests.csv')
+                friedman_df.to_csv(friedman_path, index=False)
+                logger.info(f"Resultados dos testes de Friedman salvos em: {friedman_path}")
+    
+    # Detectar rounds outliers com base nos CVs
+    if 'cv_by_metric_tenant' in results and not results['cv_by_metric_tenant'].empty:
+        cv_df = results['cv_by_metric_tenant']
+        
+        # Para cada métrica e fase, identificar quais rounds são outliers
+        outliers_by_metric = {}
+        
+        for metric in metrics:
+            metric_cv = cv_df[cv_df['metric_name'] == metric]
+            if metric_cv.empty:
+                continue
+                
+            # Calcular média global do CV para esta métrica
+            mean_cv = metric_cv['cv'].mean()
+            std_cv = metric_cv['cv'].std()
+            
+            for phase in metric_cv['experimental_phase'].unique():
+                phase_cv = metric_cv[metric_cv['experimental_phase'] == phase]
+                
+                # Identificar valores de CV muito altos (outliers)
+                outlier_threshold = mean_cv + 2 * std_cv  # 2 desvios padrão acima da média
+                
+                outliers = phase_cv[phase_cv['cv'] > outlier_threshold]
+                if not outliers.empty:
+                    for _, row in outliers.iterrows():
+                        metric_key = f"{metric}_{row['tenant_id']}"
+                        if metric_key not in outliers_by_metric:
+                            outliers_by_metric[metric_key] = []
+                            
+                        outliers_by_metric[metric_key].append({
+                            'phase': row['experimental_phase'],
+                            'cv': row['cv'],
+                            'threshold': outlier_threshold,
+                            'rounds': row['rounds']
+                        })
+        
+        results['round_outliers'] = outliers_by_metric
+    
+    logger.info("Análise de consistência entre rounds concluída.")
+    return results
+
+def analyze_behavioral_divergence(df_long: pd.DataFrame, metrics: List[str], tenants: List[str], output_dir: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Analisa a divergência comportamental entre rounds usando a Divergência de Kullback-Leibler (KL).
+    Identifica rounds com comportamento anômalo e mede a estabilidade comportamental dos tenants.
+    
+    Args:
+        df_long: DataFrame em formato longo
+        metrics: Lista de métricas para análise
+        tenants: Lista de tenants para análise
+        output_dir: Diretório para salvar os resultados
+        
+    Returns:
+        Dict[str, Any]: Dicionário com resultados da análise
+    """
+    logger.info("Analisando a divergência comportamental entre rounds...")
+    
+    results = {
+        'kl_divergence': [],
+        'round_distances': {},
+        'tenant_stability_scores': []
+    }
+    
+    # Verificar se há mais de um round para análise
+    rounds = sorted(df_long['round_id'].unique())
+    if len(rounds) < 2:
+        logger.warning("Pelo menos dois rounds são necessários para análise de divergência. Pulando.")
+        return results
+    
+    # Para cada métrica e tenant, calcular divergência KL entre distribuições por round
+    for metric in metrics:
+        metric_results = {'metric_name': metric, 'tenant_divergences': {}}
+        
+        for tenant in tenants:
+            tenant_data = df_long[(df_long['metric_name'] == metric) & 
+                                 (df_long['tenant_id'] == tenant)]
+            
+            if tenant_data.empty:
+                continue
+            
+            round_distributions = {}
+            
+            # Construir distribuições empíricas para cada round
+            for round_id in rounds:
+                round_data = tenant_data[tenant_data['round_id'] == round_id]
+                
+                if round_data.empty:
+                    continue
+                
+                # Usar histograma para estimar a distribuição
+                hist, bin_edges = np.histogram(round_data['metric_value'], bins=20, density=True)
+                
+                # Suavizar zeros para evitar divergência infinita
+                hist = np.where(hist == 0, 1e-10, hist)
+                # Normalizar para garantir que soma a 1
+                hist = hist / np.sum(hist)
+                
+                round_distributions[round_id] = hist
+            
+            # Calcular matriz de divergência KL entre todos os pares de rounds
+            if len(round_distributions) >= 2:
+                divergence_matrix = np.zeros((len(round_distributions), len(round_distributions)))
+                round_ids = list(round_distributions.keys())
+                
+                for i, round1 in enumerate(round_ids):
+                    for j, round2 in enumerate(round_ids):
+                        if i == j:
+                            divergence_matrix[i, j] = 0
+                        else:
+                            # Calcular divergência KL simétrica
+                            p = round_distributions[round1]
+                            q = round_distributions[round2]
+                            
+                            # Calcular KL em ambas direções e tomar a média
+                            # KL(P||Q) = sum_i P_i * log(P_i/Q_i)
+                            kl_pq = np.sum(p * np.log(p / q))
+                            kl_qp = np.sum(q * np.log(q / p))
+                            
+                            # Divergência simétrica
+                            sym_kl = (kl_pq + kl_qp) / 2
+                            divergence_matrix[i, j] = sym_kl
+                
+                # Armazenar resultados
+                metric_results['tenant_divergences'][tenant] = {
+                    'round_ids': round_ids,
+                    'divergence_matrix': divergence_matrix.tolist()
+                }
+                
+                # Calcular estabilidade do tenant com base na divergência média
+                avg_divergence = np.mean(divergence_matrix[np.triu_indices_from(divergence_matrix, k=1)])
+                
+                results['kl_divergence'].append({
+                    'metric_name': metric,
+                    'tenant_id': tenant,
+                    'mean_divergence': avg_divergence,
+                    'stability_score': 1 / (1 + avg_divergence)  # Converter divergência para score de estabilidade [0,1]
+                })
+        
+        results['round_distances'][metric] = metric_results
+    
+    # Calcular scores de estabilidade por tenant
+    if results['kl_divergence']:
+        stability_df = pd.DataFrame(results['kl_divergence'])
+        
+        # Calcular estabilidade média por tenant entre todas as métricas
+        tenant_stability = stability_df.groupby('tenant_id')['stability_score'].mean().reset_index()
+        tenant_stability = tenant_stability.sort_values('stability_score', ascending=False)
+        
+        results['tenant_stability_scores'] = tenant_stability.to_dict('records')
+        
+        # Salvar resultados
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
+            
+            # Salvar scores de estabilidade
+            stability_path = os.path.join(output_dir, 'tenant_stability_scores.csv')
+            tenant_stability.to_csv(stability_path, index=False)
+            logger.info(f"Scores de estabilidade de tenant salvos em: {stability_path}")
+            
+            # Salvar divergências KL
+            kl_path = os.path.join(output_dir, 'kl_divergence.csv')
+            pd.DataFrame(results['kl_divergence']).to_csv(kl_path, index=False)
+            logger.info(f"Divergências KL salvas em: {kl_path}")
+            
+            # Gerar visualização de barras para estabilidade de tenant
+            try:
+                plt.figure(figsize=(12, 6))
+                bars = plt.bar(tenant_stability['tenant_id'], tenant_stability['stability_score'], alpha=0.7)
+                
+                # Adicionar valores nas barras
+                for bar in bars:
+                    height = bar.get_height()
+                    plt.text(
+                        bar.get_x() + bar.get_width()/2.,
+                        height + 0.01,
+                        f"{height:.2f}",
+                        ha='center',
+                        va='bottom',
+                        fontsize=9
+                    )
+                
+                plt.title('Scores de Estabilidade por Tenant\nValores mais altos indicam comportamento mais estável entre rounds')
+                plt.ylim(0, max(tenant_stability['stability_score']) * 1.1)  # Ajustar limites do eixo y
+                plt.ylabel('Score de Estabilidade')
+                plt.tight_layout()
+                
+                stability_plot_path = os.path.join(output_dir, 'tenant_stability_scores.png')
+                plt.savefig(stability_plot_path, dpi=300)
+                plt.close()
+                
+                results['stability_plot_path'] = stability_plot_path
+                logger.info(f"Plot de estabilidade de tenant salvo em: {stability_plot_path}")
+            
+            except Exception as e:
+                logger.error(f"Erro ao gerar plot de estabilidade de tenant: {str(e)}")
+    
+    logger.info("Análise de divergência comportamental concluída.")
+    return results
+
+def aggregate_round_consensus(df_long: pd.DataFrame, te_matrices_by_round: Dict[str, Dict[str, pd.DataFrame]], consistency_results: Dict[str, Any], output_dir: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Agrega os resultados de múltiplos rounds para gerar um consenso final.
+    
+    Args:
+        df_long: DataFrame em formato longo
+        te_matrices_by_round: Dicionário de matrizes de Transfer Entropy por round
+        consistency_results: Resultados da análise de consistência
+        output_dir: Diretório para salvar os resultados
+        
+    Returns:
+        Dict[str, Any]: Dicionário com resultados do consenso
+    """
+    logger.info("Agregando consenso entre rounds...")
+    
+    results = {
+        'noisy_tenants_consensus': [],
+        'tenant_influence_ranking': []
+    }
+    
+    # Verificar se temos matrizes de TE suficientes
+    rounds = list(te_matrices_by_round.keys())
+    if len(rounds) < 2:
+        logger.warning("Pelo menos dois rounds com matrizes TE são necessários para agregação de consenso. Pulando.")
+        return results
+    
+    # Métricas disponíveis (interseção de todas as matrizes)
+    available_metrics = set(te_matrices_by_round[rounds[0]].keys())
+    for round_id in rounds[1:]:
+        available_metrics &= set(te_matrices_by_round[round_id].keys())
+    
+    if not available_metrics:
+        logger.warning("Nenhuma métrica comum encontrada em todas as matrizes TE. Pulando agregação de consenso.")
+        return results
+    
+    # Para cada métrica, agregar matrizes TE de todos os rounds
+    aggregated_te = {}
+    
+    for metric in available_metrics:
+        # Verificar se todas as matrizes têm as mesmas dimensões e tenants
+        matrices = [te_matrices_by_round[r][metric] for r in rounds]
+        
+        # Verificar se todas as matrizes têm os mesmos tenants
+        tenant_sets = [set(m.index) for m in matrices]
+        common_tenants = tenant_sets[0]
+        for tenant_set in tenant_sets[1:]:
+            common_tenants &= tenant_set
+        
+        if not common_tenants:
+            logger.warning(f"Nenhum tenant comum encontrado para a métrica {metric}. Pulando.")
+            continue
+        
+        # Converter para lista ordenada para consistência
+        common_tenants = sorted(common_tenants)
+        
+        # Inicializar matriz agregada
+        aggregated_matrix = pd.DataFrame(0, index=common_tenants, columns=common_tenants)
+        
+        # Calcular média ponderada baseada na consistência (se disponível)
+        if consistency_results and 'cv_by_metric_tenant' in consistency_results:
+            # Tentar obter pesos baseados no CV (menor CV = maior peso)
+            try:
+                cv_df = consistency_results['cv_by_metric_tenant']
+                if isinstance(cv_df, pd.DataFrame) and not cv_df.empty and 'cv' in cv_df.columns:
+                    # Filtrar para a métrica atual
+                    metric_cv = cv_df[cv_df['metric_name'] == metric]
+                    
+                    if not metric_cv.empty:
+                        # Calcular pesos por round (inverso do CV médio)
+                        round_weights = {}
+                        for round_id in rounds:
+                            round_data = df_long[df_long['round_id'] == round_id]
+                            if round_data.empty:
+                                round_weights[round_id] = 1.0  # Peso padrão
+                                continue
+                            
+                            # Filtrar dados para a métrica atual
+                            round_metric_data = round_data[round_data['metric_name'] == metric]
+                            if round_metric_data.empty:
+                                round_weights[round_id] = 1.0  # Peso padrão
+                                continue
+                            
+                            # Calcular CV médio para este round e métrica
+                            tenants = round_metric_data['tenant_id'].unique()
+                            tenant_cvs = []
+                            
+                            for tenant in tenants:
+                                tenant_rows = metric_cv[metric_cv['tenant_id'] == tenant]
+                                if not tenant_rows.empty:
+                                    tenant_cvs.append(tenant_rows['cv'].mean())
+                            
+                            if tenant_cvs:
+                                mean_cv = np.mean(tenant_cvs)
+                                # Peso = 1 / (1 + CV) para dar mais peso a rounds com menor variabilidade
+                                round_weights[round_id] = 1.0 / (1.0 + mean_cv)
+                            else:
+                                round_weights[round_id] = 1.0  # Peso padrão
+                        
+                        # Normalizar pesos para somar 1
+                        total_weight = sum(round_weights.values())
+                        if total_weight > 0:
+                            round_weights = {r: w / total_weight for r, w in round_weights.items()}
+                        
+                        # Aplicar pesos na agregação
+                        for i, round_id in enumerate(rounds):
+                            weight = round_weights.get(round_id, 1.0 / len(rounds))
+                            matrix = matrices[i]
+                            # Filtrar para os tenants comuns
+                            filtered_matrix = matrix.loc[common_tenants, common_tenants]
+                            aggregated_matrix += filtered_matrix * weight
+                    else:
+                        # Se não houver dados de CV, usar média simples
+                        for matrix in matrices:
+                            filtered_matrix = matrix.loc[common_tenants, common_tenants]
+                            aggregated_matrix += filtered_matrix / len(matrices)
+            except Exception as e:
+                logger.error(f"Erro ao calcular pesos para agregação de TE: {str(e)}")
+                # Fallback para média simples
+                for matrix in matrices:
+                    filtered_matrix = matrix.loc[common_tenants, common_tenants]
+                    aggregated_matrix += filtered_matrix / len(matrices)
+        else:
+            # Se não houver dados de CV, usar média simples
+            for matrix in matrices:
+                filtered_matrix = matrix.loc[common_tenants, common_tenants]
+                aggregated_matrix += filtered_matrix / len(matrices)
+        
+        aggregated_te[metric] = aggregated_matrix
+    
+        # Identificar tenants "barulhentos" (causam impacto em outros)
+        noisy_tenants = []
+        
+        # Calcular "outflow causal" (soma da força causal que sai de cada tenant)
+        for tenant in common_tenants:
+            outflow = aggregated_matrix.loc[tenant].sum() - aggregated_matrix.loc[tenant, tenant]
+            
+            # Calcular estatísticas para o ranking
+            mean_te = outflow / (len(common_tenants) - 1) if len(common_tenants) > 1 else 0
+            
+            # Considerar como "barulhento" se o valor médio de TE for maior que um limite
+            te_threshold = 0.1  # Ajustar conforme necessário
+            
+            if mean_te > te_threshold:
+                noisy_tenants.append({
+                    'metric_name': metric,
+                    'tenant_id': tenant,
+                    'outflow_causality': float(outflow),
+                    'mean_te': float(mean_te),
+                    'affected_tenants': len([t for t in common_tenants if aggregated_matrix.loc[tenant, t] > te_threshold and t != tenant])
+                })
+            
+            # Adicionar ao ranking geral
+            results['tenant_influence_ranking'].append({
+                'metric_name': metric,
+                'tenant_id': tenant,
+                'influence_score': float(outflow),
+                'mean_outgoing_te': float(mean_te)
+            })
+        
+        # Adicionar tenants barulhentos ao consenso
+        noisy_tenants.sort(key=lambda x: x['outflow_causality'], reverse=True)
+        results['noisy_tenants_consensus'].extend(noisy_tenants)
+    
+    # Salvar resultados do consenso
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Salvar matrizes TE agregadas
+        te_dir = os.path.join(output_dir, 'aggregated_te')
+        os.makedirs(te_dir, exist_ok=True)
+        
+        for metric, matrix in aggregated_te.items():
+            matrix_path = os.path.join(te_dir, f'aggregated_te_matrix_{metric}.csv')
+            matrix.to_csv(matrix_path)
+            logger.info(f"Matriz TE agregada para {metric} salva em: {matrix_path}")
+        
+        # Salvar ranking de influência
+        if results['tenant_influence_ranking']:
+            ranking_df = pd.DataFrame(results['tenant_influence_ranking'])
+            ranking_path = os.path.join(output_dir, 'tenant_influence_ranking.csv')
+            ranking_df.to_csv(ranking_path, index=False)
+            logger.info(f"Ranking de influência de tenants salvo em: {ranking_path}")
+        
+        # Salvar consenso de tenants barulhentos
+        if results['noisy_tenants_consensus']:
+            consensus_df = pd.DataFrame(results['noisy_tenants_consensus'])
+            consensus_path = os.path.join(output_dir, 'consensus_noisy_tenants.csv')
+            consensus_df.to_csv(consensus_path, index=False)
+            logger.info(f"Consenso de tenants barulhentos salvo em: {consensus_path}")
+    
+    logger.info(f"Agregação de consenso concluída. {len(results['noisy_tenants_consensus'])} tenants barulhentos identificados.")
+    return results
