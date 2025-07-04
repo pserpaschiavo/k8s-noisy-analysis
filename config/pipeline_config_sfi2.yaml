@@ -13,6 +13,7 @@ selected_metrics:
   - cpu_usage
   - memory_usage
   
+  
 selected_tenants:
   - tenant-cpu
   - tenant-mem
@@ -39,12 +40,31 @@ correlation:
   methods:
     - pearson
     - spearman
-    
+  # Novo parâmetro para threshold de correlação  
+  threshold: 0.3  # Reduzido de 0.5 para capturar mais correlações
   
 causality:
   granger_max_lag: 5
   granger_threshold: 0.05
   transfer_entropy_bins: 8
+
+# Parâmetros de visualização
+visualization:
+  plot_quality: "high"  # high, medium, low - afeta o DPI e tamanho
+  fonts:
+    family: "sans-serif"  # Use "sans-serif" para evitar warnings com "serif"
+    size: 12
+    title_size: 14
+  correlation_graph:
+    threshold: 0.3     # Threshold para gráficos de correlação
+  causality_graph:
+    threshold: 0.05    # Threshold para gráficos de causalidade
+  heatmap:
+    cmap: "coolwarm"   # Mapa de cores para heatmaps
+  boxplot:
+    notch: true        # Usar boxplots com notch
+  time_series:
+    line_width: 1.5    # Espessura das linhas em gráficos de série temporal
   
 # Configuração para análise multi-round
 multi_round_analysis:
@@ -63,6 +83,9 @@ multi_round_analysis:
   performance:
     use_cache: true
     parallel_processing: false
+    gpu_acceleration: false    # Habilitar aceleração por GPU
+    gpu_memory_limit: 0.8      # Limite de uso de memória GPU (0.0-1.0)
+    large_dataset_threshold: 10000  # Número de linhas para considerar grande dataset
   visualization:
     heatmap_colormap: "RdBu_r"
     show_significance_markers: true
@@ -73,6 +96,6 @@ multi_round_analysis:
   
 # Opções de visualização
 plots:
-  figure_size: [12, 7]
+  figure_size: [10, 6]
   style: tableau-colorblind10
-  dpi: 300
+  dpi: 100

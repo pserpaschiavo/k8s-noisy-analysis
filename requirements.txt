@@ -13,3 +13,12 @@ jupyter>=1.0.0   # Para notebooks (opcional)
 scikit-learn>=1.0.0  # Para análises avançadas
 tqdm>=4.62.0  # Para barras de progresso
 tabulate>=0.8.9 # Para gerar tabelas formatadas
+pillow>=9.0.0  # Para suporte a animações e salvar GIFs
+python-louvain>=0.16  # Para detecção de comunidades em redes
+pickle5>=0.0.11  # Suporte avançado para pickle (usado no cache)
+
+# Dependências opcionais para aceleração GPU
+# Instalação específica da plataforma pode ser necessária
+# cupy>=12.0.0  # Descomente para usar CuPy (CUDA NumPy)
+# torch>=2.0.0  # Descomente para usar PyTorch
+# tensorflow>=2.10.0  # Descomente para usar TensorFlow

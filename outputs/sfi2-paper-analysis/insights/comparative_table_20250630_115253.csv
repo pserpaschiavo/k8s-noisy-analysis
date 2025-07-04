@@ -1,6 +1,0 @@
-Rank,Tenant,Noisy Score,Is Noisy?,Is Victim?,Impacts On,Impacted By,Sensitive To,Recommendations
-1,tenant-mem,0.08168204470156204,Yes,No,,,,Consider adjusting resource limits to avoid impacting other tenants.
-2,tenant-ntk,0.07681464912089077,No,No,,,,
-3,tenant-dsk,0.073880303666089,No,No,,,,
-4,tenant-nsy,0.058082291149053195,No,No,,,,
-5,tenant-cpu,0.04945569377838624,No,No,,,,

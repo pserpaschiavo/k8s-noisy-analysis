@@ -71,10 +71,19 @@ PUBLICATION_CONFIG = {
         '7 - Recovery': 'Recovery',
     },
     
-    # Font and style settings for figures
+    # Colormap configuration for heatmap visualizations
+    'heatmap_colormaps': {
+        'correlation': 'coolwarm',
+        'covariance': 'viridis',
+        'p_value': 'viridis_r',
+        'score': 'plasma'
+    },
+    
+    # Font and style settings for figures - updated to use universally available fonts
     'figure_style': {
-        'font.family': 'serif',
-        'font.serif': ['Times New Roman'],
+        'font.family': 'sans-serif',
+        'font.sans-serif': ['DejaVu Sans', 'Arial', 'Helvetica', 'Liberation Sans', 'FreeSans', 'sans-serif'],
+        'font.serif': ['DejaVu Serif', 'Liberation Serif', 'FreeSerif', 'serif'],
         'font.size': 12,
         'axes.titlesize': 14,
         'axes.labelsize': 12,

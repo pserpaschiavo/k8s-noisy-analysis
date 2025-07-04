@@ -5,12 +5,18 @@ Description: Correlation analysis utilities for multi-tenant time series analysi
 import os
 import pandas as pd
 import numpy as np
+# Removendo configuração local do matplotlib
 import matplotlib
-matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 import logging
 from statsmodels.tsa.stattools import acf
+
+from src.utils import configure_matplotlib
+from src.gpu_acceleration import check_gpu_availability, calculate_correlation_matrix_gpu
+
+# Configuração centralizada do matplotlib
+configure_matplotlib()
 
 from src.visualization.plots import (
     plot_correlation_heatmap,
@@ -24,7 +30,8 @@ logger = logging.getLogger(__name__)
 
 plt.style.use('tableau-colorblind10')
 
-def compute_correlation_matrix(df_identifier, metric: str, phase: str, round_id: str, method: str = 'pearson') -> pd.DataFrame:
+def compute_correlation_matrix(df_identifier, metric: str, phase: str, round_id: str, method: str = 'pearson', 
+                              use_gpu: bool = False, large_dataset_threshold: int = 10000) -> pd.DataFrame:
     """
     Computes the correlation matrix (Pearson or Spearman) between tenants for a given metric, phase, and round.
     Returns a DataFrame with tenants as both rows and columns.
@@ -35,6 +42,8 @@ def compute_correlation_matrix(df_identifier, metric: str, phase: str, round_id:
         phase: Experimental phase to filter
         round_id: Round ID to filter
         method: Correlation method ('pearson', 'kendall', or 'spearman')
+        use_gpu: Se True, tenta usar aceleração GPU para correlação de Pearson
+        large_dataset_threshold: Número de linhas para considerar um dataset grande e usar GPU
         
     Returns:
         DataFrame with the correlation matrix or an empty DataFrame if data is insufficient.
@@ -86,17 +95,28 @@ def compute_correlation_matrix(df_identifier, metric: str, phase: str, round_id:
         logger.info(f"Missing data detected in the correlation matrix. Applying linear interpolation.")
         wide = wide.interpolate(method='linear')
     
-    # Workaround for type issue by running the correlation function with the correct type
-    if method == 'pearson':
-        corr = wide.corr(method='pearson')
-    elif method == 'kendall':
-        corr = wide.corr(method='kendall')
-    elif method == 'spearman':
-        corr = wide.corr(method='spearman')
+    # Verificar se devemos usar GPU (apenas para correlação de Pearson)
+    use_gpu_for_calc = use_gpu and method == 'pearson' and (len(wide) > large_dataset_threshold)
+    if use_gpu_for_calc and check_gpu_availability():
+        # Usar aceleração GPU para correlação
+        logger.info(f"Usando aceleração GPU para cálculo de correlação com {len(wide)} registros")
+        corr = calculate_correlation_matrix_gpu(wide, method='pearson')
     else:
-        # Default to pearson
-        logger.warning(f"Unknown method {method}, using pearson")
-        corr = wide.corr(method='pearson')
+        # Fallback para CPU - comportamento original
+        if use_gpu and method == 'pearson' and (len(wide) > large_dataset_threshold):
+            logger.info("GPU solicitada mas não disponível. Usando CPU para correlação.")
+            
+        # Workaround for type issue by running the correlation function with the correct type
+        if method == 'pearson':
+            corr = wide.corr(method='pearson')
+        elif method == 'kendall':
+            corr = wide.corr(method='kendall')
+        elif method == 'spearman':
+            corr = wide.corr(method='spearman')
+        else:
+            # Default to pearson
+            logger.warning(f"Unknown method {method}, using pearson")
+            corr = wide.corr(method='pearson')
         
     logger.info(f"Correlation matrix ({method}) calculated for {metric}, {phase}, {round_id}: {corr.shape}")
     return corr

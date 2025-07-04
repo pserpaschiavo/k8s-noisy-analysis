@@ -29,6 +29,7 @@ from src.visualization.plots import (
 )
 from src.visualization.advanced_plots import (
     generate_all_consolidated_timeseries,
+    generate_consolidated_timeseries,
     plot_aggregated_correlation_graph
 )
 from src.analysis_correlation import compute_aggregated_correlation
@@ -58,6 +59,15 @@ class MultiRoundAnalysisStage(PipelineStage):
     """
     Estágio do pipeline para análise de experimentos com múltiplos rounds.
     Implementa as funcionalidades descritas na seção 3.6 do plano de trabalho.
+    
+    Estrutura de visualizações geradas:
+    - effect_visualizations/: Heatmaps e gráficos de tamanhos de efeito
+    - causality_robustness/: Visualizações de robustez das relações causais
+    - correlation_graphs/: Redes de correlação entre tenants
+    - aggregated_te/: Matrizes de Transfer Entropy agregadas
+    - insights/: Relatórios e visualizações de insights automáticos
+    - Arquivos individuais: cv_heatmap_by_tenant_metric.png, tenant_stability_scores.png,
+      te_consistency_heatmap.png, granger_consistency_heatmap.png
     """
     
     def __init__(self, output_dir: Optional[str] = None):
@@ -105,18 +115,20 @@ class MultiRoundAnalysisStage(PipelineStage):
             return context
 
         # Configuração do diretório de saída
+        # Já recebemos um diretório de saída configurado para multi_round_analysis
+        # Não precisamos adicionar 'multi_round_analysis' novamente
         base_output_dir = self.output_dir or context.get('output_dir')
         if not base_output_dir:
             experiment_id = context.get('experiment_id', 'unknown_experiment')
             base_output_dir = os.path.join(os.getcwd(), 'outputs', experiment_id)
             self.logger.warning(f"Diretório de saída não especificado. Usando fallback: {base_output_dir}")
 
-        output_dir = os.path.join(base_output_dir, 'multi_round_analysis')
-        os.makedirs(output_dir, exist_ok=True)
-        self.logger.info(f"Diretório de saída para análise multi-round: {output_dir}")
+        # Garantir que o diretório de saída existe
+        os.makedirs(base_output_dir, exist_ok=True)
+        self.logger.info(f"Diretório de saída para análise multi-round: {base_output_dir}")
         
         # Atualiza o output_dir da instância para que outros métodos o utilizem
-        self.output_dir = output_dir
+        self.output_dir = base_output_dir
 
         metrics = context.get('selected_metrics', sorted(df_long['metric_name'].unique()))
         tenants = context.get('selected_tenants', sorted(df_long['tenant_id'].unique()))
@@ -162,26 +174,30 @@ class MultiRoundAnalysisStage(PipelineStage):
                     self.logger.info("Realizando análise de robustez dos tamanhos de efeito...")
                     robustness_output_dir = os.path.join(self.output_dir, 'robustness') if self.output_dir else None
                     
-                    robustness_df, robustness_plots = perform_robustness_analysis(
+                    robustness_results = perform_robustness_analysis(
                         effect_sizes_df=effect_sizes_df,
-                        output_dir=robustness_output_dir
+                        aggregated_effects_df=aggregated_effects_df,
+                        leave_one_out=True,
+                        sensitivity_test=True
                     )
                     
-                    if not robustness_df.empty:
-                        results['effect_robustness'] = {
-                            'dataframe': robustness_df,
-                            'summary': {
-                                'total_analyzed': robustness_df.shape[0],
-                                'high_robustness': (robustness_df['overall_robustness'] == 'Alta').sum(),
-                                'medium_robustness': (robustness_df['overall_robustness'] == 'Média').sum(),
-                                'low_robustness': (robustness_df['overall_robustness'] == 'Baixa').sum()
-                            },
-                            'plots': robustness_plots
-                        }
+                    # Salvar visualizações de robustez se temos resultados
+                    if 'robustness_score' in robustness_results:
+                        generate_robustness_summary(
+                            robustness_results=robustness_results,
+                            output_dir=robustness_output_dir
+                        )
+                    
+                    # Armazenar resultados de robustez no dicionário de resultados
+                    if isinstance(robustness_results, dict):
+                        results['effect_robustness'] = robustness_results
                         
-                        # Adicionar resumo de robustez ao relatório
-                        robustness_summary = generate_robustness_summary(robustness_df)
-                        results['effect_robustness']['report'] = robustness_summary
+                        # Usar a versão enriquecida do DataFrame para o resto da análise se disponível
+                        if 'enhanced_aggregated_effects' in robustness_results:
+                            enhanced_df = robustness_results['enhanced_aggregated_effects']
+                            results['aggregated_effects']['enhanced_df'] = enhanced_df
+                        
+                        # O relatório já foi gerado pela função generate_robustness_summary
                         
                     # Gerar visualizações para os tamanhos de efeito agregados
                     self.logger.info("Gerando visualizações para os tamanhos de efeito agregados...")
@@ -223,11 +239,73 @@ class MultiRoundAnalysisStage(PipelineStage):
                             if path:
                                 scatter_paths.append(path)
                                 
+                        # Forest plots para visualização meta-análise style
+                        forest_paths = []
+                        # Gerar forest plots para cada métrica × fase × tenant
+                        # Aqui limitamos para as combinações mais importantes para não gerar gráficos demais
+                        important_metrics = aggregated_effects_df.sort_values(
+                            by='mean_effect_size', key=abs, ascending=False
+                        )['metric_name'].unique()[:5]  # Top 5 métricas com maior efeito
+                        
+                        important_tenants = aggregated_effects_df.sort_values(
+                            by='mean_effect_size', key=abs, ascending=False
+                        )['tenant_id'].unique()[:3]  # Top 3 tenants com maior efeito
+                        
+                        for metric in important_metrics:
+                            for tenant in important_tenants:
+                                paths = generate_effect_forest_plot(
+                                    effect_sizes_df=effect_sizes_df,
+                                    aggregated_effects_df=aggregated_effects_df,
+                                    output_dir=effect_viz_dir,
+                                    metric=metric,
+                                    tenant=tenant,
+                                    show_reliability_indicator=True,
+                                    sort_by='effect_size'
+                                )
+                                
+                                if isinstance(paths, list):
+                                    forest_paths.extend(paths)
+                                elif paths:
+                                    forest_paths.append(paths)
+                                
                         results['aggregated_effects']['visualizations'] = {
                             'heatmaps': heatmap_paths,
                             'error_bars': error_bar_paths,
-                            'scatter_plots': scatter_paths
+                            'scatter_plots': scatter_paths,
+                            'forest_plots': forest_paths
                         }
+                        
+                        # Gerar visualizações de séries temporais consolidadas
+                        self.logger.info("Gerando visualizações de séries temporais consolidadas...")
+                        timeseries_dir = os.path.join(self.output_dir, 'timeseries')
+                        os.makedirs(timeseries_dir, exist_ok=True)
+                        
+                        # Filtrar métricas importantes (as mesmas usadas para forest plots)
+                        important_metrics = aggregated_effects_df.sort_values(
+                            by='mean_effect_size', key=abs, ascending=False
+                        )['metric_name'].unique()[:5]  # Top 5 métricas com maior efeito
+                        
+                        # Gerar visualizações de time series consolidadas
+                        consolidated_timeseries_results = {}
+                        for metric in important_metrics:
+                            try:
+                                output_paths = generate_consolidated_timeseries(
+                                    df_long=df_filtered,
+                                    metric=metric,
+                                    output_dir=timeseries_dir,
+                                    cross_tenant_comparison=True,
+                                    create_animations=True
+                                )
+                                if output_paths:
+                                    consolidated_timeseries_results[metric] = output_paths
+                                    self.logger.info(f"✅ Time series consolidados gerados para {metric}")
+                                else:
+                                    self.logger.warning(f"❌ Não foi possível gerar time series para {metric}")
+                            except Exception as e:
+                                self.logger.error(f"❌ Erro ao processar time series para {metric}: {e}", exc_info=True)
+                        
+                        if consolidated_timeseries_results:
+                            results['consolidated_timeseries'] = consolidated_timeseries_results
                     
             # 0.2 Extração de correlações intra-fase
             self.logger.info("Realizando extração de correlações intra-fase entre tenants...")
@@ -342,25 +420,102 @@ class MultiRoundAnalysisStage(PipelineStage):
             # 2. Análise de consistência de métricas (CV/Friedman)
             self.logger.info("Analisando a consistência dos valores das métricas (CV/Friedman)...")
             results['metric_consistency'] = analyze_round_consistency(
-                df_long=df_filtered, metrics=metrics, tenants=tenants, output_dir=output_dir
+                df_long=df_filtered, metrics=metrics, tenants=tenants, output_dir=self.output_dir
             )
 
             # 3. Análise de robustez de causalidade (CV sobre TE)
             if te_matrices_by_round:
                 self.logger.info("Analisando a robustez da força causal (CV sobre TE)...")
+                # Use the function defined in this module
                 causality_robustness = analyze_causality_robustness(
                     te_matrices_by_round=te_matrices_by_round,
                     granger_matrices_by_round=granger_matrices_by_round,
-                    output_dir=output_dir
+                    output_dir=self.output_dir
                 )
                 results['causality_robustness'] = causality_robustness
 
                 if 'robust_causal_relationships' in causality_robustness:
+                    # Use the function defined below
+                    def generate_robust_causality_graph(robust_relationships, output_dir, metric):
+                        """
+                        Generate a graph visualization of robust causal relationships for a metric.
+                        
+                        Args:
+                            robust_relationships: Dictionary of robust causal relationships.
+                            output_dir: Directory to save the graph.
+                            metric: Metric to generate the graph for.
+                            
+                        Returns:
+                            Path to the generated graph image.
+                        """
+                        try:
+                            if metric not in robust_relationships or not robust_relationships[metric]:
+                                return None
+                                
+                            relationships = robust_relationships[metric]
+                            if not relationships:
+                                return None
+                                
+                            # Create directed graph
+                            G = nx.DiGraph()
+                            
+                            # Add nodes and edges
+                            nodes = set()
+                            for (source, target), data in relationships.items():
+                                nodes.add(source)
+                                nodes.add(target)
+                                # Use mean TE as edge weight
+                                G.add_edge(source, target, weight=data['mean_te'])
+                            
+                            # If no edges, return None
+                            if not G.edges():
+                                return None
+                                
+                            # Add nodes
+                            for node in nodes:
+                                G.add_node(node)
+                                
+                            plt.figure(figsize=(10, 8))
+                            
+                            # Node positioning
+                            pos = nx.spring_layout(G, seed=42)
+                            
+                            # Draw nodes
+                            nx.draw_networkx_nodes(G, pos, node_size=700, node_color='skyblue')
+                            
+                            # Draw edges with width proportional to weight (TE)
+                            edges = list(G.edges())
+                            edge_weights = [G[u][v]['weight'] * 10 for u, v in edges]
+                            nx.draw_networkx_edges(G, pos, edgelist=edges, width=1.0, arrowsize=20, alpha=0.7)
+                            
+                            # Add labels
+                            nx.draw_networkx_labels(G, pos)
+                            
+                            # Add edge labels (TE values)
+                            edge_labels = {(u, v): f"{G[u][v]['weight']:.3f}" for u, v in G.edges()}
+                            nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_size=8)
+                            
+                            plt.title(f'Robust Causal Relationships: {metric}')
+                            plt.axis('off')
+                            plt.tight_layout()
+                            
+                            # Save figure
+                            os.makedirs(output_dir, exist_ok=True)
+                            graph_path = os.path.join(output_dir, f'robust_causality_graph_{metric}.png')
+                            plt.savefig(graph_path, dpi=300, bbox_inches='tight')
+                            plt.close()
+                            
+                            return graph_path
+                        except Exception as e:
+                            logger.warning(f"Error generating causality graph for {metric}: {str(e)}")
+                            return None
+                    
+                    # Generate graphs
                     robust_graphs = {}
                     for metric in causality_robustness.get('metrics_with_consistent_causality', []):
                         graph_path = generate_robust_causality_graph(
                             robust_relationships=causality_robustness['robust_causal_relationships'],
-                            output_dir=output_dir, metric=metric
+                            output_dir=self.output_dir, metric=metric
                         )
                         if graph_path:
                             robust_graphs[metric] = graph_path
@@ -372,7 +527,7 @@ class MultiRoundAnalysisStage(PipelineStage):
             # 4. Análise de divergência comportamental (KL-Divergence)
             self.logger.info("Analisando a divergência comportamental entre rounds (KL-Divergence)...")
             results['behavioral_divergence'] = analyze_behavioral_divergence(
-                df_long=df_filtered, metrics=metrics, tenants=tenants, output_dir=output_dir
+                df_long=df_filtered, metrics=metrics, tenants=tenants, output_dir=self.output_dir
             )
 
             # 5. Agregação de consenso
@@ -382,7 +537,7 @@ class MultiRoundAnalysisStage(PipelineStage):
                     df_long=df_filtered,
                     te_matrices_by_round=te_matrices_by_round,
                     consistency_results=results.get('metric_consistency', {}),
-                    output_dir=output_dir
+                    output_dir=self.output_dir
                 )
             else:
                  self.logger.warning("Matrizes de Transfer Entropy não disponíveis. Pulando agregação de consenso.")
@@ -446,89 +601,55 @@ class MultiRoundAnalysisStage(PipelineStage):
             
             # 7. Visualizações consolidadas
             self.logger.info("Gerando visualizações consolidadas...")
-            # Removido o antigo `generate_round_consistency_visualizations`
-            # As visualizações agora são geradas por tipo.
-
-            # 6.1 Boxplots Consolidados (Aprimorado v2.1)
-            self.logger.info("Gerando boxplots consolidados (violin) para todas as métricas...")
+            
+            # Extrair parâmetros de visualização da configuração
+            vis_config = config.get('visualization', {})
+            correlation_threshold = vis_config.get('correlation_graph', {}).get('threshold', 0.3)
+            causality_threshold = vis_config.get('causality_graph', {}).get('threshold', 0.05)
+            
+            # Usar os novos parâmetros configuráveis
+            self.logger.info(f"Usando threshold de correlação: {correlation_threshold}")
+            
+            # Computar as correlações agregadas
             try:
-                boxplot_dir = os.path.join(output_dir, "boxplots")
-                os.makedirs(boxplot_dir, exist_ok=True)
-                boxplot_paths = generate_all_enhanced_consolidated_boxplots(
-                    df_long=df_filtered,
-                    output_dir=boxplot_dir
-                )
-                results['consolidated_boxplots'] = boxplot_paths
-                self.logger.info(f"✅ Boxplots consolidados gerados: {len(boxplot_paths)} arquivos")
-            except Exception as e:
-                self.logger.error(f"Erro ao gerar boxplots consolidados: {e}")
-                results['consolidated_boxplots'] = {}
-
-            # 6.2 Time Series Consolidados (v2.0)
-            self.logger.info("Gerando time series consolidados para todas as métricas...")
-            try:
-                timeseries_dir = os.path.join(output_dir, "timeseries")
-                os.makedirs(timeseries_dir, exist_ok=True)
-                timeseries_paths = generate_all_consolidated_timeseries(
-                    df_long=df_filtered,
-                    output_dir=timeseries_dir, # Diretório específico
-                    rounds=rounds,
-                    tenants=tenants,
-                    normalize_time=True,
-                    add_confidence_bands=True
-                )
-                results['consolidated_timeseries'] = timeseries_paths
-                self.logger.info(f"✅ Time series consolidados gerados: {len(timeseries_paths)} métricas")
-            except Exception as e:
-                self.logger.error(f"Erro ao gerar time series consolidados: {e}")
-                results['consolidated_timeseries'] = {}
-
-            # 6.3 Gráfico de Correlação Agregado
-            self.logger.info("Gerando gráfico de correlação agregado...")
-            try:
-                correlation_dir = os.path.join(output_dir, "correlation")
-                os.makedirs(correlation_dir, exist_ok=True)
+                # Importar a função compute_aggregated_correlation
+                from src.analysis_correlation import compute_aggregated_correlation
                 
-                phases = sorted(df_filtered['experimental_phase'].unique())
-
+                # Obter a lista de fases dos dados
+                phases_list = sorted(df_filtered['experimental_phase'].unique().tolist())
+                
+                # Calcular correlações agregadas para todos os rounds, fases e métricas
                 aggregated_correlations = compute_aggregated_correlation(
                     df=df_filtered,
                     metrics=metrics,
                     rounds=rounds,
-                    phases=phases,
+                    phases=phases_list,
                     method='pearson'
                 )
                 
-                correlation_plot_paths = {}
-                if aggregated_correlations:
-                    for metric, corr_matrix in aggregated_correlations.items():
-                        filename = f"aggregated_correlation_graph_{metric}.png"
-                        title = f"Grafo de Correlação Agregada - {metric.replace('_', ' ').title()}"
-                        
-                        plot_path = plot_aggregated_correlation_graph(
-                            correlation_matrix=corr_matrix,
-                            title=title,
-                            output_dir=correlation_dir,
-                            filename=filename,
-                            threshold=0.5
+                # Plotar gráficos de correlação agregada
+                for metric in metrics:
+                    if metric in aggregated_correlations and not aggregated_correlations[metric].empty:
+                        plot_aggregated_correlation_graph(
+                            correlation_matrix=aggregated_correlations[metric],
+                            title=f"Correlação Agregada Multi-round - {metric}",
+                            output_dir=os.path.join(self.output_dir, "correlation_graphs"),
+                            filename=f"aggregated_correlation_graph_{metric}.png",
+                            threshold=correlation_threshold
                         )
-                        if plot_path:
-                            correlation_plot_paths[metric] = plot_path
-                
-                results['aggregated_correlation_graphs'] = correlation_plot_paths
-                self.logger.info(f"✅ Gráficos de correlação agregada gerados: {len(correlation_plot_paths)} arquivos")
-
+                        self.logger.info(f"Gráfico de correlação agregada gerado para {metric}")
             except Exception as e:
-                self.logger.error(f"Erro ao gerar gráficos de correlação agregada: {e}", exc_info=True)
-                results['aggregated_correlation_graphs'] = {}
+                self.logger.error(f"Erro ao gerar gráficos de correlação agregada: {str(e)}")
+                import traceback
+                self.logger.error(traceback.format_exc())
 
             # 7. Gerar relatório consolidado
             self.logger.info("Gerando relatório consolidado da análise multi-round...")
             self.generate_multi_round_report(results) # Passando todos os resultados
 
             context['multi_round_analysis'] = results
-            context['multi_round_analysis_dir'] = output_dir
-            self.logger.info(f"Análise multi-round concluída com sucesso. Resultados em {output_dir}")
+            context['multi_round_analysis_dir'] = self.output_dir
+            self.logger.info(f"Análise multi-round concluída com sucesso. Resultados em {self.output_dir}")
 
         except Exception as e:
             self.logger.error(f"Erro fatal durante a análise multi-round: {str(e)}", exc_info=True)
@@ -876,74 +997,64 @@ class MultiRoundAnalysisStage(PipelineStage):
         }
 
 
-    def _extract_effect_sizes(self, context: Dict[str, Any], config: Dict[str, Any], df_long: pd.DataFrame, rounds: List[str]) -> pd.DataFrame:
+    def _extract_effect_sizes(self, context: Dict[str, Any], config: Dict[str, Any], df_filtered: pd.DataFrame, rounds: List[str]) -> pd.DataFrame:
         """
-        Extrai tamanhos de efeito e estatísticas relacionadas para cada 
-        combinação de métrica × fase × tenant × round.
-        
+        Extrai tamanhos de efeito (effect sizes) para todas as combinações relevantes.
+
         Args:
-            context: Contexto da análise
-            config: Configuração da análise
-            df_long: DataFrame em formato longo
-            rounds: Lista de rounds a analisar
-            
+            context: Dicionário de contexto do pipeline
+            config: Dicionário de configuração
+            df_filtered: DataFrame com dados já filtrados
+            rounds: Lista de rounds para extração
+
         Returns:
-            DataFrame com tamanhos de efeito e estatísticas relacionadas
+            pd.DataFrame: DataFrame com todos os tamanhos de efeito extraídos
         """
-        self.logger.info("Extraindo tamanhos de efeito para todas as combinações...")
+        self.logger.info("Extraindo tamanhos de efeito para análise multi-round...")
         
-        # Obtém parâmetros de configuração
-        multi_round_config = config.get('multi_round_analysis', {})
-        effect_size_config = multi_round_config.get('effect_size', {})
-        
-        # Define fase de baseline
+        # Configuração para extração de tamanhos de efeito
+        effect_size_config = config.get('multi_round_analysis', {}).get('effect_size', {})
         baseline_phase = effect_size_config.get('baseline_phase', "1 - Baseline")
         
-        # Verifica se a baseline existe nos dados
-        available_phases = df_long['experimental_phase'].unique()
-        if baseline_phase not in available_phases:
-            self.logger.warning(f"Fase de baseline '{baseline_phase}' não encontrada nos dados.")
-            available_phases_str = ", ".join(sorted(available_phases))
-            self.logger.info(f"Fases disponíveis: {available_phases_str}")
-            self.logger.info(f"Usando a primeira fase como baseline: {sorted(available_phases)[0]}")
-            baseline_phase = sorted(available_phases)[0]
-        
-        # Obtém métricas, fases e tenants
-        metrics = context.get('selected_metrics', sorted(df_long['metric_name'].unique()))
-        phases = sorted(df_long['experimental_phase'].unique())
-        tenants = context.get('selected_tenants', sorted(df_long['tenant_id'].unique()))
-        
-        # Configurações de cache e paralelismo
-        perf_config = multi_round_config.get('performance', {})
-        use_cache = perf_config.get('use_cache', True)
+        # Obter configurações de desempenho
+        perf_config = config.get('multi_round_analysis', {}).get('performance', {})
         parallel = perf_config.get('parallel_processing', False)
-        cache_dir = os.path.join(self.output_dir, 'cache') if self.output_dir else None
+        use_gpu = perf_config.get('gpu_acceleration', False)
+        large_dataset_threshold = perf_config.get('large_dataset_threshold', 10000)
+        use_cache = perf_config.get('use_cache', True)
         
-        # Extrai tamanhos de efeito
-        effect_sizes_df = extract_effect_sizes(
-            df_long=df_long,
-            rounds=rounds,
-            metrics=metrics,
-            phases=phases,
-            tenants=tenants,
-            baseline_phase=baseline_phase,
-            use_cache=use_cache,
-            parallel=parallel,
-            cache_dir=cache_dir
-        )
+        # Obter listas de métricas e tenants
+        metrics = context.get('selected_metrics', sorted(df_filtered['metric_name'].unique()))
+        tenants = context.get('selected_tenants', sorted(df_filtered['tenant_id'].unique()))
+        phases = sorted(df_filtered['experimental_phase'].unique())
         
-        if effect_sizes_df.empty:
-            self.logger.warning("Nenhum tamanho de efeito extraído. Verifique os dados e parâmetros.")
-        else:
-            self.logger.info(f"Extração concluída: {effect_sizes_df.shape[0]} tamanhos de efeito calculados.")
+        # Configurar cache
+        cache_dir = os.path.join(self.output_dir, '_cache') if self.output_dir else None
+        
+        # Chamar a função extract_effect_sizes com paralelização se configurado
+        try:
+            effect_sizes_df = extract_effect_sizes(
+                df_long=df_filtered,
+                rounds=rounds,
+                metrics=metrics,
+                phases=phases,
+                tenants=tenants,
+                baseline_phase=baseline_phase,
+                parallel=parallel,
+                use_cache=use_cache,
+                cache_dir=cache_dir,
+                use_gpu=use_gpu,
+                large_dataset_threshold=large_dataset_threshold
+            )
             
-            # Salva os resultados em CSV se houver diretório de saída
-            if self.output_dir:
-                effect_sizes_path = os.path.join(self.output_dir, 'effect_sizes.csv')
-                effect_sizes_df.to_csv(effect_sizes_path, index=False)
-                self.logger.info(f"Tamanhos de efeito salvos em: {effect_sizes_path}")
-        
-        return effect_sizes_df
+            # Registrar métricas para logar
+            total_combinations = len(effect_sizes_df) if not effect_sizes_df.empty else 0
+            self.logger.info(f"Extraídos {total_combinations} tamanhos de efeito para {len(rounds)} rounds.")
+            
+            return effect_sizes_df
+        except Exception as e:
+            self.logger.error(f"Erro ao extrair tamanhos de efeito: {str(e)}")
+            return pd.DataFrame()  # Retornar DataFrame vazio em caso de erro
 
     def _aggregate_effect_sizes(self, effect_sizes_df: pd.DataFrame, config: Dict[str, Any]) -> pd.DataFrame:
         """
@@ -1235,9 +1346,6 @@ def analyze_round_consistency(df_long: pd.DataFrame, metrics: List[str], tenants
                     aggfunc='mean'
                 )
                 
-                # Criar diretório para visualizações
-                os.makedirs(os.path.join(output_dir, 'visualizations'), exist_ok=True)
-                
                 # Gerar heatmap
                 plt.figure(figsize=(10, 8))
                 sns.heatmap(
@@ -1359,7 +1467,7 @@ def analyze_round_consistency(df_long: pd.DataFrame, metrics: List[str], tenants
 
 def analyze_behavioral_divergence(df_long: pd.DataFrame, metrics: List[str], tenants: List[str], output_dir: Optional[str] = None) -> Dict[str, Any]:
     """
-    Analisa a divergência comportamental entre rounds usando a Divergência de Kullback-Leibler (KL).
+    Analisa a divergência comportamental entre rounds usando a Divergência de Kullback-Leibniz (KL).
     Identifica rounds com comportamento anômalo e mede a estabilidade comportamental dos tenants.
     
     Args:
@@ -1429,7 +1537,7 @@ def analyze_behavioral_divergence(df_long: pd.DataFrame, metrics: List[str], ten
                             p = round_distributions[round1]
                             q = round_distributions[round2]
                             
-                            # Calcular KL em ambas direções e tomar a média
+                            # Calcular KL em ambas as direções e tomar a média
                             # KL(P||Q) = sum_i P_i * log(P_i/Q_i)
                             kl_pq = np.sum(p * np.log(p / q))
                             kl_qp = np.sum(q * np.log(q / p))
@@ -1561,7 +1669,7 @@ def aggregate_round_consensus(df_long: pd.DataFrame, te_matrices_by_round: Dict[
         tenant_sets = [set(m.index) for m in matrices]
         common_tenants = tenant_sets[0]
         for tenant_set in tenant_sets[1:]:
-            common_tenants &= tenant_set
+                       common_tenants &= tenant_set
         
         if not common_tenants:
             logger.warning(f"Nenhum tenant comum encontrado para a métrica {metric}. Pulando.")
@@ -1706,4 +1814,202 @@ def aggregate_round_consensus(df_long: pd.DataFrame, te_matrices_by_round: Dict[
             logger.info(f"Consenso de tenants barulhentos salvo em: {consensus_path}")
     
     logger.info(f"Agregação de consenso concluída. {len(results['noisy_tenants_consensus'])} tenants barulhentos identificados.")
+    return results
+
+def analyze_causality_robustness(te_matrices_by_round, granger_matrices_by_round, output_dir):
+    """
+    Analyze the robustness of causal relationships across different experimental rounds.
+    
+    Args:
+        te_matrices_by_round: Dictionary of Transfer Entropy matrices by round
+        granger_matrices_by_round: Dictionary of Granger Causality matrices by round
+        output_dir: Directory to save the output
+    
+    Returns:
+        Dictionary with analysis results
+    """
+    import numpy as np
+    import pandas as pd
+    import os
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    from collections import defaultdict
+    
+    # Create output directory for robustness analysis
+    robustness_dir = os.path.join(output_dir, "causality_robustness")
+    os.makedirs(robustness_dir, exist_ok=True)
+    
+    # Initialize results dictionary
+    results = {
+        "robust_causal_relationships": defaultdict(dict),
+        "metrics_with_consistent_causality": [],
+        "cv_te_matrices": {}
+    }
+    
+    # Get all metrics and rounds
+    all_metrics = set()
+    all_rounds = sorted(list(te_matrices_by_round.keys()))
+    
+    for round_id in all_rounds:
+        for metric in te_matrices_by_round[round_id].keys():
+            all_metrics.add(metric)
+    
+    all_metrics = sorted(list(all_metrics))
+    
+    # Analyze each metric
+    for metric in all_metrics:
+        metric_te_matrices = {}
+        
+        # Collect all matrices for this metric across rounds
+        for round_id in all_rounds:
+            if metric in te_matrices_by_round[round_id]:
+                metric_te_matrices[round_id] = te_matrices_by_round[round_id][metric]
+        
+        if len(metric_te_matrices) < 2:
+            continue  # Need at least 2 rounds for robustness analysis
+        
+        # Calculate coefficient of variation (CV) for each causal pair
+        tenants = None
+        for round_id, matrices in metric_te_matrices.items():
+            for phase, matrix in matrices.items():
+                if matrix is not None and hasattr(matrix, "index") and len(matrix) > 0:
+                    tenants = matrix.index
+                    break
+            if tenants is not None:
+                break
+        
+        if tenants is None:
+            continue
+        
+        # Calculate CV for TE values across rounds for each phase and pair
+        cv_matrices = {}
+        for phase in set().union(*[set(matrices.keys()) for matrices in metric_te_matrices.values()]):
+            # Collect matrices for this phase across rounds
+            phase_matrices = []
+            for round_id in all_rounds:
+                if round_id in metric_te_matrices and phase in metric_te_matrices[round_id]:
+                    matrix = metric_te_matrices[round_id][phase]
+                    if matrix is not None and len(matrix) > 0:
+                        phase_matrices.append(matrix)
+            
+            if len(phase_matrices) < 2:
+                continue
+            
+            # Stack values into a 3D array for calculation
+            # First ensure all matrices have the same shape
+            if len(phase_matrices) >= 2:
+                # Create a list of arrays
+                matrix_values = [m.values for m in phase_matrices]
+                
+                # Stack along a new axis (at the end)
+                stacked_matrices = np.stack(matrix_values, axis=0)
+                
+                # Log the shape for debugging
+                logging.info(f"Stacked matrices shape for phase {phase}: {stacked_matrices.shape}")
+                
+                # Calculate mean and standard deviation across rounds (axis=0)
+                mean_matrix = np.nanmean(stacked_matrices, axis=0)
+                std_matrix = np.nanstd(stacked_matrices, axis=0)
+                
+                # Log the shape of the mean and std matrices
+                logging.info(f"Mean matrix shape: {mean_matrix.shape}, Std matrix shape: {std_matrix.shape}")
+            
+            # Calculate CV (coefficient of variation)
+            with np.errstate(divide='ignore', invalid='ignore'):
+                cv_matrix = np.abs(std_matrix / mean_matrix)
+            
+            # Create a DataFrame for the CV matrix
+            # Ensure cv_matrix has the correct dimensions
+            # Handle the case where we have 1D arrays instead of 2D matrices
+            if len(cv_matrix.shape) == 1:
+                # We have a 1D array, convert it to a proper matrix
+                logging.warning(f"CV matrix is 1D with shape {cv_matrix.shape}, expected 2D. Reshaping...")
+                
+                # Create a properly sized matrix filled with NaNs
+                cv_matrix_fixed = np.full((len(tenants), len(tenants)), np.nan)
+                
+                # Determine if we have enough values to fill a row or column
+                if len(cv_matrix) == len(tenants):
+                    # Assume it's diagonal data - just put values in the diagonal
+                    for i in range(len(tenants)):
+                        cv_matrix_fixed[i, i] = cv_matrix[i]
+                else:
+                    # Just put the values in the first elements
+                    flat_idx = 0
+                    for i in range(len(tenants)):
+                        for j in range(len(tenants)):
+                            if flat_idx < len(cv_matrix):
+                                cv_matrix_fixed[i, j] = cv_matrix[flat_idx]
+                                flat_idx += 1
+                            else:
+                                break
+                
+                cv_matrix = cv_matrix_fixed
+            elif cv_matrix.shape != (len(tenants), len(tenants)):
+                # We have a 2D matrix but wrong dimensions
+                logging.warning(f"CV matrix has shape {cv_matrix.shape}, expected {(len(tenants), len(tenants))}. Reshaping...")
+                
+                # Create a properly sized matrix filled with NaNs
+                cv_matrix_fixed = np.full((len(tenants), len(tenants)), np.nan)
+                
+                # Copy the data we have, respecting dimension limits
+                rows = min(cv_matrix.shape[0], len(tenants))
+                cols = min(cv_matrix.shape[1], len(tenants)) if len(cv_matrix.shape) > 1 else 1
+                
+                # Copy the available data
+                cv_matrix_fixed[:rows, :cols] = cv_matrix[:rows, :cols]
+                cv_matrix = cv_matrix_fixed
+            
+            cv_df = pd.DataFrame(cv_matrix, index=tenants, columns=tenants)
+            cv_matrices[phase] = cv_df
+            
+            # Identificar robustez das relações causais (baixo CV)
+            threshold = 0.3  # Threshold para CV considerar uma relação robusta
+            for source in tenants:
+                for target in tenants:
+                    if source != target:
+                        cv_value = cv_df.loc[source, target]
+                        if not np.isnan(cv_value) and cv_value < threshold:
+                            # Verificar se a TE média é significativa
+                            avg_te = mean_matrix[list(tenants).index(source), list(tenants).index(target)]
+                            if avg_te > 0.05:  # Threshold para TE significativa
+                                if phase not in results["robust_causal_relationships"][metric]:
+                                    results["robust_causal_relationships"][metric][phase] = []
+                                results["robust_causal_relationships"][metric][phase].append({
+                                    "source": source, 
+                                    "target": target, 
+                                    "cv": cv_value,
+                                    "avg_te": avg_te
+                                })
+        
+        # Store CV matrices for this metric
+        results["cv_te_matrices"][metric] = cv_matrices
+        
+        # Check if this metric has robust relationships
+        has_robust = False
+        for phase in results["robust_causal_relationships"].get(metric, {}).keys():
+            if results["robust_causal_relationships"][metric][phase]:
+                has_robust = True
+                break
+        
+        if has_robust:
+            results["metrics_with_consistent_causality"].append(metric)
+    
+    # Generate visualizations for CV matrices
+    for metric, cv_matrices in results["cv_te_matrices"].items():
+        for phase, cv_matrix in cv_matrices.items():
+            # Plot the CV matrix as a heatmap
+            fig, ax = plt.subplots(figsize=(10, 8))
+            mask = np.eye(len(cv_matrix))  # Mask diagonal
+            sns.heatmap(cv_matrix, annot=True, cmap="YlOrRd_r", fmt=".2f", 
+                        mask=mask, cbar_kws={"label": "Coefficient of Variation"}, ax=ax)
+            ax.set_title(f"Robustez de Causalidade (CV) - {metric} - {phase}")
+            ax.set_xlabel("Alvo")
+            ax.set_ylabel("Fonte")
+            
+            # Save the figure
+            output_path = os.path.join(robustness_dir, f"cv_te_matrix_{metric}_{phase.replace(' ', '_')}.png")
+            fig.savefig(output_path, bbox_inches="tight", dpi=300)
+            plt.close(fig)
+    
     return results

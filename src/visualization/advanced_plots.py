@@ -139,6 +139,8 @@ def generate_consolidated_timeseries(
     tenants: Optional[List[str]] = None,
     normalize_time: bool = True,
     add_confidence_bands: bool = True,
+    cross_tenant_comparison: bool = True,
+    create_animations: bool = True,
 ) -> Optional[Dict[str, str]]:
     """
     Gera um conjunto de plots de time series consolidados para uma métrica,
@@ -152,6 +154,8 @@ def generate_consolidated_timeseries(
         tenants: Lista de tenants a incluir (se None, usa todos).
         normalize_time: Se True, alinha o tempo pelo início de cada round.
         add_confidence_bands: Se True, adiciona bandas de confiança ao plot por round.
+        cross_tenant_comparison: Se True, adiciona visualização comparativa entre tenants.
+        create_animations: Se True, tenta criar animações para visualizações temporais.
         
     Returns:
         Dicionário mapeando tipo de plot para o caminho do arquivo gerado, ou None.
@@ -205,6 +209,36 @@ def generate_consolidated_timeseries(
         fig4 = _plot_distribution_by_phase(metric_df, metric)
         path4 = _save_figure(fig4, output_dir, f'consolidated_ts_by_phase_{metric}.png', dpi)
         if path4: plot_paths['by_phase'] = path4
+        
+        # Plot 5: Comparação Cross-Tenant (NOVO)
+        if cross_tenant_comparison:
+            fig5, animation_frames = _plot_cross_tenant_comparison(
+                metric_df, metric, time_col, xlabel, 
+                phase_highlight=True, 
+                animation_frames=create_animations
+            )
+            path5 = _save_figure(fig5, output_dir, f'cross_tenant_comparison_{metric}.png', dpi)
+            if path5: 
+                plot_paths['cross_tenant'] = path5
+                
+                # Salvar animação se frames foram gerados
+                if create_animations and animation_frames and len(animation_frames) > 0:
+                    try:
+                        from matplotlib.animation import FuncAnimation
+                        
+                        def update(frame_num):
+                            plt.clf()
+                            plt.imshow(animation_frames[frame_num].canvas.renderer.buffer_rgba())
+                            return plt.gca()
+                        
+                        fig = plt.figure(figsize=(14, 8))
+                        anim = FuncAnimation(fig, update, frames=len(animation_frames), interval=200)
+                        animation_path = os.path.join(output_dir, f'animated_cross_tenant_{metric}.gif')
+                        anim.save(animation_path, writer='pillow', fps=5, dpi=100)
+                        plot_paths['animation'] = animation_path
+                        logger.info(f"✅ Animação salva em {animation_path}")
+                    except Exception as e:
+                        logger.warning(f"Não foi possível criar animação: {e}")
 
     except Exception as e:
         logger.error(f"Erro fatal ao gerar plots para a métrica {metric}: {e}", exc_info=True)
@@ -258,7 +292,7 @@ def generate_all_consolidated_timeseries(
     logger.info(f"Time series consolidados concluídos: {len(results)} métricas processadas")
     return results
 
-def plot_aggregated_correlation_graph(correlation_matrix: pd.DataFrame, title: str, output_dir: str, filename: str, threshold: float = 0.5):
+def plot_aggregated_correlation_graph(correlation_matrix: pd.DataFrame, title: str, output_dir: str, filename: str, threshold: float = 0.3):
     """
     Plota um grafo de correlações agregadas entre tenants.
 
@@ -268,6 +302,7 @@ def plot_aggregated_correlation_graph(correlation_matrix: pd.DataFrame, title: s
         output_dir: Diretório para salvar o gráfico.
         filename: Nome do arquivo de saída.
         threshold: Limiar para exibir apenas correlações acima deste valor (em módulo).
+                  Valor default reduzido para 0.3 para capturar mais correlações.
     """
     if correlation_matrix.empty:
         logger.warning(f"Skipping correlation graph for {filename}: matrix is empty.")
@@ -281,6 +316,15 @@ def plot_aggregated_correlation_graph(correlation_matrix: pd.DataFrame, title: s
 
     if corr_graph_data.empty:
         logger.info(f"No correlations above threshold {threshold} for {filename}. Skipping graph.")
+        # Criar grafo vazio apenas com os nós, sem arestas
+        empty_fig, empty_ax = plt.subplots(figsize=(10, 8))
+        empty_ax.text(0.5, 0.5, f"No correlations above threshold {threshold}", 
+                     ha='center', va='center', fontsize=14)
+        empty_ax.set_title(f"{title} - Empty Correlation Network (threshold={threshold})")
+        empty_ax.axis('off')
+        os.makedirs(output_dir, exist_ok=True)
+        empty_fig.savefig(os.path.join(output_dir, filename), dpi=300, bbox_inches='tight')
+        plt.close(empty_fig)
         return None
 
     # Criar o grafo
@@ -315,3 +359,127 @@ def plot_aggregated_correlation_graph(correlation_matrix: pd.DataFrame, title: s
     plt.axis('off')
     
     return _save_figure(fig, output_dir, filename)
+
+def _plot_cross_tenant_comparison(metric_df, metric, time_col, xlabel, phase_highlight=True, animation_frames=False):
+    """
+    Cria uma visualização comparativa entre tenants em diferentes rounds.
+    
+    Args:
+        metric_df: DataFrame filtrado para uma métrica específica
+        metric: Nome da métrica
+        time_col: Coluna de tempo a ser usada (timestamp ou relative_time)
+        xlabel: Rótulo do eixo X
+        phase_highlight: Se True, destaca as diferentes fases experimentais
+        animation_frames: Se True, prepara quadros para animação (requer moviepy)
+    
+    Returns:
+        Figura matplotlib
+    """
+    fig, ax = plt.subplots(figsize=(14, 8))
+    
+    unique_tenants = sorted(metric_df['tenant_id'].unique())
+    unique_phases = sorted(metric_df['experimental_phase'].unique())
+    tenant_colors = {tenant: PUBLICATION_CONFIG['tenant_colors'].get(tenant, PUBLICATION_CONFIG['tenant_colors']['default']) 
+                    for tenant in unique_tenants}
+    tenant_markers = {tenant: PUBLICATION_CONFIG['tenant_markers'].get(tenant, PUBLICATION_CONFIG['tenant_markers']['default']) 
+                     for tenant in unique_tenants}
+    
+    # Adicionar áreas sombreadas para as fases experimentais
+    if phase_highlight and 'experimental_phase' in metric_df.columns:
+        # Agrupar por fase para encontrar os tempos de início e fim
+        phases_time = {}
+        for phase in unique_phases:
+            phase_data = metric_df[metric_df['experimental_phase'] == phase]
+            if not phase_data.empty:
+                phases_time[phase] = (phase_data[time_col].min(), phase_data[time_col].max())
+                
+        # Adicionar áreas sombreadas para as fases
+        for i, phase in enumerate(sorted(phases_time.keys())):
+            start, end = phases_time[phase]
+            color = PUBLICATION_CONFIG['phase_colors'].get(phase, f'C{i}')
+            ax.axvspan(start, end, alpha=0.2, color=color, label=f"Fase: {PUBLICATION_CONFIG['phase_display_names'].get(phase, phase)}")
+
+    # Plotar os dados por tenant com médias e bandas de confiança
+    for tenant in unique_tenants:
+        tenant_data = metric_df[metric_df['tenant_id'] == tenant]
+        
+        # Agrupar por tempo para cálculo de médias e intervalos de confiança
+        grouped = tenant_data.groupby(time_col)
+        mean_values = grouped['metric_value'].mean()
+        std_values = grouped['metric_value'].std()
+        ci95_hi = mean_values + 1.96 * (std_values / np.sqrt(grouped.size()))
+        ci95_lo = mean_values - 1.96 * (std_values / np.sqrt(grouped.size()))
+        
+        tenant_display = PUBLICATION_CONFIG['tenant_display_names'].get(tenant, tenant)
+        times = mean_values.index
+        
+        # Plotar a linha principal (média entre rounds)
+        ax.plot(times, mean_values, label=tenant_display, 
+                color=tenant_colors[tenant], 
+                marker=tenant_markers[tenant],
+                markersize=6, linewidth=2, markevery=max(1, len(times)//20))
+        
+        # Adicionar banda de confiança (95% CI)
+        ax.fill_between(times, ci95_lo, ci95_hi, color=tenant_colors[tenant], alpha=0.2)
+    
+    # Configuração do gráfico
+    metric_display = PUBLICATION_CONFIG['metric_display_names'].get(metric, {}).get('name', metric.replace('_', ' ').title())
+    metric_unit = PUBLICATION_CONFIG['metric_display_names'].get(metric, {}).get('unit', '')
+    
+    ax.set_title(f'Comparação entre Tenants - {metric_display}', fontsize=16)
+    ax.set_xlabel(xlabel, fontsize=14)
+    ylabel = f'{metric_display}'
+    if metric_unit:
+        ylabel += f' ({metric_unit})'
+    ax.set_ylabel(ylabel, fontsize=14)
+    
+    # Adicionar duas legendas: uma para tenants e outra para fases
+    tenant_handles = [plt.Line2D([0], [0], color=tenant_colors[tenant], marker=tenant_markers[tenant], 
+                                markersize=8, label=PUBLICATION_CONFIG['tenant_display_names'].get(tenant, tenant),
+                                linewidth=2) for tenant in unique_tenants]
+    
+    legend1 = ax.legend(handles=tenant_handles, title='Tenants', loc='upper right', 
+                        bbox_to_anchor=(1.15, 1), fontsize=12)
+    ax.add_artist(legend1)
+    
+    if phase_highlight:
+        phase_handles = [plt.Rectangle((0, 0), 1, 1, color=PUBLICATION_CONFIG['phase_colors'].get(phase, f'C{i}'),
+                                     alpha=0.2, label=PUBLICATION_CONFIG['phase_display_names'].get(phase, phase)) 
+                        for i, phase in enumerate(unique_phases)]
+        ax.legend(handles=phase_handles, title='Fases', loc='lower right', 
+                 bbox_to_anchor=(1.15, 0), fontsize=12)
+    
+    ax.grid(True, alpha=0.3)
+    plt.tight_layout(rect=(0, 0, 0.85, 1))
+    
+    # Animação frames (se solicitado)
+    frames = []
+    if animation_frames:
+        try:
+            import copy
+            
+            # Criar frames para cada ponto no tempo
+            times_array = np.sort(metric_df[time_col].unique())
+            
+            for time_point in times_array:
+                frame_fig = copy.deepcopy(fig)
+                frame_ax = frame_fig.axes[0]
+                
+                # Adicionar linha vertical no tempo atual
+                frame_ax.axvline(time_point, color='r', linestyle='--', linewidth=1.5)
+                
+                # Adicionar texto indicando o tempo
+                if isinstance(time_point, (int, float)):
+                    time_text = f"Tempo: {time_point:.1f}s"
+                else:
+                    time_text = f"Tempo: {time_point}"
+                    
+                frame_ax.text(0.5, 0.02, time_text, transform=frame_ax.transAxes, 
+                             fontsize=12, ha='center', bbox=dict(facecolor='white', alpha=0.8))
+                
+                frames.append(frame_fig)
+                
+        except ImportError:
+            logger.warning("Módulo necessário para animação não encontrado. Frames de animação não foram gerados.")
+    
+    return fig, frames

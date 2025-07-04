@@ -33,7 +33,75 @@ def suppress_statsmodels_warnings():
         # Other common statistical warnings
         warnings.filterwarnings('ignore', message='.*p-value.*')
         
+        # Matplotlib warnings - Mais agressivo na filtragem de warnings de fonte
+        warnings.filterwarnings('ignore', category=UserWarning, message='.*findfont.*')
+        warnings.filterwarnings('ignore', category=UserWarning, message='.*font.*not found.*')
+        warnings.filterwarnings('ignore', category=UserWarning, message='.*family.*not found.*')
+        warnings.filterwarnings('ignore', category=UserWarning, message='.*tight_layout.*')
+        
+        # Pandas warnings
+        warnings.filterwarnings('ignore', message='.*A value is trying to be set on a copy of a slice.*')
+        warnings.filterwarnings('ignore', message='.*SettingWithCopyWarning.*')
+        
         yield
+
+def configure_matplotlib(config=None):
+    """
+    Centraliza a configuração do matplotlib para evitar inconsistências.
+    Deve ser chamado no início de cada script ou módulo que usa visualizações.
+    
+    Args:
+        config: Configuração opcional do pipeline, para ler configurações específicas.
+    """
+    import matplotlib
+    matplotlib.use('Agg')  # Use o backend não interativo Agg
+    
+    # Fontes padrão que geralmente estão disponíveis em sistemas Linux
+    font_family = 'sans-serif'
+    font_size = 12
+    
+    # Leia configurações do arquivo de configuração, se disponível
+    if config and 'visualization' in config and 'fonts' in config['visualization']:
+        font_config = config['visualization']['fonts']
+        font_family = font_config.get('family', font_family)
+        font_size = font_config.get('size', font_size)
+    
+    # Configuração de fontes para evitar warnings
+    matplotlib.rcParams['font.family'] = font_family
+    
+    # Definir listas de fontes disponíveis em praticamente todos os sistemas
+    matplotlib.rcParams['font.sans-serif'] = [
+        'DejaVu Sans', 'Arial', 'Helvetica', 'Liberation Sans', 
+        'FreeSans', 'Ubuntu', 'Noto Sans', 'sans-serif'
+    ]
+    
+    # Mesmo que usemos 'serif', forneça alternativas para Times New Roman
+    matplotlib.rcParams['font.serif'] = [
+        'DejaVu Serif', 'Liberation Serif', 'FreeSerif', 
+        'Bitstream Vera Serif', 'Noto Serif', 'serif'
+    ]
+    
+    # Configurações adicionais para evitar warnings
+    matplotlib.rcParams['figure.max_open_warning'] = 100
+    matplotlib.rcParams['font.size'] = font_size
+    
+    # Configurações para qualidade de saída
+    plot_quality = "high"
+    if config and 'visualization' in config and 'plot_quality' in config['visualization']:
+        plot_quality = config['visualization']['plot_quality']
+    
+    if plot_quality == "high":
+        matplotlib.rcParams['savefig.dpi'] = 300
+        matplotlib.rcParams['figure.dpi'] = 120
+    elif plot_quality == "medium":
+        matplotlib.rcParams['savefig.dpi'] = 200
+        matplotlib.rcParams['figure.dpi'] = 100
+    else:
+        matplotlib.rcParams['savefig.dpi'] = 100
+        matplotlib.rcParams['figure.dpi'] = 80
+    
+    # Configuração para garantir que legendas não causem problemas de layout
+    matplotlib.rcParams['legend.loc'] = 'best'
 
 
 def validate_data_availability(config: dict) -> bool:
@@ -75,19 +143,56 @@ def validate_data_availability(config: dict) -> bool:
         return True # Skip validation if config is incomplete
 
     missing_files = []
+    total_expected = len(selected_rounds) * len(phase_names) * len(selected_tenants) * len(selected_metrics)
+    
+    # Usar a estrutura de diretório real em vez de assumir os nomes
     for round_name in selected_rounds:
-        for phase_name in phase_names:
+        round_dir = os.path.join(data_root, round_name)
+        if not os.path.exists(round_dir):
+            logger.warning(f"Round directory not found: {round_dir}")
+            continue
+            
+        # Buscar fases reais em vez de assumir os nomes
+        actual_phases = [d for d in os.listdir(round_dir) 
+                        if os.path.isdir(os.path.join(round_dir, d))]
+        
+        # Mapear fase real para nome canônico
+        phase_mapping = {}
+        for phase in actual_phases:
+            canonical = normalize_phase_name(phase)
+            if canonical:
+                phase_mapping[canonical] = phase
+        
+        # Se não houver fases conhecidas, usar as pastas encontradas
+        if not phase_mapping:
+            phase_mapping = {phase: phase for phase in actual_phases}
+            
+        for canonical_phase, dir_phase in phase_mapping.items():
+            phase_dir = os.path.join(round_dir, dir_phase)
+            
             for tenant_name in selected_tenants:
+                tenant_dir = os.path.join(phase_dir, tenant_name)
+                if not os.path.exists(tenant_dir):
+                    continue
+                    
                 for metric_name in selected_metrics:
-                    # Path assumption: <data_root>/<round>/<phase>/<tenant>/<metric>.csv
-                    file_path = os.path.join(data_root, round_name, phase_name, tenant_name, f"{metric_name}.csv")
+                    file_path = os.path.join(tenant_dir, f"{metric_name}.csv")
                     if not os.path.exists(file_path):
                         missing_files.append(file_path)
 
     if missing_files:
-        logger.warning("Pre-flight check found missing data files:")
-        for f in missing_files:
-            logger.warning(f"  - {f}")
+        # Limitar o número de arquivos mostrados para evitar poluição do log
+        missing_count = len(missing_files)
+        if missing_count > 10:
+            sample = missing_files[:5] + ["..."] + missing_files[-5:]
+            logger.warning(f"Pre-flight check found {missing_count} missing data files out of {total_expected} expected. Sample:")
+            for f in sample:
+                logger.warning(f"  - {f}")
+        else:
+            logger.warning(f"Pre-flight check found {missing_count} missing data files:")
+            for f in missing_files:
+                logger.warning(f"  - {f}")
+        
         logger.warning("Pipeline will continue, but ingestion may be incomplete.")
         return False
     else:

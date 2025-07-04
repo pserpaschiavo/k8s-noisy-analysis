@@ -5,8 +5,8 @@ Description: Descriptive statistics and plotting utilities for multi-tenant time
 import os
 import pandas as pd
 import numpy as np
+# Removendo configuração local do matplotlib
 import matplotlib
-matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import matplotlib.patches as mpatches
@@ -14,6 +14,7 @@ import seaborn as sns
 from functools import lru_cache
 import logging
 
+from src.utils import configure_matplotlib
 from src.visualization_config import PUBLICATION_CONFIG
 from src.visualization.plots import (
     plot_metric_timeseries_multi_tenant,
@@ -22,6 +23,9 @@ from src.visualization.plots import (
     plot_metric_boxplot,
     plot_anomalies
 )
+
+# Configuração centralizada do matplotlib
+configure_matplotlib()
 
 # Setup logging
 logger = logging.getLogger(__name__)

@@ -42,7 +42,6 @@ def main():
 
     # Diretório de saída para esta análise
     output_dir = config.get('output_dir', './outputs/sfi2-paper-analysis')
-    multi_round_output_dir = f"{output_dir}/multi_round_analysis"
 
     # Preparar o contexto inicial para o estágio
     # Em um pipeline real, o contexto seria passado entre os estágios.
@@ -60,6 +59,7 @@ def main():
 
     # Instanciar e executar o estágio de análise multi-round
     logger.info("Iniciando o estágio de análise de múltiplos rounds.")
+    multi_round_output_dir = f"{output_dir}/multi_round_analysis"
     multi_round_stage = MultiRoundAnalysisStage(output_dir=multi_round_output_dir)
     final_context = multi_round_stage.execute(initial_context)
 

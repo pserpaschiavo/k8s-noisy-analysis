@@ -1,6 +1,6 @@
 # Multi-Tenant Time Series Analysis System
 
-🎉 **Status**: Pipeline totalmente funcional end-to-end (Atualizado: 24/06/2025)
+🎉 **Status**: Pipeline totalmente funcional end-to-end (Atualizado: 03/07/2025) - Implementação completa de análise de robustez, meta-visualizações, aceleração GPU e sistema avançado de cache
 
 This system provides a **complete, production-ready pipeline** for multi-tenant time series analysis of Kubernetes metrics, with advanced focus on identifying "noisy neighbors" and causality analysis between tenants.
 
@@ -17,16 +17,40 @@ The pipeline consists of **10 fully functional stages** that execute without err
 7.  ✅ **Phase Comparison**: Compares baseline/attack/recovery phases
 8.  ✅ **Report Generation**: Consolidated Markdown reports with insights
 9.  ✅ **Insight Aggregation**: High-level insights with tenant rankings
-10. ✅ **Multi-Round Analysis**: **FIXED 24/06/2025** - Cross-round consistency analysis
+10. ✅ **Multi-Round Analysis**: Análise de consistência e robustez entre rodadas
 
-## 🚀 Recent Major Achievement
+## 🔍 Novos Recursos (03/07/2025)
 
-**Multi-Round Analysis Stage Fixed**: The critical `NotImplementedError` has been resolved. The stage now successfully generates:
-- Consolidated boxplots for all metrics
-- CV heatmaps by tenant and metric  
-- Multi-round analysis reports
-- Round consistency data
-- Tenant stability scores
+1. **Análise de Robustez Completa**:
+   - ✅ Análise leave-one-out para testar a estabilidade dos resultados
+   - ✅ Análise de sensibilidade com limiares alfa
+   - ✅ Sistema de pontuação de robustez para confiança nos resultados
+   - ✅ Integração com o pipeline de visualização
+
+2. **Meta-Visualizações Aprimoradas para Múltiplas Rodadas**:
+   - ✅ Gráficos de floresta estilo meta-análise para tamanhos de efeito
+   - ✅ Mapas de calor de tamanhos de efeito aprimorados com indicadores de confiabilidade
+   - ✅ Gráficos de barras de erro aprimorados com intervalos de confiança
+   - ✅ Gráficos de dispersão 3D para análise de efeito multivariado
+
+3. **Redes de Correlação Avançadas**:
+   - ✅ Detecção de comunidades para agrupamento visual de tenants relacionados
+   - ✅ Filtragem inteligente para visualizações com grande volume de dados
+   - ✅ Opções personalizáveis de estética e layout
+   - ✅ Destaque para correlações mais significativas
+
+4. **Sistema de Cache Inteligente**:
+   - ✅ Evita reprocessamento de análises computacionalmente intensivas
+   - ✅ Rastreamento de dependências para invalidação automática
+   - ✅ Gestão automática de ciclo de vida do cache
+   - ✅ Estatísticas de economia de tempo e recursos
+
+5. **Aceleração GPU para Grandes Volumes de Dados**:
+   - ✅ Suporte para CuPy, PyTorch e TensorFlow como backends
+   - ✅ Aceleração para cálculos de correlação em grandes matrizes
+   - ✅ Cálculo de tamanho de efeito otimizado para GPU
+   - ✅ Fallback automático para CPU quando GPU não disponível
+   - ✅ Configuração flexível via YAML
 
 ## Project Structure
 
@@ -35,13 +59,15 @@ The pipeline consists of **10 fully functional stages** that execute without err
     -   **analysis_multi_round.py**: Multi-round analysis (**✅ Fixed 24/06/2025**)
     -   **data_ingestion.py**: Data ingestion with experiment_folder support (**✅ Working**)
     -   **analysis_*.py**: Complete suite of analysis modules (**✅ All Working**)
+    -   **gpu_acceleration.py**: GPU acceleration for large datasets (**✅ NEW 03/07/2025**)
+    -   **smart_cache.py**: Intelligent caching system (**✅ Working**)
     -   **visualization/**: Professional visualizations with relative time (**✅ Working**)
 -   **config/**: Configuration files (**✅ Tested configurations available**)
 -   **outputs/**: Analysis results (**✅ Complete outputs generated**)
     -   **plots/**: Professional visualizations
     -   **reports/**: Detailed Markdown reports  
     -   **insights/**: Aggregated insights and rankings
-    -   **multi_round_analysis/**: Cross-round analysis results (**✅ NEW**)
+    -   **multi_round_analysis/**: Cross-round analysis results (**✅ Working**)
 
 ## Quick Start
 
@@ -58,6 +84,12 @@ source venv/bin/activate  # Linux/Mac
 
 # Install dependencies
 pip install -r requirements.txt
+
+# For GPU acceleration (optional)
+# Uncomment and install the appropriate backend in requirements.txt:
+# - CuPy (CUDA NumPy): Recommended for best NumPy compatibility
+# - PyTorch: Alternative for tensor operations
+# - TensorFlow: Alternative for tensor operations
 ```
 
 ## Basic Usage
@@ -65,8 +97,20 @@ pip install -r requirements.txt
 To run the complete pipeline with a specific configuration:
 
 ```bash
+# Using the standard execution method:
 python3 run_pipeline.py --config config/pipeline_config.yaml
+
+# OR using the optimized execution script (recommended):
+./run_optimized_pipeline.sh
+
+# Test GPU acceleration (if GPU is available):
+python3 test_gpu_acceleration.py
 ```
+
+The `run_optimized_pipeline.sh` script provides:
+- Enhanced warning suppression
+- Output verification
+- Summary of execution results
 
 ### Command-Line Options
 
@@ -83,3 +127,24 @@ For more details, run:
 ```bash
 python3 run_pipeline.py --help
 ```
+
+## Visualization Configuration (New in 07/2025)
+
+The pipeline includes an enhanced visualization system with configurable settings:
+
+```yaml
+# Example from config/pipeline_config_sfi2.yaml
+visualization:
+  plot_quality: "high"  # high, medium, low - affects DPI and size
+  fonts:
+    family: "sans-serif"  # Universally available font family
+    size: 12              # Base font size
+  correlation_graph:
+    threshold: 0.3        # Minimum correlation to display
+  heatmap:
+    cmap: "coolwarm"      # Color map for heatmaps
+```
+
+For detailed visualization configuration options, see:
+- [Visualization Configuration Guide](./docs/visualization_config_guide.md)
+- [Work Plan 07/02/2025](./work-plan-20250702.md) for the latest improvements

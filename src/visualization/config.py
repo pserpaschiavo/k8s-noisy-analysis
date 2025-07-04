@@ -55,5 +55,11 @@ PUBLICATION_CONFIG = {
         "tenant-dsk": "Disk-Bound",
         "tenant-ntk": "Network-Bound",
         "tenant-nsy": "Noisy-Neighbor"
+    },
+    "heatmap_colormaps": {
+        "correlation": "coolwarm",
+        "covariance": "viridis",
+        "p_value": "viridis_r",
+        "score": "plasma"
     }
 }

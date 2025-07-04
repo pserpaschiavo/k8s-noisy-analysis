@@ -10,7 +10,6 @@ import logging
 import pandas as pd
 import numpy as np
 import matplotlib
-matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
 import networkx as nx
@@ -21,6 +20,10 @@ from functools import lru_cache
 import warnings
 
 from src.visualization.plots import plot_causality_graph, plot_causality_heatmap
+from src.utils import configure_matplotlib
+
+# Configure matplotlib using the centralized function
+configure_matplotlib()
 
 # Import utilities for time series processing
 try:

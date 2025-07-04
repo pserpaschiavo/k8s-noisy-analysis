@@ -9,6 +9,9 @@ from functools import lru_cache
 from pathlib import Path
 import time
 
+# Importar o módulo de aceleração GPU
+from src.gpu_acceleration import check_gpu_availability, to_gpu, to_cpu
+
 logger = logging.getLogger(__name__)
 
 def cohens_d(group1, group2):
@@ -45,6 +48,97 @@ def cohens_d(group1, group2):
     # Cohen's d
     d = (mean2 - mean1) / pooled_std
     return d
+
+def cohens_d_gpu(group1, group2):
+    """
+    Calcula o tamanho de efeito (Cohen's d) entre dois grupos usando GPU.
+    
+    Args:
+        group1: Array-like com valores do grupo 1
+        group2: Array-like com valores do grupo 2
+        
+    Returns:
+        float: Tamanho de efeito (Cohen's d)
+    """
+    # Verifica se os grupos têm dados suficientes
+    if len(group1) < 2 or len(group2) < 2:
+        return np.nan
+    
+    # Transferir para GPU
+    gpu_group1 = to_gpu(np.array(group1))
+    gpu_group2 = to_gpu(np.array(group2))
+    
+    # Obter backend
+    backend = check_gpu_availability()
+    
+    # Calcular estatísticas usando o backend apropriado
+    if backend == "cupy":
+        import cupy as cp
+        mean1, mean2 = cp.mean(gpu_group1), cp.mean(gpu_group2)
+        std1, std2 = cp.std(gpu_group1, ddof=1), cp.std(gpu_group2, ddof=1)
+        
+        # Se o desvio padrão for zero em ambos os grupos, retorna NaN
+        if std1 == 0 and std2 == 0:
+            return np.nan
+        
+        # Pooled standard deviation
+        n1, n2 = len(group1), len(group2)
+        pooled_std = cp.sqrt(((n1 - 1) * std1**2 + (n2 - 1) * std2**2) / (n1 + n2 - 2))
+        
+        # Prevenção de divisão por zero
+        if pooled_std == 0:
+            return np.nan
+        
+        # Cohen's d
+        d = (mean2 - mean1) / pooled_std
+        return float(to_cpu(d))
+    
+    elif backend == "torch":
+        import torch
+        mean1, mean2 = torch.mean(gpu_group1), torch.mean(gpu_group2)
+        std1, std2 = torch.std(gpu_group1, unbiased=True), torch.std(gpu_group2, unbiased=True)
+        
+        # Se o desvio padrão for zero em ambos os grupos, retorna NaN
+        if std1 == 0 and std2 == 0:
+            return np.nan
+        
+        # Pooled standard deviation
+        n1, n2 = len(group1), len(group2)
+        pooled_std = torch.sqrt(((n1 - 1) * std1**2 + (n2 - 1) * std2**2) / (n1 + n2 - 2))
+        
+        # Prevenção de divisão por zero
+        if pooled_std == 0:
+            return np.nan
+        
+        # Cohen's d
+        d = (mean2 - mean1) / pooled_std
+        return float(to_cpu(d))
+    
+    elif backend == "tensorflow":
+        import tensorflow as tf
+        mean1, mean2 = tf.reduce_mean(gpu_group1), tf.reduce_mean(gpu_group2)
+        std1 = tf.sqrt(tf.reduce_sum(tf.square(gpu_group1 - mean1)) / (len(group1) - 1))
+        std2 = tf.sqrt(tf.reduce_sum(tf.square(gpu_group2 - mean2)) / (len(group2) - 1))
+        
+        # Se o desvio padrão for zero em ambos os grupos, retorna NaN
+        if std1 == 0 and std2 == 0:
+            return np.nan
+        
+        # Pooled standard deviation
+        n1, n2 = len(group1), len(group2)
+        pooled_std = tf.sqrt(((n1 - 1) * tf.square(std1) + (n2 - 1) * tf.square(std2)) / (n1 + n2 - 2))
+        
+        # Prevenção de divisão por zero
+        if pooled_std == 0:
+            return np.nan
+        
+        # Cohen's d
+        d = (mean2 - mean1) / pooled_std
+        return float(to_cpu(d))
+    
+    else:
+        # Fallback para versão CPU
+        return cohens_d(group1, group2)
 
 def eta_squared(group1, group2):
     """
@@ -107,60 +201,72 @@ def t_test(group1, group2):
 
 def _process_effect_size(args):
     """
-    Função auxiliar para processamento paralelo que calcula tamanhos de efeito
-    para uma combinação específica de round, métrica, fase e tenant.
+    Função auxiliar para processar um único cálculo de tamanho de efeito.
     
     Args:
-        args: Tupla com argumentos (df_long, round_id, metric_name, phase, tenant_id, baseline_phase)
+        args: Tupla com (df, round_id, metric, phase, tenant, baseline_phase, use_gpu)
         
     Returns:
-        Dict: Dicionário com os resultados calculados
+        Dict com resultados de tamanho de efeito ou None se houver erro
     """
-    df_long, round_id, metric_name, phase, tenant_id, baseline_phase = args
-    
-    # Pula a baseline comparada com ela mesma
-    if phase == baseline_phase:
+    # Desempacotar argumentos
+    if len(args) >= 7:
+        df, round_id, metric, phase, tenant, baseline_phase, use_gpu = args
+    else:
+        df, round_id, metric, phase, tenant, baseline_phase = args
+        use_gpu = False  # Valor padrão caso não seja fornecido
+        
+    try:
+        # Filtrar dados para baseline
+        base_data = df[(df['round_id'] == round_id) & 
+                    (df['metric_name'] == metric) & 
+                    (df['experimental_phase'] == baseline_phase) &
+                    (df['tenant_id'] == tenant)]
+        
+        # Filtrar dados para fase experimental
+        exp_data = df[(df['round_id'] == round_id) & 
+                    (df['metric_name'] == metric) & 
+                    (df['experimental_phase'] == phase) &
+                    (df['tenant_id'] == tenant)]
+        
+        # Verificar dados suficientes
+        if base_data.empty or exp_data.empty:
+            return None
+            
+        base_values = base_data['metric_value'].values
+        exp_values = exp_data['metric_value'].values
+        
+        if len(base_values) < 2 or len(exp_values) < 2:
+            return None
+            
+        # Calcular tamanho de efeito e testes estatísticos
+        if use_gpu and check_gpu_availability() and (len(base_values) + len(exp_values) > 1000):
+            # Usar versões GPU das funções para datasets grandes
+            d = cohens_d_gpu(base_values, exp_values)
+            _, p_value = t_test(base_values, exp_values)  # Usando t-test na CPU por simplicidade
+            eta_sq = eta_squared(base_values, exp_values)  # Usando eta_squared na CPU por simplicidade
+        else:
+            # Usar versões CPU para datasets menores
+            d = cohens_d(base_values, exp_values)
+            _, p_value = t_test(base_values, exp_values)
+            eta_sq = eta_squared(base_values, exp_values)
+        
+        # Retornar resultados
+        return {
+            'round_id': round_id,
+            'metric_name': metric,
+            'experimental_phase': phase,
+            'tenant_id': tenant,
+            'baseline_phase': baseline_phase,
+            'effect_size': d,
+            'p_value': p_value,
+            'eta_squared': eta_sq,
+            'sample_size_baseline': len(base_values),
+            'sample_size_experimental': len(exp_values)
+        }
+    except Exception as e:
+        logger.warning(f"Erro ao processar efeito para {round_id}/{metric}/{phase}/{tenant}: {e}")
         return None
-    
-    # Filtra os dados para o grupo experimental
-    exp_data = df_long[(df_long['round_id'] == round_id) & 
-                      (df_long['metric_name'] == metric_name) & 
-                      (df_long['experimental_phase'] == phase) & 
-                      (df_long['tenant_id'] == tenant_id)]
-    
-    # Filtra os dados para o grupo baseline
-    base_data = df_long[(df_long['round_id'] == round_id) & 
-                       (df_long['metric_name'] == metric_name) & 
-                       (df_long['experimental_phase'] == baseline_phase) & 
-                       (df_long['tenant_id'] == tenant_id)]
-    
-    # Se não houver dados suficientes, retorna None
-    if exp_data.empty or base_data.empty:
-        return None
-    
-    # Extrai os valores métricos para ambos os grupos
-    exp_values = exp_data['metric_value'].values
-    base_values = base_data['metric_value'].values
-    
-    # Calcula estatísticas
-    effect_size = cohens_d(base_values, exp_values)
-    eta_sq = eta_squared(base_values, exp_values)
-    t_stat, p_value = t_test(base_values, exp_values)
-    
-    # Retorna um dicionário com os resultados
-    return {
-        'round_id': round_id,
-        'metric_name': metric_name,
-        'experimental_phase': phase,
-        'tenant_id': tenant_id,
-        'baseline_phase': baseline_phase,
-        'effect_size': effect_size,
-        'p_value': p_value,
-        't_statistic': t_stat,
-        'eta_squared': eta_sq,
-        'sample_size_baseline': len(base_values),
-        'sample_size_experimental': len(exp_values)
-    }
 
 def extract_effect_sizes(
     df_long: pd.DataFrame,
@@ -171,7 +277,9 @@ def extract_effect_sizes(
     baseline_phase: str = "1 - Baseline",
     use_cache: bool = True,
     parallel: bool = False,
-    cache_dir: Optional[str] = None
+    cache_dir: Optional[str] = None,
+    use_gpu: bool = False,
+    large_dataset_threshold: int = 10000
 ) -> pd.DataFrame:
     """
     Extrai estatísticas de tamanho de efeito (Cohen's d) e p-valores para
@@ -187,6 +295,8 @@ def extract_effect_sizes(
         use_cache: Se True, usa cache para evitar recálculos
         parallel: Se True, paraleliza o processamento
         cache_dir: Diretório para armazenar o cache (opcional)
+        use_gpu: Se True, tenta usar aceleração GPU para cálculos intensivos
+        large_dataset_threshold: Número de linhas para considerar um dataset grande
         
     Returns:
         DataFrame com colunas: round_id, metric_name, experimental_phase, 
@@ -194,6 +304,15 @@ def extract_effect_sizes(
     """
     start_time = time.time()
     logger.info("Iniciando extração de tamanhos de efeito...")
+    
+    # Verificar disponibilidade de GPU se solicitado
+    if use_gpu:
+        gpu_available = check_gpu_availability()
+        if gpu_available:
+            logger.info(f"Aceleração GPU ativada para extração de tamanhos de efeito")
+        else:
+            logger.info(f"GPU solicitada mas não disponível. Usando CPU para cálculos.")
+            use_gpu = False
     
     # Configurar cache, se solicitado
     cache_file = None
@@ -219,7 +338,8 @@ def extract_effect_sizes(
                 if phase == baseline_phase:
                     continue  # Pula comparação da baseline com ela mesma
                 for tenant_id in tenants:
-                    args_list.append((df_long, round_id, metric_name, phase, tenant_id, baseline_phase))
+                    # Adiciona flag de uso GPU aos argumentos
+                    args_list.append((df_long, round_id, metric_name, phase, tenant_id, baseline_phase, use_gpu))
     
     # Processa os dados (em paralelo ou sequencial)
     results = []
@@ -262,7 +382,7 @@ def extract_effect_sizes(
         except Exception as e:
             logger.warning(f"Erro ao salvar cache: {e}")
     
-    elapsed_time = time.time() - start_time
-    logger.info(f"Extração de tamanhos de efeito concluída em {elapsed_time:.2f} segundos. Retornando {effect_sizes_df.shape[0]} registros.")
+    elapsed = time.time() - start_time
+    logger.info(f"Extração de tamanhos de efeito concluída em {elapsed:.2f}s")
     
     return effect_sizes_df
