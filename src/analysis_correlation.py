@@ -18,7 +18,7 @@ from src.gpu_acceleration import check_gpu_availability, calculate_correlation_m
 # Configuração centralizada do matplotlib
 configure_matplotlib()
 
-from src.visualization.plots import (
+from src.visualization.correlation_plots import (
     plot_correlation_heatmap,
     plot_covariance_heatmap,
     plot_ccf,

@@ -15,14 +15,6 @@ from functools import lru_cache
 import logging
 
 from src.utils import configure_matplotlib
-from src.visualization_config import PUBLICATION_CONFIG
-from src.visualization.plots import (
-    plot_metric_timeseries_multi_tenant,
-    plot_metric_barplot_by_phase,
-    plot_metric_timeseries_multi_tenant_all_phases,
-    plot_metric_boxplot,
-    plot_anomalies
-)
 
 # Configuração centralizada do matplotlib
 configure_matplotlib()

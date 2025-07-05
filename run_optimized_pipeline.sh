@@ -26,25 +26,32 @@ if [ $? -eq 0 ]; then
   # Verificar os arquivos de saída críticos
   output_dir="./outputs/sfi2-paper-analysis"
   
-  echo -n "Relatório de análise multi-round: "
-  if [ -f "${output_dir}/multi_round_analysis/multi_round_analysis/multi_round_analysis_report.md" ]; then
+  echo -n "Relatório de análise: "
+  if [ -n "$(find "${output_dir}/reports" -name 'report_*.md' -print -quit)" ]; then
     echo "✅ OK"
   else
     echo "❌ Não encontrado"
   fi
   
   echo -n "Gráficos de correlação: "
-  if [ -d "${output_dir}/correlation_graphs" ]; then
-    echo "✅ OK ($(ls ${output_dir}/correlation_graphs | grep .png | wc -l) arquivos)"
+  if [ -d "${output_dir}/plots/correlation" ] && [ "$(ls -A "${output_dir}/plots/correlation")" ]; then
+    echo "✅ OK ($(find "${output_dir}/plots/correlation" -type f -name '*.png' | wc -l) arquivos)"
   else
-    echo "❌ Diretório não encontrado"
+    echo "❌ Diretório não encontrado ou vazio"
   fi
   
-  echo -n "Relatórios de insights: "
-  if [ -d "${output_dir}/insights" ]; then
+  echo -n "Gráficos de causalidade: "
+  if [ -d "${output_dir}/plots/causality" ] && [ "$(ls -A "${output_dir}/plots/causality")" ]; then
+    echo "✅ OK ($(find "${output_dir}/plots/causality" -type f -name '*.png' | wc -l) arquivos)"
+  else
+    echo "❌ Diretório não encontrado ou vazio"
+  fi
+
+  echo -n "Análise de Impacto: "
+  if [ -d "${output_dir}/impact_analysis" ] && [ "$(ls -A "${output_dir}/impact_analysis")" ]; then
     echo "✅ OK"
   else
-    echo "❌ Diretório não encontrado"
+    echo "❌ Diretório não encontrado ou vazio"
   fi
   
   echo "===== Resumo da execução ====="

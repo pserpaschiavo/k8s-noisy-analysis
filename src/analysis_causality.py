@@ -19,7 +19,7 @@ from statsmodels.tools.sm_exceptions import MissingDataError, InfeasibleTestErro
 from functools import lru_cache
 import warnings
 
-from src.visualization.plots import plot_causality_graph, plot_causality_heatmap
+from src.visualization.causality_plots import plot_causality_graph, plot_causality_heatmap
 from src.utils import configure_matplotlib
 
 # Configure matplotlib using the centralized function

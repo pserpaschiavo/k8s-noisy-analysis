@@ -32,23 +32,27 @@ import networkx as nx
 from src.data_ingestion import ingest_experiment_data
 from src.data_export import save_dataframe, load_dataframe
 from src.data_segment import filter_long_df, get_wide_format_for_analysis
-from src.analysis_descriptive import compute_descriptive_stats, plot_metric_timeseries_multi_tenant
-from src.analysis_descriptive import plot_metric_barplot_by_phase, plot_metric_boxplot, plot_metric_timeseries_multi_tenant_all_phases
+from src.analysis_descriptive import compute_descriptive_stats
+from src.visualization.descriptive_plots import (
+    plot_metric_timeseries_multi_tenant,
+    plot_metric_barplot_by_phase,
+    plot_metric_boxplot,
+    plot_metric_timeseries_multi_tenant_all_phases
+)
 from src.analysis_correlation import compute_correlation_matrix, compute_covariance_matrix, compute_cross_correlation
 from src.report_generation import generate_tenant_metrics, generate_tenant_ranking_plot, generate_markdown_report
-from src.insight_aggregation import aggregate_tenant_insights, generate_comparative_table, plot_insight_matrix
-from src.analysis_multi_round import MultiRoundAnalysisStage
 from src import config
 from src.parse_config import load_parse_config, get_selected_metrics, get_selected_tenants, get_selected_rounds
 from src.parse_config import get_data_root, get_processed_data_dir, get_experiment_folder, get_experiment_dir
 from src.utils import validate_data_availability as preflight_check
-from src.visualization.plots import (
+from src.visualization.correlation_plots import (
     plot_correlation_heatmap,
     plot_covariance_heatmap,
-    plot_ccf,
-    plot_causality_graph
+    plot_ccf
 )
 from src.pipeline_stage import PipelineStage
+from src.analysis_phase_comparison import PhaseComparisonStage as AnalysisPhaseComparisonStage
+from src.analysis_impact import ImpactAnalysisStage
 
 # Logging configuration
 logging.basicConfig(
@@ -194,7 +198,7 @@ class DataIngestionStage(PipelineStage):
                 self.logger.info(f"Data loaded successfully. Total records: {len(df_long)}")
                 
                 # Add to context
-                context['df_long'] = df_long
+                context['data'] = df_long
                 context['consolidated_long_path'] = input_parquet_path
                 
                 return context
@@ -212,7 +216,7 @@ class DataIngestionStage(PipelineStage):
                 self.logger.info(f"Data loaded successfully. Total records: {len(df_long)}")
                 
                 # Add to context
-                context['df_long'] = df_long
+                context['data'] = df_long
                 context['consolidated_long_path'] = consolidated_long_path
                 
                 return context
@@ -234,7 +238,7 @@ class DataIngestionStage(PipelineStage):
         self.logger.info(f"Ingestion completed. Total records: {len(df_long)}")
         
         # Add to context
-        context['df_long'] = df_long
+        context['data'] = df_long
         context['consolidated_long_path'] = consolidated_long_path
         
         return context
@@ -250,7 +254,7 @@ class DataValidationStage(PipelineStage):
         """
         Executes the data validation.
         """
-        df_long = context.get('df_long')
+        df_long = context.get('data')
         if df_long is None or df_long.empty:
             self.logger.error("DataFrame not available for validation. Halting pipeline.")
             context['pipeline_halted'] = True
@@ -286,7 +290,7 @@ class DataExportStage(PipelineStage):
         Returns:
             Updated context.
         """
-        df_long = context.get('df_long')
+        df_long = context.get('data')
         if df_long is None or df_long.empty:
             self.logger.error("DataFrame not available for export.")
             return context
@@ -303,7 +307,7 @@ class DataExportStage(PipelineStage):
         input_parquet_path = config_dict.get('input_parquet_path')
         if input_parquet_path and os.path.exists(input_parquet_path) and context.get('consolidated_long_path') == input_parquet_path:
             self.logger.info(f"Using existing input parquet file: {input_parquet_path}")
-            # We don't need to save again if we are using the input file directly
+            # We don't need to save again if we are using the input file diretamente
             return context
         
         # Create directory if it doesn't exist
@@ -335,7 +339,7 @@ class DescriptiveAnalysisStage(PipelineStage):
         Returns:
             Updated context with results and plot paths.
         """
-        df_long = context.get('df_long')
+        df_long = context.get('data')
         if df_long is None or df_long.empty:
             self.logger.error("DataFrame not available for descriptive analysis.")
             return context
@@ -410,7 +414,7 @@ class CorrelationAnalysisStage(PipelineStage):
         Returns:
             Updated context with results and plot paths.
         """
-        df_long = context.get('df_long')
+        df_long = context.get('data')
         if df_long is None or df_long.empty:
             self.stage_logger.error("DataFrame not available for correlation analysis.")
             return context
@@ -572,7 +576,7 @@ class CausalityAnalysisStage(PipelineStage):
         from src.analysis_causality import CausalityAnalyzer
         from tqdm import tqdm
         
-        df_long = context.get('df_long')
+        df_long = context.get('data')
         if df_long is None or df_long.empty:
             self.logger.error("DataFrame not available for causality analysis.")
             return context
@@ -643,92 +647,6 @@ class CausalityAnalysisStage(PipelineStage):
         return context
 
 
-class PhaseComparisonStage(PipelineStage):
-    """
-    Stage for comparative analysis between different experimental phases.
-    
-    This stage implements:
-    1. Comparison of metrics between phases (baseline, attack, recovery)
-    2. Identification of significant changes
-    3. Comparative visualizations
-    """
-    
-    def __init__(self):
-        super().__init__("phase_comparison", "Comparative analysis between experimental phases")
-    
-    def _execute_implementation(self, context: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Executes comparative analysis between experimental phases.
-        
-        Args:
-            context: Context with long DataFrame and results from previous stages
-            
-        Returns:
-            Updated context with comparative results
-        """
-        from src.analysis_phase_comparison import PhaseComparisonAnalyzer
-        
-        df_long = context.get('df_long')
-        if df_long is None or df_long.empty:
-            self.logger.error("DataFrame not available for comparative phase analysis.")
-            return context
-        
-        # Configure output directory
-        out_dir = os.path.join(context.get('output_dir', 'outputs'), 'plots', 'phase_comparison')
-        os.makedirs(out_dir, exist_ok=True)
-        
-        # Initialize phase comparison analyzer
-        analyzer = PhaseComparisonAnalyzer(df_long)
-        
-        # Structures to store results
-        phase_comparison_results = {}
-        plot_paths = []
-        
-        # Process each experiment and round
-        experiments = df_long['experiment_id'].unique()
-        for experiment_id in experiments:
-            exp_df = df_long[df_long['experiment_id'] == experiment_id]
-            
-            for round_id in exp_df['round_id'].unique():
-                round_df = exp_df[exp_df['round_id'] == round_id]
-                
-                # Check if there are at least 2 phases for comparison
-                phases = round_df['experimental_phase'].unique()
-                if len(phases) < 2:
-                    self.logger.warning(f"Fewer than 2 phases available for {experiment_id}, {round_id}. Skipping comparison.")
-                    continue
-                
-                # Process each metric
-                for metric in round_df['metric_name'].unique():
-                    try:
-                        # Perform comparative analysis
-                        self.logger.info(f"Comparing phases for {metric}, {round_id}")
-                        
-                        stats_df = analyzer.analyze_metric_across_phases(
-                            metric=metric,
-                            round_id=round_id,
-                            output_dir=out_dir
-                        )
-                        
-                        # Store results
-                        result_key = f"{experiment_id}:{round_id}:{metric}"
-                        phase_comparison_results[result_key] = stats_df
-                        
-                        # Add path of the generated plot
-                        plot_path = os.path.join(out_dir, f'phase_comparison_{metric}_{round_id}.png')
-                        if os.path.exists(plot_path):
-                            plot_paths.append(plot_path)
-                            
-                    except Exception as e:
-                        self.logger.error(f"Error comparing phases for {metric}, {round_id}: {e}", exc_info=True)
-        
-        # Update context
-        context['phase_comparison_results'] = {'stats_by_metric': phase_comparison_results}
-        context['phase_comparison_plot_paths'] = plot_paths
-        
-        return context
-
-
 class ReportGenerationStage(PipelineStage):
     """
     Stage for generating the final consolidated report.
@@ -759,7 +677,7 @@ class ReportGenerationStage(PipelineStage):
             generate_phase_variation_plot
         )
         
-        df_long = context.get('df_long')
+        df_long = context.get('data')
         if df_long is None or df_long.empty:
             self.logger.error("DataFrame not available for report generation.")
             return context
@@ -786,7 +704,7 @@ class ReportGenerationStage(PipelineStage):
         )
         
         # Log what was generated
-        self.logger.info(f"Tenant metrics generated: type={type(tenant_metrics)}")
+        self.logger.info("Tenant metrics generated: type=%s", type(tenant_metrics))
         if isinstance(tenant_metrics, pd.DataFrame):
             self.logger.info(f"Available columns: {list(tenant_metrics.columns)}")
             self.logger.info(f"Number of tenants: {len(tenant_metrics)}")
@@ -826,124 +744,6 @@ class ReportGenerationStage(PipelineStage):
         return context
 
 
-class InsightAggregationStage(PipelineStage):
-    """
-    Stage for aggregating insights and generating an inter-tenant comparative table.
-    Implements the functionalities of Phase 3 of the work plan.
-    """
-    
-    def __init__(self, output_dir: Optional[str] = None):
-        super().__init__(name="Insight Aggregation", description="Aggregation of insights and inter-tenant comparisons")
-        self.output_dir = output_dir
-    
-    def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Aggregates insights from all tenants and generates a comparative table.
-        
-        Args:
-            context: Context with results from previous stages
-            
-        Returns:
-            Updated context with the results of insight aggregation
-        """
-        import pandas as pd
-        import numpy as np
-        from src.insight_aggregation import aggregate_tenant_insights, generate_comparative_table, plot_insight_matrix
-        from datetime import datetime
-        import json
-        
-        self.logger.info("Starting inter-tenant insight aggregation")
-        
-        if 'error' in context and context['error'] is not None:
-            self.logger.error(f"Error in previous stage: {context['error']}")
-            return context
-            
-        # Output directory
-        output_dir = self.output_dir or context.get('output_dir')
-        if not output_dir:
-            output_dir = os.path.join(os.getcwd(), 'outputs')
-        
-        insights_dir = os.path.join(output_dir, 'insights')
-        os.makedirs(insights_dir, exist_ok=True)
-        
-        # Get necessary data from the context
-        tenant_metrics = context.get('tenant_metrics')
-        phase_comparison_results_raw = context.get('phase_comparison_results', {})
-        phase_comparison_stats = phase_comparison_results_raw.get('stats_by_metric', {})
-        granger_matrices = context.get('granger_matrices', {})
-        te_matrices = context.get('te_matrices', {})
-        correlation_matrices = context.get('correlation_matrices', {})
-        anomaly_metrics = context.get('anomaly_metrics', {})
-        
-        if tenant_metrics is None:
-            self.logger.error("tenant_metrics not found in context. Cannot proceed with insight aggregation.")
-            context['error'] = "tenant_metrics not available for insight aggregation"
-            return context
-
-        try:
-            # Aggregate insights for each tenant
-            self.logger.info("Aggregating insights for each tenant")
-            tenant_insights = aggregate_tenant_insights(
-                tenant_metrics=tenant_metrics,
-                phase_comparison_results=phase_comparison_stats,
-                granger_matrices=granger_matrices,
-                te_matrices=te_matrices,
-                correlation_matrices=correlation_matrices,
-                anomaly_metrics=anomaly_metrics
-            )
-            
-            if 'error_message' in tenant_insights:
-                error_msg = tenant_insights['error_message']
-                self.logger.error(f"Failed to aggregate insights: {error_msg}")
-                context['error'] = error_msg
-                return context
-                
-            context['tenant_insights'] = tenant_insights
-            
-            # Generate comparative table
-            self.logger.info("Generating inter-tenant comparative table")
-            comparative_table = generate_comparative_table(tenant_insights)
-            context['comparative_table'] = comparative_table
-            
-            comparative_table_path = os.path.join(insights_dir, f"comparative_table_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
-            comparative_table.to_csv(comparative_table_path, index=False)
-            context['comparative_table_path'] = comparative_table_path
-            
-            # Generate insight matrix plot
-            self.logger.info("Generating insight matrix plot")
-            plot_path = os.path.join(insights_dir, f"insight_matrix_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png")
-            plot_insight_matrix(tenant_insights, plot_path)
-            context['insight_matrix_plot_path'] = plot_path
-            
-            # Save detailed insights to JSON
-            insights_json_path = os.path.join(insights_dir, f"tenant_insights_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
-            
-            # Convert numpy types for JSON serialization
-            serializable_insights = {}
-            for tenant, data in tenant_insights.items():
-                serializable_data = {}
-                for k, v in data.items():
-                    if isinstance(v, np.generic):
-                        serializable_data[k] = v.item()
-                    elif isinstance(v, (pd.Timestamp, datetime)):
-                        serializable_data[k] = v.isoformat()
-                    else:
-                        serializable_data[k] = v
-                serializable_insights[tenant] = serializable_data
-
-            with open(insights_json_path, 'w') as f:
-                json.dump(serializable_insights, f, indent=4)
-            context['insights_json_path'] = insights_json_path
-
-            self.logger.info(f"Insight aggregation completed successfully. Reports saved in {insights_dir}")
-
-        except Exception as e:
-            self.logger.error(f"An error occurred during insight aggregation: {e}", exc_info=True)
-            context['error'] = str(e)
-
-        return context
-
-
 class Pipeline:
     """Orchestrates the execution of the analysis pipeline."""
     
@@ -958,36 +758,51 @@ class Pipeline:
         self.context: Dict[str, Any] = {'config': config}
         self.stages: List[PipelineStage] = []
         self.logger = logging.getLogger("pipeline.Pipeline")
+        self.all_stages: Dict[str, PipelineStage] = {}
         self._setup_stages()
         
     def _setup_stages(self):
         """Initializes and adds all pipeline stages."""
-        self.stages.append(DataIngestionStage())
-        self.stages.append(DataValidationStage())
-        self.stages.append(DataExportStage())
-        self.stages.append(DescriptiveAnalysisStage())
-        self.stages.append(CorrelationAnalysisStage())
-        self.stages.append(CausalityAnalysisStage())
-        self.stages.append(PhaseComparisonStage())
-        self.stages.append(ReportGenerationStage())
-        self.stages.append(InsightAggregationStage())
+        self.all_stages = {
+            "data_ingestion": DataIngestionStage(),
+            "data_validation": DataValidationStage(),
+            "data_export": DataExportStage(),
+            "descriptive_analysis": DescriptiveAnalysisStage(),
+            "correlation_analysis": CorrelationAnalysisStage(),
+            "causality_analysis": CausalityAnalysisStage(),
+            "phase_comparison": AnalysisPhaseComparisonStage(),
+            "impact_analysis": ImpactAnalysisStage(),
+            "report_generation": ReportGenerationStage(),
+        }
         
-        # Adicionar estágios de análise ao pipeline
-        reports_dir = os.path.join(self.config.get('output_dir', 'outputs'), 'reports')
-        insights_dir = os.path.join(self.config.get('output_dir', 'outputs'), 'insights')
-        
-        # Adicionar o novo estágio de análise multi-round
-        multi_round_output_dir = os.path.join(self.config.get('output_dir', 'outputs'), "multi_round_analysis")
-        self.stages.append(MultiRoundAnalysisStage(output_dir=multi_round_output_dir))
-
-    def run(self, force_reprocess: bool = False):
+    def run(self, force_reprocess: bool = False, selected_stages: Optional[List[str]] = None):
         """
         Executes all pipeline stages in order.
         
         Args:
             force_reprocess: If True, forces data reprocessing.
+            selected_stages: A list of stage names to execute. If None, all stages will run.
         """
         self.logger.info("Starting pipeline execution...")
+
+        if selected_stages:
+            # Garantir que a ingestão e validação de dados sempre ocorram se um estágio de análise for selecionado
+            if any(s not in ['data_ingestion', 'data_validation'] for s in selected_stages):
+                if 'data_ingestion' not in selected_stages:
+                    selected_stages.insert(0, 'data_ingestion')
+                    self.logger.info("Adicionando o estágio 'data_ingestion' como pré-requisito.")
+                if 'data_validation' not in selected_stages:
+                    # Inserir após a ingestão
+                    ingestion_index = selected_stages.index('data_ingestion')
+                    selected_stages.insert(ingestion_index + 1, 'data_validation')
+                    self.logger.info("Adicionando o estágio 'data_validation' como pré-requisito.")
+
+            self.stages = [self.all_stages[name] for name in selected_stages if name in self.all_stages]
+            self.logger.info(f"Executing selected stages: {[s.name for s in self.stages]}")
+        else:
+            self.logger.info("Executing all stages.")
+            self.stages = list(self.all_stages.values())
+
         self.context['force_reprocess'] = force_reprocess
         self.context['output_dir'] = self.config.get('output_dir', 'outputs')
         self.context['data_root'] = self.config.get('data_root', config.DATA_ROOT)
@@ -1000,7 +815,11 @@ class Pipeline:
 
         for stage in self.stages:
             try:
-                self.context = stage.execute(self.context)
+                # A chave para o sucesso: garantir que o contexto é sempre atualizado
+                # e repassado para o próximo estágio.
+                updated_context = stage.execute(self.context)
+                self.context.update(updated_context)
+
                 if self.context.get('pipeline_halted'):
                     self.logger.error(f"Pipeline execution halted at stage '{stage.name}'. Reason: {self.context.get('data_validation_report', 'Unknown')}")
                     break
@@ -1019,6 +838,17 @@ def main():
     parser.add_argument("--config", type=str, default="config/pipeline_config_sfi2.yaml", help="Path to the pipeline configuration file.")
     parser.add_argument("--force-reprocess", action="store_true", help="Force reprocessing of all data, ignoring existing consolidated files.")
     
+    # Argumentos para parametrização
+    parser.add_argument(
+        "--analysis-stages",
+        nargs='+',
+        choices=['data_ingestion', 'data_validation', 'data_export', 'descriptive_analysis', 'correlation_analysis', 'causality_analysis', 'phase_comparison', 'impact_analysis', 'report_generation'],
+        help="Select which analysis stages to run. If not provided, all stages will run."
+    )
+    parser.add_argument("--selected-rounds", nargs='+', help="Override selected rounds from config file.")
+    parser.add_argument("--selected-metrics", nargs='+', help="Override selected metrics from config file.")
+    parser.add_argument("--selected-tenants", nargs='+', help="Override selected tenants from config file.")
+
     args = parser.parse_args()
 
     # Load configuration
@@ -1031,9 +861,20 @@ def main():
         logger.error(f"Error parsing configuration file: {e}")
         return 1
 
+    # Override config with command-line arguments if provided
+    if args.selected_rounds:
+        config_dict['selected_rounds'] = args.selected_rounds
+        logger.info(f"Overriding selected_rounds with: {args.selected_rounds}")
+    if args.selected_metrics:
+        config_dict['selected_metrics'] = args.selected_metrics
+        logger.info(f"Overriding selected_metrics with: {args.selected_metrics}")
+    if args.selected_tenants:
+        config_dict['selected_tenants'] = args.selected_tenants
+        logger.info(f"Overriding selected_tenants with: {args.selected_tenants}")
+
     # Create and run the pipeline
     pipeline = Pipeline(config_dict)
-    pipeline.run(force_reprocess=args.force_reprocess)
+    pipeline.run(force_reprocess=args.force_reprocess, selected_stages=args.analysis_stages)
 
     logger.info("Pipeline execution finished.")
     return 0

@@ -4,7 +4,7 @@ Este documento serve como um guia de alto nível para as fases de trabalho no pi
 
 ---
 
-### Fase 1: Fundação e Estabilidade (Estamos aqui)
+### Fase 1: Fundação e Estabilidade
 
 *Objetivo: Estabilizar o pipeline, corrigir problemas críticos e estabelecer uma base sólida para futuras análises.*
 
@@ -12,13 +12,13 @@ Este documento serve como um guia de alto nível para as fases de trabalho no pi
   - **Status:** Concluído.
   - **Artefatos:** `PLANO_DE_REFATORACAO.md`.
 
-- [ ] **Corrigir Alertas `SettingWithCopyWarning`:**
-  - **Status:** Pendente.
+- [x] **Corrigir Alertas `SettingWithCopyWarning`:**
+  - **Status:** Concluído.
   - **Local:** `src/visualization/plots.py`.
   - **Descrição:** Refatorar o código para usar o acessador `.loc` do Pandas, eliminando alertas e garantindo a robustez do tratamento de dados.
 
-- [ ] **Implementar Parametrização do Pipeline:**
-  - **Status:** Pendente.
+- [x] **Implementar Parametrização do Pipeline:**
+  - **Status:** Concluído.
   - **Descrição:** Modificar `run_pipeline.py` para aceitar argumentos de linha de comando que permitam selecionar quais fases da análise (descritiva, correlação, impacto) e quais rodadas executar. Isso trará um ganho de performance imediato.
 
 ---
@@ -27,30 +27,54 @@ Este documento serve como um guia de alto nível para as fases de trabalho no pi
 
 *Objetivo: Desenvolver a lógica central para quantificar o "noisy neighbour" e gerar os artefatos necessários para publicações acadêmicas.*
 
-- [ ] **Desenvolver Módulo de Análise de Impacto:**
-  - **Status:** Pendente.
+- [x] **Desenvolver Módulo de Análise de Impacto:**
+  - **Status:** Concluído.
   - **Local:** Criar `src/analysis_impact.py`.
   - **Descrição:** Implementar a lógica de análise comparativa entre a fase `Baseline` e as fases de ruído.
 
-- [ ] **Implementar Métricas de Impacto e Testes Estatísticos:**
-  - **Status:** Pendente.
+- [x] **Implementar Métricas de Impacto e Testes Estatísticos:**
+  - **Status:** Concluído.
   - **Descrição:** Adicionar cálculos de variação percentual, volatilidade (desvio padrão) e testes de hipótese (ex: t-test de Student) para validar a significância estatística dos resultados.
 
-- [ ] **Gerar CSVs e Plots Focados:**
-  - **Status:** Pendente.
+- [x] **Gerar CSVs e Plots Focados:**
+  - **Status:** Concluído.
   - **Descrição:** Criar funções para exportar os resultados da análise de impacto em formato CSV e gerar plots estáticos de alta qualidade (PNG/PDF) para uso em artigos.
 
 ---
 
-### Fase 3: Otimização e Refinamento
+### Fase 3: Otimização e Refinamento (Concluída)
 
-*Objetivo: Otimizar o código legado, remover partes obsoletas e garantir a manutenibilidade do pipeline a longo prazo.*
+*Objetivo: Melhorar a qualidade do código, remover redundâncias e otimizar a performance geral do pipeline.*
 
-- [ ] **Refatorar Módulos de Análise Legados:**
-  - **Status:** Pendente.
-  - **Locais:** `analysis_correlation.py`, `analysis_descriptive.py`.
-  - **Descrição:** Otimizar os cálculos e a geração de plots nesses módulos, alinhando-os com a nova estrutura parametrizada.
+- [x] **Refatorar Módulos de Análise Legados:**
+  - **Status:** Concluído.
+  - **Descrição:** Migrar a lógica dos módulos de análise para a nova estrutura de `PipelineStage`, separando claramente a lógica de cálculo da lógica de visualização.
+    - [x] **Análise de Impacto:** Módulo criado e integrado.
+    - [x] **Análise Descritiva:** Módulo de visualização (`descriptive_plots.py`) criado e refatorado.
+    - [x] **Análise de Correlação:** Módulo de visualização (`correlation_plots.py`) criado e refatorado.
+    - [x] **Análise de Causalidade:** Módulo de visualização (`causality_plots.py`) criado e refatorado.
+    - [x] **Análise de Comparação de Fases:** Refatorar o módulo de visualização (`phase_comparison_plots.py`).
 
-- [ ] **Revisar e Remover Código Obsoleto:**
-  - **Status:** Pendente.
-  - **Descrição:** Realizar uma varredura completa no projeto para identificar e remover scripts, funções e módulos que não são mais utilizados após a refatoração.
+- [x] **Remover Código Obsoleto:**
+  - **Status:** Concluído.
+  - **Descrição:** Após a refatoração, identificar e remover funções e scripts que não são mais utilizados.
+
+- [ ] **Otimização de Performance:**
+  - **Status:** A fazer.
+  - **Descrição:** Investigar e implementar otimizações de performance, como o uso de `Polars` ou `Dask` para manipulação de grandes DataFrames, se necessário.
+
+### Fase 4: Documentação e Finalização (Estamos aqui)
+
+*Objetivo: Garantir que toda a lógica do pipeline esteja bem documentada e que o sistema esteja pronto para manutenção e futuras expansões.*
+
+- [ ] **Documentar Pipeline e Análises:**
+  - **Status:** A fazer.
+  - **Descrição:** Criar ou atualizar a documentação do pipeline, incluindo a descrição detalhada de cada fase da análise, parâmetros utilizados e interpretação dos resultados.
+
+- [ ] **Treinamento e Transferência de Conhecimento:**
+  - **Status:** A fazer.
+  - **Descrição:** Realizar sessões de treinamento para a equipe envolvida, garantindo que todos compreendam a nova estrutura do código e como utilizá-lo efetivamente.
+
+- [ ] **Planejamento de Futuras Melhorias:**
+  - **Status:** A fazer.
+  - **Descrição:** Com base no aprendizado das fases anteriores, planejar melhorias e novas funcionalidades para o pipeline, priorizando aquelas que trarão maior impacto positivo na qualidade da análise.

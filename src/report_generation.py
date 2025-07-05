@@ -445,14 +445,14 @@ def run_report_generation(
     granger_results = context.get('granger_results', {})
     te_results = context.get('te_results', {})
     correlation_results = context.get('correlation_results', {})
-    phase_comparison_results = context.get('phase_comparison_results', {})
-    
+    phase_comparison_stats = context.get('phase_comparison_stats', {}) # Corrected key
+
     # Generate tenant impact metrics
     tenant_metrics_df = generate_tenant_metrics(
         granger_matrices=granger_results.get('causality_matrices', {}),
         te_matrices=te_results.get('causality_matrices', {}),
         correlation_matrices=correlation_results.get('correlation_matrices', {}),
-        phase_comparison_results=phase_comparison_results.get('stats_by_metric', {})
+        phase_comparison_results=phase_comparison_stats.get('stats_by_metric', {}) # Use the corrected variable
     )
     
     # Define paths for artifacts
