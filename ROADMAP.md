@@ -78,3 +78,39 @@ Este documento serve como um guia de alto nível para as fases de trabalho no pi
 - [ ] **Planejamento de Futuras Melhorias:**
   - **Status:** A fazer.
   - **Descrição:** Com base no aprendizado das fases anteriores, planejar melhorias e novas funcionalidades para o pipeline, priorizando aquelas que trarão maior impacto positivo na qualidade da análise.
+
+---
+
+### Fase 5: Análise Multi-Round e Consolidação de Resultados
+
+*Objetivo: Agregar os resultados das múltiplas rodadas de execução para obter uma visão estatística consolidada do comportamento dos tenants sob o efeito de "noisy neighbours". O foco é gerar artefatos que demonstrem a estabilidade e a variabilidade dos resultados.*
+
+- [ ] **Desenvolver Módulo de Agregação de Resultados:**
+  - **Status:** A fazer.
+  - **Local:** Criar `src/analysis_multi_round.py`.
+  - **Descrição:** Implementar a lógica para carregar e consolidar os resultados de todas as rodadas (ex: arquivos CSV de impacto e métricas).
+
+- [ ] **Calcular Estatísticas Agregadas:**
+  - **Status:** A fazer.
+  - **Descrição:** Calcular métricas estatísticas descritivas sobre os resultados agregados, como média, mediana, desvio padrão e intervalos de confiança para as principais métricas de impacto.
+
+- [ ] **Gerar Visualizações Multi-Round:**
+  - **Status:** A fazer.
+  - **Local:** Criar `src/visualization/multi_round_plots.py`.
+  - **Descrição:** Desenvolver um conjunto de visualizações agregadas para demonstrar a robustez e a variabilidade dos resultados ao longo de N rodadas.
+    - **Análise de Impacto:**
+        - **Box Plots por Tenant:** Visualizar a distribuição do impacto percentual para cada tenant, destacando a consistência dos resultados.
+        - **Gráficos de Barras com Intervalos de Confiança:** Apresentar o impacto médio com barras de erro para validar a significância estatística.
+    - **Análise de Correlação:**
+        - **Heatmap de Consistência:** Mostrar a frequência (0-100%) com que cada correlação entre pares de métricas foi significativa, separando relações sistêmicas de fortuitas.
+    - **Análise de Causalidade:**
+        - **Grafo de Causalidade Agregado:** Consolidar os resultados de todas as rodadas, usando a espessura ou cor das arestas para indicar a frequência de cada link causal.
+        - **Matriz de Frequência Causal:** Apresentar os dados de causalidade de forma tabular para fácil inclusão em publicações.
+
+- [ ] **Integrar ao Pipeline Principal:**
+  - **Status:** A fazer.
+  - **Descrição:** Adicionar a `MultiRoundAnalysisStage` ao `run_pipeline.py`, garantindo que ela seja executada após todas as outras análises.
+
+- [ ] **Atualizar Relatório Final:**
+  - **Status:** A fazer.
+  - **Descrição:** Incrementar a `ReportGenerationStage` para incluir a nova seção de análise multi-round no relatório final em markdown.
