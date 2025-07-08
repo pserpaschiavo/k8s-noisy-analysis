@@ -11,6 +11,7 @@ import logging
 import matplotlib.patches as mpatches
 from typing import Dict, List, Optional
 
+from src.config import PipelineConfig
 from src.visualization_config import PUBLICATION_CONFIG
 from src.visualization.plots import save_plot
 
@@ -19,7 +20,7 @@ logger = logging.getLogger(__name__)
 # Apply global style settings from the configuration
 plt.rcParams.update(PUBLICATION_CONFIG.get('figure_style', {}))
 
-def plot_metric_timeseries_multi_tenant(df: pd.DataFrame, metric: str, phase: str, round_id: str, out_dir: str):
+def plot_metric_timeseries_multi_tenant(df: pd.DataFrame, metric: str, phase: str, round_id: str, out_dir: str, config: PipelineConfig):
     """Plots multi-tenant time series using the centralized configuration."""
     subset_mask = (df['metric_name'] == metric) & (df['experimental_phase'] == phase) & (df['round_id'] == round_id)
     subset = df.loc[subset_mask].copy()
@@ -28,7 +29,10 @@ def plot_metric_timeseries_multi_tenant(df: pd.DataFrame, metric: str, phase: st
         return None
 
     subset['timestamp'] = pd.to_datetime(subset['timestamp'], errors='coerce')
-    metric_info = PUBLICATION_CONFIG['metric_display_names'].get(metric, {'name': metric, 'unit': ''})
+    
+    metric_display_names = config.get_metric_display_names()
+    metric_display_name = metric_display_names.get(metric, metric)
+    
     phase_display = PUBLICATION_CONFIG['phase_display_names'].get(phase, phase)
     tenant_colors = PUBLICATION_CONFIG['tenant_colors']
     tenant_markers = PUBLICATION_CONFIG['tenant_markers']
@@ -47,9 +51,9 @@ def plot_metric_timeseries_multi_tenant(df: pd.DataFrame, metric: str, phase: st
                 color=tenant_colors.get(tenant_id, '#7f7f7f'),
                 label=tenant_display_names.get(tenant_id, tenant_id))
 
-    ax.set_title(f'Time Series: {metric_info["name"]} - {phase_display} (Round {round_id})', fontweight='bold')
+    ax.set_title(f'Time Series: {metric_display_name} - {phase_display} (Round {round_id})', fontweight='bold')
     ax.set_xlabel("Time (seconds from phase start)")
-    ax.set_ylabel(f'{metric_info["name"]} ({metric_info["unit"]})' if metric_info["unit"] else metric_info["name"])
+    ax.set_ylabel(metric_display_name)
     ax.legend(title='Tenant', bbox_to_anchor=(1.05, 1), loc='upper left')
     ax.grid(True, which='both', linestyle='--', linewidth=0.5)
     fig.tight_layout(rect=(0, 0, 0.85, 1))
@@ -57,7 +61,7 @@ def plot_metric_timeseries_multi_tenant(df: pd.DataFrame, metric: str, phase: st
     save_plot(fig, out_path)
     return out_path
 
-def plot_metric_timeseries_multi_tenant_all_phases(df: pd.DataFrame, metric: str, round_id: str, out_dir: str):
+def plot_metric_timeseries_multi_tenant_all_phases(df: pd.DataFrame, metric: str, round_id: str, out_dir: str, config: PipelineConfig):
     """Plots a single time series for a metric, with phases indicated by shaded regions."""
     subset_mask = (df['metric_name'] == metric) & (df['round_id'] == round_id)
     subset = df.loc[subset_mask].copy()
@@ -68,7 +72,9 @@ def plot_metric_timeseries_multi_tenant_all_phases(df: pd.DataFrame, metric: str
     subset['timestamp'] = pd.to_datetime(subset['timestamp'], errors='coerce')
     subset = subset.sort_values('timestamp')
 
-    metric_info = PUBLICATION_CONFIG['metric_display_names'].get(metric, {'name': metric, 'unit': ''})
+    metric_display_names = config.get_metric_display_names()
+    metric_display_name = metric_display_names.get(metric, metric)
+    
     tenant_colors = PUBLICATION_CONFIG['tenant_colors']
     tenant_markers = PUBLICATION_CONFIG['tenant_markers']
     tenant_display_names = PUBLICATION_CONFIG['tenant_display_names']
@@ -128,9 +134,9 @@ def plot_metric_timeseries_multi_tenant_all_phases(df: pd.DataFrame, metric: str
     ax.add_artist(tenant_legend)
     ax.legend(handles=phase_patches, title="Phase", bbox_to_anchor=(1.05, 0), loc='lower left')
 
-    ax.set_title(f'Time Series: {metric_info["name"]} - All Phases (Round {round_id})', fontweight='bold')
+    ax.set_title(f'Time Series: {metric_display_name} - All Phases (Round {round_id})', fontweight='bold')
     ax.set_xlabel("Time (seconds from round start)")
-    ax.set_ylabel(f'{metric_info["name"]} ({metric_info["unit"]})' if metric_info["unit"] else metric_info["name"])
+    ax.set_ylabel(metric_display_name)
     ax.grid(True, which='both', linestyle='--', linewidth=0.5)
     ax.autoscale(enable=True, axis='x', tight=True)
 
@@ -139,7 +145,7 @@ def plot_metric_timeseries_multi_tenant_all_phases(df: pd.DataFrame, metric: str
     save_plot(fig, out_path)
     return out_path
 
-def plot_metric_barplot_by_phase(df: pd.DataFrame, metric: str, round_id: str, out_dir: str):
+def plot_metric_barplot_by_phase(df: pd.DataFrame, metric: str, round_id: str, out_dir: str, config: PipelineConfig):
     """Generates a bar plot using the centralized configuration."""
     subset_mask = (df['metric_name'] == metric) & (df['round_id'] == round_id)
     subset = df.loc[subset_mask]
@@ -147,7 +153,9 @@ def plot_metric_barplot_by_phase(df: pd.DataFrame, metric: str, round_id: str, o
         logger.warning(f"No data for bar plot: {metric}, {round_id}. Check input dataframe.")
         return None
 
-    metric_info = PUBLICATION_CONFIG['metric_display_names'].get(metric, {'name': metric, 'unit': ''})
+    metric_display_names = config.get_metric_display_names()
+    metric_display_name = metric_display_names.get(metric, metric)
+    
     tenant_display_names = PUBLICATION_CONFIG['tenant_display_names']
     phase_display_names = PUBLICATION_CONFIG['phase_display_names']
     color_palette = {tenant_display_names.get(k, k): v for k, v in PUBLICATION_CONFIG['tenant_colors'].items()}
@@ -159,19 +167,19 @@ def plot_metric_barplot_by_phase(df: pd.DataFrame, metric: str, round_id: str, o
     fig, ax = plt.subplots(figsize=(12, 7))
     sns.barplot(data=plot_df, x='experimental_phase', y='metric_value', hue='tenant_id', palette=color_palette, errorbar='sd', capsize=0.1, ax=ax)
 
-    ax.set_title(f'Mean {metric_info["name"]} by Phase (Round {round_id})', fontweight='bold')
+    ax.set_title(f'Mean {metric_display_name} by Phase (Round {round_id})', fontweight='bold')
     ax.set_xlabel('Experimental Phase')
-    ax.set_ylabel(f'Mean {metric_info["name"]} ({metric_info["unit"]})' if metric_info["unit"] else f'Mean {metric_info["name"]}')
+    ax.set_ylabel(f'Mean {metric_display_name}')
     ax.tick_params(axis='x', rotation=45)
     ax.legend(title='Tenant', bbox_to_anchor=(1.05, 1), loc='upper left')
-    ax.grid(True, axis='y', linestyle='--', linewidth=0.5)
+    ax.grid(True, axis='y', linestyle='--' , linewidth=0.5)
     fig.tight_layout(rect=(0, 0, 0.85, 1))
     plt.subplots_adjust(bottom=0.2)
     out_path = os.path.join(out_dir, f"barplot_{metric}_{round_id}.png")
     save_plot(fig, out_path)
     return out_path
 
-def plot_metric_boxplot(df: pd.DataFrame, metric: str, round_id: str, out_dir: str):
+def plot_metric_boxplot(df: pd.DataFrame, metric: str, round_id: str, out_dir: str, config: PipelineConfig):
     """Generates a box plot using the centralized configuration."""
     subset_mask = (df['metric_name'] == metric) & (df['round_id'] == round_id)
     subset = df.loc[subset_mask]
@@ -179,7 +187,9 @@ def plot_metric_boxplot(df: pd.DataFrame, metric: str, round_id: str, out_dir: s
         logger.warning(f"No data for box plot: {metric}, {round_id}. Check input dataframe.")
         return None
 
-    metric_info = PUBLICATION_CONFIG['metric_display_names'].get(metric, {'name': metric, 'unit': ''})
+    metric_display_names = config.get_metric_display_names()
+    metric_display_name = metric_display_names.get(metric, metric)
+    
     tenant_display_names = PUBLICATION_CONFIG['tenant_display_names']
     phase_display_names = PUBLICATION_CONFIG['phase_display_names']
     color_palette = {tenant_display_names.get(k, k): v for k, v in PUBLICATION_CONFIG['tenant_colors'].items()}
@@ -191,14 +201,14 @@ def plot_metric_boxplot(df: pd.DataFrame, metric: str, round_id: str, out_dir: s
     fig, ax = plt.subplots(figsize=(14, 8))
     sns.boxplot(data=plot_df, x='experimental_phase', y='metric_value', hue='tenant_id', palette=color_palette, showfliers=False, ax=ax)
 
-    ax.set_title(f'Distribution of {metric_info["name"]} by Phase (Round {round_id})', fontweight='bold')
+    ax.set_title(f'Distribution of {metric_display_name} by Phase (Round {round_id})', fontweight='bold')
     ax.set_xlabel('Experimental Phase')
-    ax.set_ylabel(f'{metric_info["name"]} ({metric_info["unit"]})' if metric_info["unit"] else metric_info["name"])
+    ax.set_ylabel(metric_display_name)
     ax.tick_params(axis='x', rotation=45)
     ax.legend(title='Tenant', bbox_to_anchor=(1.05, 1), loc='upper left')
     ax.grid(True, axis='y', linestyle='--' , linewidth=0.5)
     fig.tight_layout(rect=(0, 0, 0.85, 1))
-    plt.subplots_adjust(bottom=0.2)
+    plt.subplots_adjust(bottom=0.25)
     out_path = os.path.join(out_dir, f"boxplot_{metric}_{round_id}.png")
     save_plot(fig, out_path)
     return out_path
@@ -217,7 +227,9 @@ def plot_anomalies(df: pd.DataFrame, anomalies: pd.DataFrame, metric: str, phase
     subset['timestamp'] = pd.to_datetime(subset['timestamp'], errors='coerce')
     anomalies['timestamp'] = pd.to_datetime(anomalies['timestamp'], errors='coerce')
 
-    metric_info = PUBLICATION_CONFIG['metric_display_names'].get(metric, {'name': metric, 'unit': ''})
+    metric_display_names = config.get_metric_display_names()
+    metric_display_name = metric_display_names.get(metric, metric)
+    
     phase_display = PUBLICATION_CONFIG['phase_display_names'].get(phase, phase)
     tenant_colors = PUBLICATION_CONFIG['tenant_colors']
     tenant_display_names = PUBLICATION_CONFIG['tenant_display_names']
@@ -241,12 +253,76 @@ def plot_anomalies(df: pd.DataFrame, anomalies: pd.DataFrame, metric: str, phase
                    edgecolors='black', linewidth=1, zorder=10)
 
     ax.scatter([], [], color='red', s=100, marker='X', edgecolors='black', linewidth=1, label='Anomaly')
-    ax.set_title(f'Anomalies in {metric_info["name"]} - {phase_display} (Round {round_id})', fontweight='bold')
+    ax.set_title(f'Anomalies in {metric_display_name} - {phase_display} (Round {round_id})', fontweight='bold')
     ax.set_xlabel("Time (seconds from phase start)")
-    ax.set_ylabel(f'{metric_info["name"]} ({metric_info["unit"]})' if metric_info["unit"] else metric_info["name"])
+    ax.set_ylabel(metric_display_name)
     ax.grid(True, which='both', linestyle='--', linewidth=0.5)
     ax.legend(title='Tenant / Event', bbox_to_anchor=(1.05, 1), loc='upper left')
     fig.tight_layout(rect=(0, 0, 0.85, 1))
     out_path = os.path.join(out_dir, f"anomalies_{metric}_{phase.replace(' ', '_')}_{round_id}.png")
+    save_plot(fig, out_path)
+    return out_path
+
+def plot_metric_distribution_by_phase(df: pd.DataFrame, metric: str, round_id: str, out_dir: str, config: PipelineConfig):
+    """Generates a distribution plot (violin or boxen) using the centralized configuration."""
+    subset_mask = (df['metric_name'] == metric) & (df['round_id'] == round_id)
+    subset = df.loc[subset_mask]
+    if subset.empty:
+        logger.warning(f"No data for distribution plot: {metric}, {round_id}. Check input dataframe.")
+        return None
+
+    metric_display_names = config.get_metric_display_names()
+    metric_display_name = metric_display_names.get(metric, metric)
+
+    tenant_display_names = PUBLICATION_CONFIG['tenant_display_names']
+    phase_display_names = PUBLICATION_CONFIG['phase_display_names']
+    color_palette = {tenant_display_names.get(k, k): v for k, v in PUBLICATION_CONFIG['tenant_colors'].items()}
+
+    plot_df = subset.copy()
+    plot_df['tenant_id'] = plot_df['tenant_id'].map(tenant_display_names).fillna(plot_df['tenant_id'])
+    plot_df['experimental_phase'] = plot_df['experimental_phase'].map(phase_display_names).fillna(plot_df['experimental_phase'])
+
+    fig, ax = plt.subplots(figsize=(14, 8))
+    sns.violinplot(data=plot_df, x='experimental_phase', y='metric_value', hue='tenant_id', palette=color_palette, inner='quartile', ax=ax)
+
+    ax.set_title(f'Distribution of {metric_display_name} by Phase (Round {round_id})', fontweight='bold')
+    ax.set_xlabel('Experimental Phase')
+    ax.set_ylabel(metric_display_name)
+    ax.tick_params(axis='x', rotation=45)
+    ax.legend(title='Tenant', bbox_to_anchor=(1.05, 1), loc='upper left')
+    ax.grid(True, axis='y', linestyle='--' , linewidth=0.5)
+    fig.tight_layout(rect=(0, 0, 0.85, 1))
+    plt.subplots_adjust(bottom=0.25)
+    out_path = os.path.join(out_dir, f"distribution_{metric}_{round_id}.png")
+    save_plot(fig, out_path)
+    return out_path
+
+def plot_metric_heatmap(df: pd.DataFrame, metric: str, round_id: str, out_dir: str, config: PipelineConfig):
+    """Generates a heatmap of metric values over time for all tenants."""
+    subset_mask = (df['metric_name'] == metric) & (df['round_id'] == round_id)
+    subset = df.loc[subset_mask]
+    if subset.empty:
+        logger.warning(f"No data for heatmap: {metric}, {round_id}. Check dataframe.")
+        return None
+
+    metric_display_names = config.get_metric_display_names()
+    metric_display_name = metric_display_names.get(metric, metric)
+
+    # Pivot data
+    pivot_df = subset.pivot_table(index='tenant_id', columns='timestamp', values='metric_value')
+    if pivot_df.empty:
+        logger.warning(f"Pivot table is empty for heatmap: {metric}, {round_id}.")
+        return None
+
+    fig, ax = plt.subplots(figsize=(18, 8))
+    sns.heatmap(pivot_df, ax=ax, cmap="viridis", cbar_kws={'label': metric_display_name})
+
+    ax.set_title(f'Heatmap of {metric_display_name} Over Time (Round {round_id})', fontweight='bold')
+    ax.set_xlabel('Time')
+    ax.set_ylabel('Tenant')
+    ax.tick_params(axis='x', rotation=90)
+
+    fig.tight_layout()
+    out_path = os.path.join(out_dir, f"heatmap_{metric}_{round_id}.png")
     save_plot(fig, out_path)
     return out_path

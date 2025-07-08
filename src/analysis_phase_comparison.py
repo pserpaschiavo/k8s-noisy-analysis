@@ -14,6 +14,7 @@ import logging
 import pandas as pd
 from typing import Dict, List, Optional, Any
 
+from src.config import PipelineConfig
 from src.pipeline_stage import PipelineStage
 from src.utils import normalize_phase_name
 from src.visualization.phase_comparison_plots import (
@@ -118,47 +119,36 @@ class PhaseComparisonStage(PipelineStage):
     Pipeline stage for comparative analysis between experimental phases.
     """
     
-    def __init__(self):
+    def __init__(self, config: PipelineConfig):
         """Initializes the phase comparison stage."""
         super().__init__(
-            name="PhaseComparisonAnalysis",
+            name="phase_comparison_analysis",
             description="Performs comparative analysis between experimental phases."
         )
+        self.config = config
 
     def _execute_implementation(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """
         Executes the phase comparison analysis.
-        
-        Args:
-            context: The pipeline context.
-            
-        Returns:
-            The updated context.
         """
         self.logger.info("Starting phase comparison analysis.")
-
-        df = context.get('data')
-        output_dir = context.get('output_dir')  # Corrigido de 'output_dir_path'
-
-        if df is None or df.empty:
-            self.logger.error("Required 'data' not found in context or is empty.")
+        rounds_data = context.get('rounds_data', {})
+        if not rounds_data:
+            self.logger.warning("No rounds data found in context. Skipping phase comparison.")
             return context
-        
-        if not output_dir:
-            self.logger.error("Required 'output_dir' not found in context.")
-            return context
-
-        # Obter métricas e rounds diretamente do DataFrame
-        metrics_to_analyze = df['metric_name'].unique()
-        rounds_to_analyze = df['round_id'].unique()
-        
-        analysis_output_dir = os.path.join(output_dir, "phase_comparison_analysis")
-        os.makedirs(analysis_output_dir, exist_ok=True)
 
         all_stats = []
 
-        for round_id in rounds_to_analyze:
+        for round_id, round_data in rounds_data.items():
             self.logger.info(f"Processing round: {round_id}")
+            df = round_data.get('data')
+            if df is None or df.empty:
+                self.logger.warning(f"No data for round {round_id}, skipping.")
+                continue
+
+            output_dir = self.config.get_output_dir_for_round("phase_comparison_analysis", round_id)
+            metrics_to_analyze = df['metric_name'].unique()
+
             for metric in metrics_to_analyze:
                 self.logger.info(f"Analyzing metric '{metric}' for round '{round_id}'")
 
@@ -172,13 +162,19 @@ class PhaseComparisonStage(PipelineStage):
                     self.logger.warning(f"No stats computed for metric {metric} in round {round_id}.")
                     continue
 
-                plot_phase_comparison(stats_df, metric, analysis_output_dir, round_id)
+                # A função de plot agora pode precisar de um caminho de saída mais explícito
+                plot_phase_comparison(stats_df, metric, output_dir, round_id)
                 
                 stats_df['round_id'] = round_id
                 all_stats.append(stats_df)
 
         if all_stats:
             final_stats_df = pd.concat(all_stats, ignore_index=True)
+            # Salvar o consolidado no diretório principal do experimento
+            exp_output_dir = self.config.get_output_dir()
+            final_csv_path = os.path.join(exp_output_dir, 'phase_comparison_all_rounds.csv')
+            final_stats_df.to_csv(final_csv_path, index=False)
+            self.logger.info(f"Aggregated phase comparison stats saved to {final_csv_path}")
             context['phase_comparison_stats'] = final_stats_df
             self.logger.info("Phase comparison analysis completed successfully.")
         else:

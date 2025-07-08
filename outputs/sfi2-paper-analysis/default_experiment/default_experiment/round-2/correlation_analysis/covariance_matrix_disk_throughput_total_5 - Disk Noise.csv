@@ -1,0 +1,6 @@
+tenant_id,tenant-cpu,tenant-dsk,tenant-mem,tenant-nsy,tenant-ntk
+tenant-cpu,0.0,0.0,0.0,0.0,0.0
+tenant-dsk,0.0,40093.66573946425,0.0,-81595985.9434369,0.0
+tenant-mem,0.0,0.0,0.0,0.0,0.0
+tenant-nsy,0.0,-81595985.9434369,0.0,255932225237868.28,0.0
+tenant-ntk,0.0,0.0,0.0,0.0,0.0

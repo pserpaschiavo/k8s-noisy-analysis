@@ -1,7 +1,7 @@
 # Configuração do Pipeline de Análise para SFI2 Paper
 
 # Diretórios de entrada/saída
-data_root: ./exp_data/sfi2-paper
+data_root: ./data/sfi2-paper
 processed_data_dir: ./data/processed
 output_dir: ./outputs/sfi2-paper-analysis
 
@@ -12,7 +12,8 @@ output_parquet_name: sfi2_paper.parquet
 selected_metrics:
   - cpu_usage
   - memory_usage
-  
+  - network_total_bandwidth
+  - disk_throughput_total
   
 selected_tenants:
   - tenant-cpu
@@ -55,6 +56,11 @@ visualization:
     family: "sans-serif"  # Use "sans-serif" para evitar warnings com "serif"
     size: 12
     title_size: 14
+  metric_display_names:
+    cpu_usage: "CPU Usage (%)"
+    memory_usage: "Memory Usage (MB)"
+    network_total_bandwidth: "Network Bandwidth (Mbps)"
+    disk_throughput_total: "Disk Throughput (MB/s)"
   correlation_graph:
     threshold: 0.3     # Threshold para gráficos de correlação
   causality_graph:

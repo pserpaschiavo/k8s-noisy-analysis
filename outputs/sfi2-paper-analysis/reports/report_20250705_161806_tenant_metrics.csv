@@ -1,6 +1,0 @@
-tenant_id,causality_impact_score,causality_affected_score,correlation_strength,total_phase_variation,cpu_noise_variation,memory_noise_variation,network_noise_variation,disk_noise_variation,combined_noise_variation,noisy_score,metrics_count,variation_metrics_count
-tenant-ntk,0.7996640881017305,0.0,0.08534961013432307,0.0,0.0,0.0,0.0,0.0,0.0,0.42543692709116215,126,0
-tenant-mem,0.7745495953745274,0.0,0.09075782744618005,0.0,0.0,0.0,0.0,0.0,0.0,0.4145021459211177,126,0
-tenant-dsk,0.7723438139960901,0.0,0.08274594010601967,0.0,0.0,0.0,0.0,0.0,0.0,0.41099568902985095,125,0
-tenant-nsy,0.7059194919431705,0.0,0.06637976131320365,0.0,0.0,0.0,0.0,0.0,0.0,0.37287367436554636,105,0
-tenant-cpu,0.6463147825843074,0.0,0.0549507708648736,0.0,0.0,0.0,0.0,0.0,0.0,0.3396426225516158,126,0

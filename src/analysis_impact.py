@@ -10,6 +10,7 @@ from scipy.stats import ttest_ind
 
 from src.pipeline_stage import PipelineStage
 from src.visualization.impact_plots import plot_impact_summary # Importa a função de plotagem
+from src.config import PipelineConfig
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +18,9 @@ class ImpactAnalysisStage(PipelineStage):
     """
     Pipeline stage for analyzing the impact of different experimental phases on tenant metrics.
     """
-    def __init__(self):
+    def __init__(self, config: PipelineConfig):
         super().__init__("impact_analysis", "Impact analysis of noisy neighbors")
+        self.config = config
 
     def _execute_implementation(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -30,7 +32,7 @@ class ImpactAnalysisStage(PipelineStage):
         Returns:
             The updated context with impact analysis results.
         """
-        df_long = context.get('data')  # Padronizado para 'data'
+        df_long = context.get('data')
         if df_long is None or df_long.empty:
             self.logger.error("DataFrame 'data' not available for impact analysis.")
             return context
@@ -46,12 +48,10 @@ class ImpactAnalysisStage(PipelineStage):
         context['impact_analysis_results'] = impact_results
         
         # --- Geração de Artefatos ---
-        output_dir = context.get('output_dir', 'outputs')
-        impact_output_dir = os.path.join(output_dir, 'impact_analysis')
-        os.makedirs(impact_output_dir, exist_ok=True)
+        output_dir = self.config.get_output_dir("impact_analysis")
 
         # 1. Exportar resultados para CSV
-        csv_path = os.path.join(impact_output_dir, 'impact_analysis_results.csv')
+        csv_path = os.path.join(output_dir, 'impact_analysis_results.csv')
         try:
             impact_results.to_csv(csv_path, index=False)
             self.logger.info(f"Impact analysis results saved to {csv_path}")
@@ -61,7 +61,7 @@ class ImpactAnalysisStage(PipelineStage):
 
         # 2. Gerar plots de impacto
         try:
-            plot_paths = plot_impact_summary(impact_results, impact_output_dir)
+            plot_paths = plot_impact_summary(impact_results, output_dir)
             self.logger.info(f"Generated {len(plot_paths)} impact plots.")
             context['impact_plot_paths'] = plot_paths
         except Exception as e:

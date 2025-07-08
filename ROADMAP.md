@@ -42,7 +42,7 @@ Este documento serve como um guia de alto nível para as fases de trabalho no pi
 
 ---
 
-### Fase 3: Otimização e Refinamento (Concluída)
+### Fase 3: Otimização e Refinamento
 
 *Objetivo: Melhorar a qualidade do código, remover redundâncias e otimizar a performance geral do pipeline.*
 
@@ -59,11 +59,11 @@ Este documento serve como um guia de alto nível para as fases de trabalho no pi
   - **Status:** Concluído.
   - **Descrição:** Após a refatoração, identificar e remover funções e scripts que não são mais utilizados.
 
-- [ ] **Otimização de Performance:**
-  - **Status:** A fazer.
+- [x] **Otimização de Performance:**
+  - **Status:** Concluído.
   - **Descrição:** Investigar e implementar otimizações de performance, como o uso de `Polars` ou `Dask` para manipulação de grandes DataFrames, se necessário.
 
-### Fase 4: Documentação e Finalização (Estamos aqui)
+### Fase 4: Documentação e Finalização (A fazer)
 
 *Objetivo: Garantir que toda a lógica do pipeline esteja bem documentada e que o sistema esteja pronto para manutenção e futuras expansões.*
 
@@ -85,32 +85,36 @@ Este documento serve como um guia de alto nível para as fases de trabalho no pi
 
 *Objetivo: Agregar os resultados das múltiplas rodadas de execução para obter uma visão estatística consolidada do comportamento dos tenants sob o efeito de "noisy neighbours". O foco é gerar artefatos que demonstrem a estabilidade e a variabilidade dos resultados.*
 
-- [ ] **Desenvolver Módulo de Agregação de Resultados:**
-  - **Status:** A fazer.
+- [x] **Desenvolver Módulo de Agregação de Resultados:**
+  - **Status:** Concluído.
   - **Local:** Criar `src/analysis_multi_round.py`.
   - **Descrição:** Implementar a lógica para carregar e consolidar os resultados de todas as rodadas (ex: arquivos CSV de impacto e métricas).
 
-- [ ] **Calcular Estatísticas Agregadas:**
-  - **Status:** A fazer.
+- [x] **Calcular Estatísticas Agregadas:**
+  - **Status:** Concluído.
   - **Descrição:** Calcular métricas estatísticas descritivas sobre os resultados agregados, como média, mediana, desvio padrão e intervalos de confiança para as principais métricas de impacto.
 
-- [ ] **Gerar Visualizações Multi-Round:**
-  - **Status:** A fazer.
+- [x] **Gerar Visualizações Multi-Round:**
+  - **Status:** Concluído.
   - **Local:** Criar `src/visualization/multi_round_plots.py`.
   - **Descrição:** Desenvolver um conjunto de visualizações agregadas para demonstrar a robustez e a variabilidade dos resultados ao longo de N rodadas.
-    - **Análise de Impacto:**
-        - **Box Plots por Tenant:** Visualizar a distribuição do impacto percentual para cada tenant, destacando a consistência dos resultados.
-        - **Gráficos de Barras com Intervalos de Confiança:** Apresentar o impacto médio com barras de erro para validar a significância estatística.
-    - **Análise de Correlação:**
-        - **Heatmap de Consistência:** Mostrar a frequência (0-100%) com que cada correlação entre pares de métricas foi significativa, separando relações sistêmicas de fortuitas.
-    - **Análise de Causalidade:**
-        - **Grafo de Causalidade Agregado:** Consolidar os resultados de todas as rodadas, usando a espessura ou cor das arestas para indicar a frequência de cada link causal.
-        - **Matriz de Frequência Causal:** Apresentar os dados de causalidade de forma tabular para fácil inclusão em publicações.
 
-- [ ] **Integrar ao Pipeline Principal:**
-  - **Status:** A fazer.
-  - **Descrição:** Adicionar a `MultiRoundAnalysisStage` ao `run_pipeline.py`, garantindo que ela seja executada após todas as outras análises.
+### Fase 6: Validação e Execução Multi-Round
 
-- [ ] **Atualizar Relatório Final:**
-  - **Status:** A fazer.
-  - **Descrição:** Incrementar a `ReportGenerationStage` para incluir a nova seção de análise multi-round no relatório final em markdown.
+*Objetivo: Executar o pipeline completo para múltiplas rodadas, gerar os artefatos de saída corretos e validar a análise consolidada para extrair conclusões robustas.*
+
+- [x] **Adaptar Script de Execução para Múltiplas Rodadas:**
+  - **Status:** Concluído.
+  - **Descrição:** Modificar `run_pipeline.py` ou criar um script wrapper para iterar sobre as rodadas definidas na configuração, salvando os resultados em diretórios específicos por rodada (ex: `outputs/sfi2-paper-analysis/round-1`, `outputs/sfi2-paper-analysis/round-2`).
+
+- [x] **Executar o Pipeline Completo:**
+  - **Status:** Concluído.
+  - **Descrição:** Realizar uma execução completa com as múltiplas rodadas para gerar os dados necessários para a análise consolidada.
+
+- [x] **Validar Análise Multi-Round:**
+  - **Status:** Concluído.
+  - **Descrição:** Verificar se a `MultiRoundAnalysisStage` processa corretamente os resultados das múltiplas rodadas e gera os artefatos agregados (CSVs e plots).
+
+- [x] **Analisar Resultados Consolidados:**
+  - **Status:** Concluído.
+  - **Descrição:** Interpretar os resultados agregados para extrair conclusões sobre a estabilidade e variabilidade do impacto dos "noisy neighbours".

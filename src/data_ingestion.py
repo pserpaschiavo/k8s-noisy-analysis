@@ -8,6 +8,84 @@ from typing import List, Optional, Dict
 import logging
 
 from src.utils import normalize_phase_name
+from src.pipeline_stage import PipelineStage
+from src.config import PipelineConfig
+
+
+class DataIngestionStage(PipelineStage):
+    """Pipeline stage for ingesting and loading experiment data."""
+
+    def __init__(self, config: PipelineConfig):
+        """
+        Initializes the DataIngestionStage.
+
+        Args:
+            config: The pipeline configuration object.
+        """
+        super().__init__("Data Ingestion", "Ingests and loads experiment data from raw files or a pre-processed Parquet file.")
+        self.config = config
+
+    def _execute_implementation(self, context: dict) -> dict:
+        """
+        Executes the data ingestion logic.
+
+        This method checks if a pre-processed Parquet file is specified and exists.
+        If so, it loads the data from there. Otherwise, it ingests the data from
+        the raw experiment files. The resulting DataFrame is stored in the context.
+
+        Args:
+            context: The pipeline context dictionary.
+
+        Returns:
+            The updated context dictionary with the ingested data.
+        """
+        logging.info("Executing Data Ingestion Stage...")
+        
+        processed_data_path = self.config.get_processed_data_path()
+
+        if processed_data_path and os.path.exists(processed_data_path):
+            logging.info(f"Loading data from existing parquet file: {processed_data_path}")
+            try:
+                df = load_from_parquet(processed_data_path)
+                context['data'] = df
+                logging.info("Successfully loaded data from parquet.")
+            except Exception as e:
+                logging.error(f"Failed to load from parquet file {processed_data_path}: {e}")
+                raise
+        else:
+            logging.info("Ingesting data from raw experiment files...")
+            try:
+                df = ingest_experiment_data(
+                    data_root=self.config.get_data_root(),
+                    selected_metrics=self.config.get_selected_metrics(),
+                    selected_tenants=self.config.get_selected_tenants(),
+                    selected_rounds=self.config.get_selected_rounds(),
+                    selected_phases=self.config.get_selected_phases(),
+                )
+                context['data'] = df
+                logging.info("Successfully ingested data from raw files.")
+
+                # Save the processed data if a path is provided in the config
+                if processed_data_path:
+                    logging.info(f"Saving ingested data to {processed_data_path}...")
+                    try:
+                        # Ensure the directory exists
+                        os.makedirs(os.path.dirname(processed_data_path), exist_ok=True)
+                        df.to_parquet(processed_data_path)
+                        logging.info("Successfully saved data to parquet file.")
+                    except Exception as e:
+                        logging.error(f"Failed to save data to parquet file {processed_data_path}: {e}")
+
+            except Exception as e:
+                logging.error(f"Data ingestion from raw files failed: {e}")
+                raise
+
+        if 'data' not in context or context['data'].empty:
+            logging.error("Data ingestion resulted in an empty DataFrame. Halting pipeline.")
+            raise ValueError("Data ingestion failed, resulting in no data.")
+
+        logging.info("Data Ingestion Stage completed.")
+        return context
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -127,6 +205,21 @@ def ingest_experiment_data(
     if selected_metrics is None:
         selected_metrics = []
 
+    # Map filename stems to their canonical metric name.
+    # If a metric's filename (e.g., 'cpu_usage.csv') is the same as its desired
+    # metric name, it does not need to be in this mapping.
+    METRIC_FILENAME_TO_NAME = {
+        'disk_io_total': 'disk_io',
+        # Add other mappings here if filenames differ from metric names
+    }
+
+
+    # Normalize selected phases for consistent matching
+    normalized_selected_phases = [
+        phase.split(' - ', 1)[-1].lower().replace(' ', '-') 
+        for phase in selected_phases
+    ] if selected_phases else None
+
     for experiment_path in list_experiments(data_root):
         experiment_id = os.path.basename(experiment_path)
         for round_path in list_rounds(experiment_path):
@@ -136,7 +229,9 @@ def ingest_experiment_data(
             for phase_path in list_phases(round_path):
                 experimental_phase = os.path.basename(phase_path)
                 normalized_phase_name = experimental_phase.split(' - ', 1)[-1].lower().replace(' ', '-')
-                if selected_phases and normalized_phase_name not in selected_phases:
+                
+                # Use the normalized list for filtering
+                if normalized_selected_phases and normalized_phase_name not in normalized_selected_phases:
                     continue
 
                 for tenant_path in list_tenants(phase_path):
@@ -189,18 +284,18 @@ def ingest_experiment_data(
 
                     # Process other metrics
                     for metric_file in list_metric_files(tenant_path):
-                        metric_name_from_file = os.path.splitext(os.path.basename(metric_file))[0]
+                        filename_stem = os.path.splitext(os.path.basename(metric_file))[0]
                         
-                        if 'network_receive' in metric_name_from_file or 'network_transmit' in metric_name_from_file:
+                        # Skip files used for combined metrics
+                        if 'network_receive' in filename_stem or 'network_transmit' in filename_stem:
                             continue
 
-                        current_metric_name = None
-                        if metric_name_from_file == 'disk_io_total' and 'disk_io' in selected_metrics:
-                            current_metric_name = 'disk_io'
-                        elif metric_name_from_file in selected_metrics:
-                            current_metric_name = metric_name_from_file
-                        
-                        if not current_metric_name:
+                        # Determine the canonical metric name
+                        # Use the mapping if available, otherwise use the filename stem
+                        metric_name = METRIC_FILENAME_TO_NAME.get(filename_stem, filename_stem)
+
+                        # Process only if the metric is in the selected list
+                        if metric_name not in selected_metrics:
                             continue
 
                         try:
@@ -222,7 +317,7 @@ def ingest_experiment_data(
                                 records.append({
                                     'timestamp': row['timestamp'],
                                     'metric_value': row['metric_value'],
-                                    'metric_name': current_metric_name,
+                                    'metric_name': metric_name,
                                     'tenant_id': tenant_id,
                                     'experimental_phase': experimental_phase,
                                     'round_id': round_id,

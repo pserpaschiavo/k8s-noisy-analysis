@@ -21,6 +21,8 @@ import warnings
 
 from src.visualization.causality_plots import plot_causality_graph, plot_causality_heatmap
 from src.utils import configure_matplotlib
+from src.pipeline_stage import PipelineStage
+from src.config import PipelineConfig
 
 # Configure matplotlib using the centralized function
 configure_matplotlib()
@@ -129,177 +131,94 @@ def _transfer_entropy(x, y, bins=5, k=1):
                                        (pxz / (np.sum(pxy[j, :]) + 1e-12)))
     return te
 
-class CausalityAnalyzer:
+class CausalityAnalysisStage(PipelineStage):
     """
-    Class responsible for causality calculations (e.g., Granger, Transfer Entropy) between tenants.
+    Pipeline stage for performing causality analysis (Granger, Transfer Entropy).
     """
-    def __init__(self, df: pd.DataFrame, output_dir: str):
-        self.df = df
-        self.output_dir = output_dir
-        os.makedirs(self.output_dir, exist_ok=True)
+    def __init__(self, config: PipelineConfig):
+        super().__init__("causality_analysis", "Performs causality analysis between tenants.")
+        self.config = config
 
-
-    def run_and_plot_causality_analysis(self, metric: str, phase: str, round_id: str, p_value_threshold: float = 0.05) -> dict:
+    def _execute_implementation(self, context: dict) -> dict:
         """
-        Orchestrates the full causality analysis pipeline for a given metric, phase, and round.
-        It computes causality matrices, generates visualizations (graphs and heatmaps),
-        and saves them to the output directory.
-
-        Args:
-            metric: The metric to analyze.
-            phase: The experimental phase.
-            round_id: The round identifier.
-            p_value_threshold: Significance level for Granger causality.
-            
-        Returns:
-            A dictionary containing the computed matrices and paths to the generated plots.
+        Executes the causality analysis for all specified rounds.
         """
-        # Criar um subdiretório específico para o round para manter os resultados organizados
-        round_output_dir = os.path.join(self.output_dir, round_id)
-        os.makedirs(round_output_dir, exist_ok=True)
-        
-        logger.info(f"Starting causality analysis for metric='{metric}', phase='{phase}', round='{round_id}'")
-        logger.info(f"Output will be saved to: {round_output_dir}")
-        
-        plot_paths = []
-        results = {
-            "granger_matrix": pd.DataFrame(),
-            "te_matrix": pd.DataFrame(),
-            "plot_paths": []
-        }
+        self.logger.info("Starting causality analysis stage.")
+        rounds_data = context.get('rounds_data', {})
+        if not rounds_data:
+            self.logger.warning("No rounds data found in context. Skipping causality analysis.")
+            return context
 
-        # --- Granger Causality ---
-        granger_p_matrix = self.compute_granger_matrix(metric, phase, round_id)
-        results["granger_matrix"] = granger_p_matrix
+        for round_id, round_data in rounds_data.items():
+            self.logger.info(f"Processing round: {round_id}")
+            df = round_data.get('data')
+            if df is None or df.empty:
+                self.logger.warning(f"No data found for round {round_id}. Skipping.")
+                continue
 
-        if not granger_p_matrix.empty:
-            # Salvar a matriz de p-valores de Granger em CSV
-            granger_csv_path = os.path.join(round_output_dir, f"granger_matrix_{metric}_{phase}.csv")
-            granger_p_matrix.to_csv(granger_csv_path)
+            output_dir = self.config.get_output_dir_for_round("causality_analysis", round_id)
             
-            # Define output path for the graph
-            graph_filename = os.path.join(round_output_dir, f"granger_graph_{metric}_{phase}.png")
-            
-            # Plot and save Granger causality graph
-            path = plot_causality_graph(
-                causality_matrix=granger_p_matrix,
-                out_path=graph_filename,
-                metric=metric,
-                threshold=p_value_threshold,
-                threshold_mode='less'
-            )
-            if path: plot_paths.append(path)
+            metrics = self.config.get('analysis_settings', {}).get('metrics', [])
+            phases = self.config.get('analysis_settings', {}).get('phases', [])
+            p_value_threshold = self.config.get('analysis_settings', {}).get('causality', {}).get('p_value_threshold', 0.05)
+            te_threshold = self.config.get('analysis_settings', {}).get('causality', {}).get('te_threshold', 0.1)
 
-            # Plot and save Granger p-value heatmap
-            path = plot_causality_heatmap(
-                causality_matrix=granger_p_matrix,
-                metric=metric,
-                phase=phase,
-                round_id=round_id, # Mantido para fins de título no plot
-                out_dir=round_output_dir, # Salvar no diretório do round
-                method='Granger',
-                value_type='p-value'
-            )
-            if path: plot_paths.append(path)
+            for metric in metrics:
+                for phase in phases:
+                    self.logger.info(f"Analyzing metric: {metric}, phase: {phase}")
+                    
+                    # --- Granger Causality ---
+                    granger_p_matrix = self.compute_granger_matrix(df, metric, phase, round_id)
+                    if not granger_p_matrix.empty:
+                        granger_csv_path = os.path.join(output_dir, f"granger_matrix_{metric}_{phase}.csv")
+                        granger_p_matrix.to_csv(granger_csv_path)
+                        
+                        plot_causality_graph(
+                            causality_matrix=granger_p_matrix,
+                            out_path=os.path.join(output_dir, f"granger_graph_{metric}_{phase}.png"),
+                            metric=metric,
+                            threshold=p_value_threshold,
+                            threshold_mode='less'
+                        )
+                        plot_causality_heatmap(
+                            causality_matrix=granger_p_matrix,
+                            metric=metric,
+                            phase=phase,
+                            round_id=round_id,
+                            out_dir=output_dir,
+                            method='Granger',
+                            value_type='p-value'
+                        )
 
-        # --- Transfer Entropy ---
-        te_matrix = self.compute_transfer_entropy_matrix(metric, phase, round_id)
-        results["te_matrix"] = te_matrix
+                    # --- Transfer Entropy ---
+                    te_matrix = self.compute_transfer_entropy_matrix(df, metric, phase, round_id)
+                    if not te_matrix.empty:
+                        te_csv_path = os.path.join(output_dir, f"te_matrix_{metric}_{phase}.csv")
+                        te_matrix.to_csv(te_csv_path)
+                        
+                        plot_causality_graph(
+                            causality_matrix=te_matrix,
+                            out_path=os.path.join(output_dir, f"te_graph_{metric}_{phase}.png"),
+                            metric=metric,
+                            threshold=te_threshold,
+                            threshold_mode='greater',
+                            directed=True
+                        )
+                        plot_causality_heatmap(
+                            causality_matrix=te_matrix,
+                            metric=metric,
+                            phase=phase,
+                            round_id=round_id,
+                            out_dir=output_dir,
+                            method='TE',
+                            value_type='score'
+                        )
 
-        if not te_matrix.empty:
-            # Salvar a matriz de Transfer Entropy em CSV
-            te_csv_path = os.path.join(round_output_dir, f"te_matrix_{metric}_{phase}.csv")
-            te_matrix.to_csv(te_csv_path)
-            
-            # Define a threshold for TE score to be considered significant
-            te_threshold = 0.1  # This threshold may require tuning
-
-            # Plot and save Transfer Entropy causality graph
-            te_graph_filename = os.path.join(round_output_dir, f"te_graph_{metric}_{phase}.png")
-            path = plot_causality_graph(
-                causality_matrix=te_matrix,
-                out_path=te_graph_filename,
-                metric=metric,
-                threshold=te_threshold,
-                threshold_mode='greater',
-                directed=True
-            )
-            if path: plot_paths.append(path)
-
-            # Plot and save Transfer Entropy score heatmap
-            path = plot_causality_heatmap(
-                causality_matrix=te_matrix,
-                metric=metric,
-                phase=phase,
-                round_id=round_id, # Mantido para fins de título no plot
-                out_dir=round_output_dir, # Salvar no diretório do round
-                method='TE',
-                value_type='score'
-            )
-            if path: plot_paths.append(path)
-
-        logger.info(f"Finished causality analysis for metric='{metric}', phase='{phase}', round='{round_id}'")
-        results["plot_paths"] = plot_paths
-        return results
-
-
-    def _granger_causality_test(self, source_series: np.ndarray, target_series: np.ndarray, max_lag: int = 3) -> dict:
-        """
-        Executes a Granger causality test between two time series.
-        
-        Args:
-            source_series: Source time series (potential cause)
-            target_series: Target time series (potential effect)
-            max_lag: Maximum number of lags to test
-            
-        Returns:
-            Dictionary with test results or an empty dictionary if it fails
-        """
-        try:
-            # Check if the series are constant (very low standard deviation)
-            if np.std(source_series) < 1e-6 or np.std(target_series) < 1e-6:
-                logger.warning("Constant series detected - cannot run Granger test")
-                return {}
-                
-            # Check for missing values
-            if np.isnan(source_series).any() or np.isnan(target_series).any():
-                # Try to interpolate missing values
-                source_series_pd = pd.Series(source_series).interpolate().bfill().ffill()
-                target_series_pd = pd.Series(target_series).interpolate().bfill().ffill()
-                
-                # Convert back to numpy arrays
-                source_series = source_series_pd.to_numpy()
-                target_series = target_series_pd.to_numpy()
-                
-                # Check if NaNs still exist after interpolation
-                if np.isnan(source_series).any() or np.isnan(target_series).any():
-                    logger.warning("Missing values could not be corrected by interpolation")
-                    return {}
-            
-            # Adjust max_lag if the series is too short
-            if len(source_series) <= max_lag + 2:
-                new_max_lag = max(1, len(source_series) // 3 - 1)
-                logger.warning(f"Series too short for max_lag={max_lag}. Adjusting to {new_max_lag}")
-                max_lag = new_max_lag
-            
-            # Create a DataFrame with the two series
-            data = pd.DataFrame({
-                'target': target_series,
-                'source': source_series
-            })
-            
-            # Execute the Granger test
-            with warnings.catch_warnings():
-                warnings.simplefilter('ignore')
-                results = grangercausalitytests(data, maxlag=max_lag, verbose=False)
-                
-            return results
-        except Exception as e:
-            logger.warning(f"Error in Granger causality test: {str(e)}")
-            return {}
+        self.logger.info("Causality analysis stage finished.")
+        return context
 
     @lru_cache(maxsize=32)
-    def compute_granger_matrix(self, metric: str, phase: str, round_id: str, maxlag: int = 5) -> pd.DataFrame:
+    def compute_granger_matrix(self, df: pd.DataFrame, metric: str, phase: str, round_id: str, maxlag: int = 5) -> pd.DataFrame:
         """
         Calculates the matrix of p-values from the Granger causality test between all tenants for a specific metric.
         Results are cached to improve performance on repeated runs.
@@ -314,11 +233,9 @@ class CausalityAnalyzer:
             DataFrame where mat[i,j] is the lowest p-value of j causing i (considering lags from 1 to maxlag)
         """
         logger.info(f"Calculating Granger causality matrix for {metric}, {phase}, {round_id}, maxlag={maxlag}")
-        subset = self.df[(self.df['metric_name'] == metric) & 
-                        (self.df['experimental_phase'] == phase) & 
-                        (self.df['round_id'] == round_id)]
+        subset = df[(df['metric_name'] == metric) & 
+                        (df['experimental_phase'] == phase)]
         
-        # Enhanced validation
         if subset.empty:
             logger.warning(f"Skipping Granger for {metric}, {phase}, {round_id}: No data found after filtering.")
             return pd.DataFrame()
@@ -329,93 +246,48 @@ class CausalityAnalyzer:
             return pd.DataFrame(index=tenants, columns=tenants)
 
         mat = pd.DataFrame(np.nan, index=tenants, columns=tenants)
-        
-        # Transform to wide format for time series analysis
         wide = subset.pivot_table(index='timestamp', columns='tenant_id', values='metric_value')
-        
-        # Ensure all tenants are present as columns, filling with NaN if necessary
         wide = wide.reindex(columns=tenants, fill_value=np.nan)
-
-        # Interpolation and filling to handle missing values
         wide = wide.sort_index().interpolate(method='time').ffill().bfill()
         
-        # Test Granger causality for each pair of tenants
         for target in tenants:
             for source in tenants:
                 if target == source:
                     continue
-                
                 try:
-                    # Select only data with overlapping timestamps
                     data = pd.concat([wide[target], wide[source]], axis=1).dropna()
-                    
-                    # Check for constant series before any other processing
                     if data[source].std() < 1e-9 or data[target].std() < 1e-9:
-                        logger.warning(f"Skipping Granger for {source}->{target}: At least one series is constant.")
                         continue
-
-                    # Additional check to ensure sufficient data
-                    if len(data) < maxlag + 5:  # Requires at least 5 points beyond maxlag
-                        logger.warning(f"Insufficient data for Granger test {source}->{target}: {len(data)} points, minimum {maxlag+5}")
+                    if len(data) < maxlag + 5:
                         continue
-                        
-                    # Check for stationarity before the test
                     from statsmodels.tsa.stattools import adfuller
-                    # First-order differentiation if not stationary
                     for col_name in data.columns:
                         try:
                             adf_result = adfuller(data[col_name], autolag='AIC')
-                            if adf_result[1] > 0.05:  # p-value > 0.05 indicates non-stationarity
-                                original_len = len(data)
+                            if adf_result[1] > 0.05:
                                 data[col_name] = data[col_name].diff()
-                                logger.warning(f"Series {col_name} for {source}->{target} was not stationary. Differentiated and reduced from {original_len} to {len(data.dropna())} points.")
-                        except Exception as adf_error:
-                            logger.error(f"Error during stationarity check for {col_name} in {source}->{target}: {adf_error}")
-                            continue # Skip to next column
-                            
-                    data = data.dropna()  # Remove NaN values after differentiation
-                    
-                    # Check for constant series again after differentiation to avoid errors
+                        except Exception:
+                            continue
+                    data = data.dropna()
                     if data[source].std() < 1e-9 or data[target].std() < 1e-9:
-                        logger.warning(f"Skipping Granger for {source}->{target}: At least one series is constant after differentiation.")
                         continue
-                    
-                    if len(data) <= maxlag + 3:  # Check again after differentiation
-                        logger.warning(f"Insufficient data for {source}->{target} after differentiation: {len(data)} points")
+                    if len(data) <= maxlag + 3:
                         continue
-                        
                     with warnings.catch_warnings():
                         warnings.simplefilter('ignore')
-                        # Perform Granger test with improved error handling
-                        test_results = grangercausalitytests(
-                            data[[target, source]], 
-                            maxlag=maxlag, 
-                            verbose=False
-                        )
-                        
-                        # Extract the lowest p-value among all lags
+                        test_results = grangercausalitytests(data[[target, source]], maxlag=maxlag, verbose=False)
                         p_values = [test_results[lag][0]['ssr_chi2test'][1] for lag in range(1, maxlag+1)]
                         min_p_value = min(p_values) if p_values else np.nan
-                    
-                    # Store the result in the matrix
                     mat.loc[target, source] = min_p_value
-                except (KeyError, MissingDataError):
-                    logger.warning(f"Skipping Granger for {source}->{target} due to missing data or key errors.")
-                    continue
-                except (ValueError, np.linalg.LinAlgError) as e:
-                    logger.warning(f"Could not calculate Granger for {source}->{target}. This is often due to constant data after processing. Details: {str(e)}")
-                    continue
-                except InfeasibleTestError as e:
-                    logger.warning(f"Infeasible Granger test for {source}->{target}: {e}")
+                except (KeyError, MissingDataError, ValueError, np.linalg.LinAlgError, InfeasibleTestError):
                     continue
                 except Exception as e:
                     logger.error(f"An unexpected error occurred calculating Granger for {source}->{target}: {str(e)}", exc_info=True)
                     continue
-                    
         return mat
 
     @lru_cache(maxsize=32)
-    def compute_transfer_entropy_matrix(self, metric: str, phase: str, round_id: str, bins: int = 8, k: int = 1) -> pd.DataFrame:
+    def compute_transfer_entropy_matrix(self, df: pd.DataFrame, metric: str, phase: str, round_id: str, bins: int = 8, k: int = 1) -> pd.DataFrame:
         """
         Calculates the Transfer Entropy (TE) matrix between all tenants for a specific metric.
         Results are cached to improve performance on repeated runs.
@@ -435,11 +307,9 @@ class CausalityAnalyzer:
         logger.info(f"Calculating Transfer Entropy matrix for {metric} in {phase} ({round_id}), bins={bins}, k={k}")
         
         # Filter relevant data
-        subset = self.df[(self.df['metric_name'] == metric) & 
-                        (self.df['experimental_phase'] == phase) & 
-                        (self.df['round_id'] == round_id)]
+        subset = df[(df['metric_name'] == metric) & 
+                        (df['experimental_phase'] == phase)]
         
-        # Enhanced validation
         if subset.empty:
             logger.warning(f"Skipping TE for {metric}, {phase}, {round_id}: No data found after filtering.")
             return pd.DataFrame()
@@ -450,35 +320,21 @@ class CausalityAnalyzer:
             return pd.DataFrame(index=tenants, columns=tenants)
 
         mat = pd.DataFrame(np.nan, index=tenants, columns=tenants)
-        
-        # Transform to wide format for analysis
         wide = subset.pivot_table(index='timestamp', columns='tenant_id', values='metric_value')
-
-        # Ensure all tenants are present as columns, filling with NaN if necessary
         wide = wide.reindex(columns=tenants, fill_value=np.nan)
-        
-        # Interpolate and fill NaNs to align all tenants
         wide = wide.sort_index().interpolate(method='time').ffill().bfill()
         
-        # Calculate TE for each pair of tenants
         for target in tenants:
             for source in tenants:
                 if target == source:
                     continue
-                
                 try:
-                    # Get time series for the tenants
                     target_series = wide[target]
                     source_series = wide[source]
-                    
-                    # Align indices to ensure temporal correspondence
                     common_idx = target_series.index.intersection(source_series.index)
                     target_values = target_series.loc[common_idx].values
                     source_values = source_series.loc[common_idx].values
-                    
-                    # Check if there are enough points for a meaningful calculation
-                    if len(target_values) >= 8:  # Reduced from 10 to 8 minimum points
-                        # Calculate TE and store it in the matrix
+                    if len(target_values) >= 8:
                         try:
                             te_value = _transfer_entropy(target_values, source_values, bins=bins, k=k)
                             mat.loc[target, source] = te_value
@@ -486,8 +342,6 @@ class CausalityAnalyzer:
                             logging.warning(f"Error in TE calculation for {source}->{target}: {calc_error}")
                     else:
                         logging.warning(f"Insufficient time series for pair {source}->{target}: {len(target_values)} points")
-                        
                 except Exception as e:
                     logging.error(f"Error calculating Transfer Entropy for {source}->{target}: {str(e)}")
-        
         return mat

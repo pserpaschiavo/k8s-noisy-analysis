@@ -15,6 +15,14 @@ from functools import lru_cache
 import logging
 
 from src.utils import configure_matplotlib
+from src.pipeline_stage import PipelineStage
+from src.config import PipelineConfig
+from typing import Dict, Any, List
+from src.visualization.descriptive_plots import (
+    plot_metric_timeseries_multi_tenant_all_phases,
+    plot_metric_barplot_by_phase,
+    plot_metric_boxplot
+)
 
 # Configuração centralizada do matplotlib
 configure_matplotlib()
@@ -51,6 +59,75 @@ def compute_descriptive_stats(df, groupby_cols=None) -> pd.DataFrame:
     
     logger.info(f"Computed descriptive stats for {len(groupby_cols)} groups with {len(stats)} rows")
     return stats
+
+
+class DescriptiveAnalysisStage(PipelineStage):
+    """
+    Pipeline stage for descriptive analysis.
+    """
+    def __init__(self, config: PipelineConfig):
+        super().__init__("descriptive_analysis", "Descriptive statistics and anomaly detection")
+        self.config = config
+
+    def _execute_implementation(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Executes the descriptive analysis stage.
+        """
+        self.logger.info("Starting descriptive analysis...")
+        df = context.get('data')
+        if df is None or df.empty:
+            self.logger.error("DataFrame 'data' not available for descriptive analysis.")
+            return context
+
+        # Compute descriptive stats
+        descriptive_stats = compute_descriptive_stats(df)
+        context['descriptive_stats'] = descriptive_stats
+        
+        # Save to CSV
+        output_dir = self.config.get_output_dir("descriptive_analysis")
+        csv_path = os.path.join(output_dir, "descriptive_stats.csv")
+        descriptive_stats.to_csv(csv_path, index=False)
+        self.logger.info(f"Descriptive stats saved to {csv_path}")
+
+        # --- Reintegrar a geração de plots ---
+        plot_paths = []
+        
+        # Extrair round_id e métricas do contexto/config
+        if 'round_id' in df.columns and not df['round_id'].empty:
+            round_id = df['round_id'].unique()[0]
+        else:
+            self.logger.warning("Could not determine round_id from DataFrame. Skipping plot generation.")
+            return context
+
+        selected_metrics = self.config.get_selected_metrics()
+        if not selected_metrics:
+            self.logger.warning("No selected metrics found in config. Skipping plot generation.")
+            return context
+
+        for metric in selected_metrics:
+            self.logger.info(f"Generating descriptive plots for metric: {metric} in round: {round_id}")
+            
+            # Plot: Time series com todas as fases
+            path = plot_metric_timeseries_multi_tenant_all_phases(df, metric, round_id, output_dir)
+            if path:
+                plot_paths.append(path)
+
+            # Plot: Barplot por fase
+            path = plot_metric_barplot_by_phase(df, metric, round_id, output_dir)
+            if path:
+                plot_paths.append(path)
+
+            # Plot: Boxplot por fase
+            path = plot_metric_boxplot(df, metric, round_id, output_dir)
+            if path:
+                plot_paths.append(path)
+        
+        context['descriptive_plots'] = plot_paths
+        self.logger.info(f"Generated {len(plot_paths)} descriptive plots.")
+        # --- Fim da reintegração ---
+
+        self.logger.info("Descriptive analysis completed.")
+        return context
 
 
 def detect_anomalies(df: pd.DataFrame, metric: str, phase: str, round_id: str, window_size: int = 10, threshold: float = 2.0) -> pd.DataFrame:
