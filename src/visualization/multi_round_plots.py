@@ -33,7 +33,7 @@ def plot_aggregated_impact_boxplots(
     plot_paths = []
     
     try:
-        # Garante que o diretório de saída exista
+        # Ensure the output directory exists
         os.makedirs(output_dir, exist_ok=True)
 
         for tenant_id, group in consolidated_df.groupby('tenant_id'):
@@ -82,7 +82,7 @@ def plot_aggregated_impact_bar_charts(
     try:
         os.makedirs(output_dir, exist_ok=True)
 
-        # Usar 'catplot' para melhor controle sobre a figura e eixos
+        # Use 'catplot' for better control over the figure and axes
         g = sns.catplot(
             data=consolidated_df,
             x='metric_name',
@@ -93,8 +93,8 @@ def plot_aggregated_impact_bar_charts(
             ci=ci,
             height=6,
             aspect=1.5,
-            col_wrap=2,  # Enrolar os plots em 2 colunas
-            sharex=False, # Nomes das métricas podem ser diferentes
+            col_wrap=2,  # Wrap plots into 2 columns
+            sharex=False, # Metric names can be different
             legend_out=True
         )
         
@@ -102,13 +102,13 @@ def plot_aggregated_impact_bar_charts(
         g.set_axis_labels('Metric Name', f'Average Percentage Change (CI {ci}%)')
         g.set_titles("Tenant: {col_name}")
         
-        # Rotacionar os labels do eixo x para cada subplot
+        # Rotate x-axis labels for each subplot
         for ax in g.axes.flat:
             for label in ax.get_xticklabels():
                 label.set_rotation(45)
                 label.set_horizontalalignment('right')
 
-        plt.tight_layout(rect=(0, 0, 1, 0.97)) # Ajustar para o supertítulo
+        plt.tight_layout(rect=(0, 0, 1, 0.97)) # Adjust for the supertitle
         
         plot_filename = "barchart_impact_ci_all_tenants.png"
         plot_path = os.path.join(output_dir, plot_filename)
@@ -127,45 +127,45 @@ def plot_correlation_consistency_heatmap(
     output_dir: str
 ) -> List[str]:
     """
-    Gera heatmaps mostrando a média da correlação entre tenants para cada 
-    métrica e fase, com base nos dados de consistência multi-round.
+    Generates heatmaps showing the mean correlation between tenants for each 
+    metric and phase, based on multi-round consistency data.
 
     Args:
-        correlation_consistency_df: DataFrame com dados de consistência de correlação.
-        output_dir: Diretório para salvar os plots.
+        correlation_consistency_df: DataFrame with correlation consistency data.
+        output_dir: Directory to save the plots.
 
     Returns:
-        Uma lista de caminhos para os arquivos de plot gerados.
+        A list of paths to the generated plot files.
     """
     if correlation_consistency_df.empty:
-        logging.warning("DataFrame de consistência de correlação está vazio. Pulando a geração de heatmaps.")
+        logging.warning("Correlation consistency DataFrame is empty. Skipping heatmap generation.")
         return []
 
     plot_paths = []
     
-    # Agrupar por métrica e fase para criar um plot para cada combinação
+    # Group by metric and phase to create a plot for each combination
     for (metric, phase), group in correlation_consistency_df.groupby(['metric', 'phase']):
         try:
-            # Criar uma matriz de pivô para o heatmap
+            # Create a pivot table for the heatmap
             pivot_table = group.pivot(
                 index='tenant1', 
                 columns='tenant2', 
                 values='mean_correlation'
             )
             
-            # Garantir que a matriz seja simétrica e completa
+            # Ensure the matrix is symmetric and complete
             all_tenants = sorted(list(set(group['tenant1']) | set(group['tenant2'])))
             pivot_table = pivot_table.reindex(index=all_tenants, columns=all_tenants)
             
-            # Preencher a matriz simetricamente e a diagonal
-            # Usamos .add com fill_value=0 para somar o pivô com sua transposta
+            # Fill the matrix symmetrically and the diagonal
+            # We use .add with fill_value=0 to sum the pivot with its transpose
             symmetric_matrix = pivot_table.add(pivot_table.T, fill_value=0)
             
-            # Para os valores que não são NaN em ambos (ou seja, os pares originais), a soma dobrou o valor.
-            # Dividimos por 2 onde o pivô original não era nulo.
+            # For values that are not NaN in both (i.e., the original pairs), the sum doubled the value.
+            # We divide by 2 where the original pivot was not null.
             symmetric_matrix[pivot_table.notna()] = symmetric_matrix[pivot_table.notna()] / 2
 
-            np.fill_diagonal(symmetric_matrix.values, 1.0) # Correlação de um tenant com ele mesmo é 1
+            np.fill_diagonal(symmetric_matrix.values, 1.0) # Correlation of a tenant with itself is 1
 
             fig, ax = plt.subplots(figsize=(14, 12))
             sns.heatmap(
@@ -175,10 +175,10 @@ def plot_correlation_consistency_heatmap(
                 fmt='.2f', 
                 linewidths=.5, 
                 ax=ax,
-                vmin=-1, vmax=1 # Fixar a escala de cores para -1 a 1
+                vmin=-1, vmax=1 # Fix the color scale from -1 to 1
             )
             
-            # Limpar o nome da fase para o nome do arquivo
+            # Clean the phase name for the filename
             safe_phase_name = phase.replace(' ', '_').replace('/', '_')
             title = f'Mean Correlation Consistency - {metric} / {phase}'
             ax.set_title(title, fontsize=16)
@@ -191,21 +191,21 @@ def plot_correlation_consistency_heatmap(
             output_path = os.path.join(output_dir, plot_filename)
             plt.tight_layout()
             fig.savefig(output_path)
-            logging.info(f"Heatmap de consistência de correlação salvo em: {output_path}")
+            logging.info(f"Correlation consistency heatmap saved to: {output_path}")
             plt.close(fig)
             plot_paths.append(output_path)
 
         except Exception as e:
-            logger.error(f"Falha ao gerar heatmap para métrica '{metric}' e fase '{phase}': {e}", exc_info=True)
+            logger.error(f"Failed to generate heatmap for metric '{metric}' and phase '{phase}': {e}", exc_info=True)
 
     return plot_paths
 
 def plot_causality_consistency_matrix(causality_frequency: pd.DataFrame, output_dir: str) -> str:
     """
-    Gera um heatmap da matriz de consistência de causalidade.
+    Generates a heatmap of the causality consistency matrix.
     """
     if causality_frequency.empty:
-        logging.warning("DataFrame de frequência de causalidade está vazio. Pulando plot.")
+        logging.warning("Causality frequency DataFrame is empty. Skipping plot.")
         return ""
 
     causality_matrix = causality_frequency.pivot(index='source', columns='target', values='consistency_rate').fillna(0)
@@ -216,25 +216,25 @@ def plot_causality_consistency_matrix(causality_frequency: pd.DataFrame, output_
     fig, ax = plt.subplots(figsize=(12, 10))
     sns.heatmap(causality_matrix, annot=True, cmap='viridis', fmt='.1f', linewidths=.5, ax=ax)
     
-    ax.set_title('Matriz de Consistência de Causalidade Multi-Round (%)', fontsize=16)
-    ax.set_xlabel('Variável de Destino (Target)', fontsize=12)
-    ax.set_ylabel('Variável de Origem (Source)', fontsize=12)
+    ax.set_title('Multi-Round Causality Consistency Matrix (%)', fontsize=16)
+    ax.set_xlabel('Target Variable', fontsize=12)
+    ax.set_ylabel('Source Variable', fontsize=12)
     plt.xticks(rotation=45, ha='right')
     plt.yticks(rotation=0)
     
     output_path = os.path.join(output_dir, 'causality_consistency_matrix.png')
     plt.tight_layout()
     fig.savefig(output_path)
-    logging.info(f"Matriz de consistência de causalidade salva em: {output_path}")
+    logging.info(f"Causality consistency matrix saved to: {output_path}")
     plt.close(fig)
     return output_path
 
 def plot_aggregated_causality_graph(causality_frequency: pd.DataFrame, output_dir: str) -> str:
     """
-    Gera um grafo de causalidade agregado a partir da frequência dos links.
+    Generates an aggregated causality graph from the frequency of links.
     """
     if causality_frequency.empty:
-        logging.warning("DataFrame de frequência de causalidade está vazio. Pulando plot.")
+        logging.warning("Causality frequency DataFrame is empty. Skipping plot.")
         return ""
 
     G = nx.from_pandas_edgelist(
@@ -246,7 +246,7 @@ def plot_aggregated_causality_graph(causality_frequency: pd.DataFrame, output_di
     )
 
     if G.number_of_nodes() == 0:
-        logging.warning("Grafo de causalidade vazio. Pulando plot.")
+        logging.warning("Causality graph is empty. Skipping plot.")
         return ""
 
     fig, ax = plt.subplots(figsize=(15, 15))
@@ -259,7 +259,7 @@ def plot_aggregated_causality_graph(causality_frequency: pd.DataFrame, output_di
     nx.draw_networkx_edges(
         G,
         pos,
-        width=edge_widths,  # O linter pode reclamar, mas networkx aceita uma lista aqui
+        width=edge_widths,  # The linter might complain, but networkx accepts a list here # type: ignore
         edge_color='gray',
         arrows=True,
         arrowstyle='->',
@@ -270,13 +270,13 @@ def plot_aggregated_causality_graph(causality_frequency: pd.DataFrame, output_di
     edge_labels = {(u, v): f"{d['consistency_rate']:.1f}%" for u, v, d in G.edges(data=True)}
     nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_color='red', ax=ax)
 
-    ax.set_title('Grafo de Causalidade Agregado Multi-Round (Consistência %)', fontsize=20)
+    ax.set_title('Aggregated Multi-Round Causality Graph (Consistency %)', fontsize=20)
     plt.axis('off')
     
     output_path = os.path.join(output_dir, 'aggregated_causality_graph.png')
     plt.tight_layout()
     fig.savefig(output_path)
-    logging.info(f"Grafo de causalidade agregado salvo em: {output_path}")
+    logging.info(f"Aggregated causality graph saved to: {output_path}")
     plt.close(fig)
     return output_path
 

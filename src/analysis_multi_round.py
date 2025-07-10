@@ -1,24 +1,25 @@
 # -*- coding: utf-8 -*-
 
 """
-Módulo para a análise consolidada de múltiplas rodadas de execução.
+Module for the consolidated analysis of multiple execution rounds.
 
-Este módulo é responsável por agregar os resultados de várias execuções
-do pipeline, permitindo uma análise estatística mais robusta e a
-geração de visualizações que demonstram a consistência e a
-variabilidade dos resultados.
+This module is responsible for aggregating the results of various pipeline
+executions, allowing for a more robust statistical analysis and the
+generation of visualizations that demonstrate the consistency and
+variability of the results.
 
-Funcionalidades Principais:
-- Carregar e consolidar os resultados de impacto de múltiplas rodadas.
-- Calcular métricas estatísticas agregadas (média, desvio padrão, etc.).
-- Preparar os dados para a geração de visualizações multi-round.
+Main Features:
+- Load and consolidate impact results from multiple rounds.
+- Calculate aggregated statistical metrics (mean, standard deviation, etc.).
+- Prepare data for the generation of multi-round visualizations.
 
 Classes:
-- MultiRoundAnalysisStage: Orquestra a execução da análise multi-round.
+- MultiRoundAnalysisStage: Orchestrates the execution of the multi-round analysis.
 """
 
 import pandas as pd
 import os
+import glob
 from typing import Optional, Dict, List, Any
 from .pipeline_stage import PipelineStage
 from .config import PipelineConfig
@@ -32,306 +33,257 @@ from .visualization.multi_round_plots import (
 
 class MultiRoundAnalysisStage(PipelineStage):
     """
-    Representa a fase de análise consolidada de múltiplas rodadas no pipeline.
+    Represents the consolidated multi-round analysis stage in the pipeline.
 
-    Esta classe herda de `PipelineStage` e implementa a lógica para carregar,
-    consolidar e analisar os resultados de todas as rodadas de execução
-    definidas na configuração do experimento.
+    This class inherits from `PipelineStage` and implements the logic to load,
+    consolidate, and analyze the results from all execution rounds
+    defined in the experiment's configuration.
     """
 
     def __init__(self, config: PipelineConfig):
         """
-        Inicializa a fase de análise multi-round.
+        Initializes the multi-round analysis stage.
 
         Args:
-            config (Config): O objeto de configuração do pipeline.
+            config (PipelineConfig): The pipeline configuration object.
         """
         super().__init__(
-            "multi_round_analysis", 
-            "Consolida e analisa os resultados de múltiplas rodadas."
+            stage_name="multi_round_analysis", 
+            description="Consolidates and analyzes the results of multiple rounds."
         )
         self.config = config
-        self.output_dir = self.config.get_output_dir()
-        self.experiment_name = self.config.get_experiment_name()
-        self.generated_plots: Dict[str, List[str]] = {}
+        # The main output directory for the entire experiment
+        self.experiment_output_dir = self.config.get_output_dir()
+        # The specific directory for this stage's artifacts
+        self.stage_output_dir = os.path.join(self.experiment_output_dir, self.stage_name)
+        os.makedirs(self.stage_output_dir, exist_ok=True)
 
-    def _find_reports(self, analysis_type: str, filename: str) -> list[str]:
+    def _find_reports_from_context(self, all_results: Dict[str, Any], analysis_stage_name: str, result_key: str) -> List[pd.DataFrame]:
         """
-        Encontra todos os relatórios de uma análise específica em todas as rodadas
-        usando uma busca recursiva (glob).
+        Extracts specific results from the context for all rounds.
 
         Args:
-            analysis_type: O nome da subpasta da análise (ex: 'impact_analysis').
-            filename: O nome do arquivo de relatório a ser encontrado.
+            all_results: The dictionary containing all results from all rounds.
+            analysis_stage_name: The name of the analysis stage to get results from (e.g., 'impact_analysis').
+            result_key: The key for the specific result DataFrame within the stage's results.
 
         Returns:
-            list[str]: Uma lista de caminhos para os arquivos CSV encontrados.
+            A list of DataFrames, one for each round.
         """
-        import glob
+        dataframes = []
+        for round_id, round_results in all_results.items():
+            stage_results = round_results.get(analysis_stage_name)
+            if stage_results and isinstance(stage_results, dict):
+                result_df = stage_results.get(result_key)
+                if result_df is not None and not result_df.empty:
+                    # Ensure round_id is present for aggregation
+                    if 'round_id' not in result_df.columns:
+                        result_df['round_id'] = round_id
+                    dataframes.append(result_df)
+                else:
+                    self.logger.warning(f"No '{result_key}' found for stage '{analysis_stage_name}' in round '{round_id}'.")
+            else:
+                self.logger.warning(f"No results found for stage '{analysis_stage_name}' in round '{round_id}'.")
         
-        base_path = os.path.join(self.output_dir, self.experiment_name)
-        
-        # Padrão de busca para encontrar os relatórios dentro das pastas de cada rodada
-        search_pattern = os.path.join(base_path, 'round-*', analysis_type, filename)
-        
-        self.logger.info(f"Buscando por relatórios com o padrão: {search_pattern}")
-        
-        report_paths = glob.glob(search_pattern) # recursive=True não é mais necessário
-        
-        if report_paths:
-            for path in report_paths:
-                self.logger.info(f"Encontrado relatório '{filename}' em: {path}")
-        else:
-            self.logger.warning(f"Nenhum relatório '{filename}' encontrado para a análise '{analysis_type}' no caminho base '{base_path}'.")
+        if not dataframes:
+            self.logger.warning(f"No dataframes found for stage '{analysis_stage_name}' with key '{result_key}' across all rounds.")
             
-        return report_paths
+        return dataframes
 
-    def _execute_implementation(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def _execute_implementation(self, data: Optional[pd.DataFrame], all_results: Dict[str, Any], round_id: str) -> Dict[str, Any]:
         """
-        Executa a lógica de consolidação e análise dos resultados.
-
-        Este método será o ponto de entrada para a execução da fase.
-        Ele irá orquestrar a busca pelos arquivos de resultados,
-        a consolidação dos dados e o cálculo das métricas agregadas.
+        Executes the logic of consolidating and analyzing the results from all rounds.
 
         Args:
-            context (Dict[str, Any]): O contexto do pipeline.
+            data: Not used in this stage, as it operates on the consolidated results.
+            all_results: A dictionary containing all results from all previous stages and rounds.
+            round_id: A nominal identifier for this execution (e.g., 'multi-round').
 
         Returns:
-            Dict[str, Any]: O contexto do pipeline atualizado.
+            A dictionary containing the paths to the generated artifacts.
         """
-        self.logger.info(f"Iniciando a fase: {self.name}")
+        self.logger.info(f"Starting multi-round analysis stage for experiment: {self.config.get_experiment_name()}")
 
-        # --- Análise de Impacto Multi-Round ---
-        self.logger.info("Iniciando análise de impacto multi-round...")
-        impact_reports = self._find_reports('impact_analysis', 'impact_analysis_results.csv')
-        if impact_reports:
-            self._process_impact_analysis(impact_reports)
-        else:
-            self.logger.warning("Nenhum relatório de impacto encontrado. Pulando a análise de impacto multi-round.")
-
-        # --- Análise de Correlação Multi-Round ---
-        self.logger.info("Iniciando análise de correlação multi-round...")
-        correlation_reports = self._find_reports('correlation_analysis', 'correlation_results.csv')
-        if correlation_reports:
-            self._process_correlation_analysis(correlation_reports)
-        else:
-            self.logger.warning("Nenhum relatório de correlação encontrado. Pulando a análise de correlação multi-round.")
-
-        # --- Análise de Causalidade Multi-Round ---
-        self.logger.info("Iniciando análise de causalidade multi-round...")
-        causality_reports = self._find_reports('causality_analysis', 'causality_results.csv')
-        if causality_reports:
-            self._process_causality_analysis(causality_reports)
-        else:
-            self.logger.warning("Nenhum relatório de causalidade encontrado. Pulando a análise de causalidade multi-round.")
-
-        self.logger.info(f"Fase {self.name} concluída.")
+        # This stage operates on the `all_results` which contains per-round data.
+        # The structure is expected to be: {'per_round': {'round-1': {'stage_name': {...}}, 'round-2': ...}}
+        per_round_results = all_results.get('per_round', {})
+        if not per_round_results:
+            self.logger.error("Could not find 'per_round' results in the input data. Aborting multi-round analysis.")
+            return {}
         
-        # Retornar um DataFrame vazio ou um resumo, pois o principal são os artefatos salvos
-        return context
+        # --- Multi-Round Impact Analysis ---
+        self.logger.info("Starting multi-round impact analysis...")
+        impact_dfs = self._find_reports_from_context(per_round_results, 'impact_analysis', 'impact_metrics')
+        if impact_dfs:
+            self._process_impact_analysis(impact_dfs)
+        else:
+            self.logger.warning("No impact reports found. Skipping multi-round impact analysis.")
 
-    def _process_impact_analysis(self, impact_reports: List[str]):
+        # --- Multi-Round Correlation Analysis ---
+        self.logger.info("Starting multi-round correlation analysis...")
+        correlation_dfs = self._find_reports_from_context(per_round_results, 'correlation_analysis', 'correlation_results')
+        if correlation_dfs:
+            self._process_correlation_analysis(correlation_dfs)
+        else:
+            self.logger.warning("No correlation reports found. Skipping multi-round correlation analysis.")
+
+        # --- Multi-Round Causality Analysis ---
+        self.logger.info("Starting multi-round causality analysis...")
+        causality_dfs = self._find_reports_from_context(per_round_results, 'causality_analysis', 'causality_results')
+        if causality_dfs:
+            self._process_causality_analysis(causality_dfs)
+        else:
+            self.logger.warning("No causality reports found. Skipping multi-round causality analysis.")
+
+        self.logger.info(f"Multi-round analysis stage completed. Artifacts saved in: {self.stage_output_dir}")
+        
+        # The results are the artifacts saved to disk, but we can return a summary.
+        return {"multi_round_output_dir": self.stage_output_dir}
+
+    def _process_impact_analysis(self, impact_dfs: List[pd.DataFrame]):
         """
-        Processa os relatórios de análise de impacto.
+        Processes the impact analysis reports from all rounds.
         """
-        consolidated_df = self._consolidate_reports(impact_reports, 'round_id')
+        consolidated_df = pd.concat(impact_dfs, ignore_index=True)
         if consolidated_df.empty:
-            self.logger.error("A consolidação dos relatórios de impacto falhou.")
+            self.logger.error("Consolidation of impact reports failed or resulted in an empty DataFrame.")
             return
 
-        self.logger.info(f"Resultados de impacto de {len(impact_reports)} rodadas consolidados.")
+        self.logger.info(f"Impact results from {len(impact_dfs)} rounds consolidated successfully.")
 
-        # Lógica para calcular estatísticas agregadas
-        aggregated_stats = self._calculate_aggregated_stats(consolidated_df)
+        # Logic to calculate aggregated statistics
+        aggregated_stats_cohen = self._calculate_aggregated_stats(consolidated_df, 'cohen_d')
+        aggregated_stats_perc = self._calculate_aggregated_stats(consolidated_df, 'percentage_change')
 
-        # Salvar os resultados agregados em um novo CSV
-        multi_round_output_dir = os.path.join(self.output_dir, self.experiment_name, self.name)
-        os.makedirs(multi_round_output_dir, exist_ok=True)
+        # Merge the aggregated stats
+        merge_cols = [col for col in ['metric_name', 'tenant_id', 'phase'] if col in aggregated_stats_cohen.columns and col in aggregated_stats_perc.columns]
+        aggregated_stats = pd.merge(aggregated_stats_cohen, aggregated_stats_perc, on=merge_cols)
 
-        aggregated_csv_path = os.path.join(multi_round_output_dir, 'multi_round_aggregated_stats.csv')
-        aggregated_stats.to_csv(aggregated_csv_path, index=False)
-        self.logger.info(f"Estatísticas agregadas de impacto salvas em: {aggregated_csv_path}")
 
-        # Gerar visualizações de impacto
-        plots_output_dir = os.path.join(multi_round_output_dir, 'plots')
-        os.makedirs(plots_output_dir, exist_ok=True)
+        # Save the aggregated results to a new CSV
+        aggregated_stats_path = os.path.join(self.stage_output_dir, 'multi_round_impact_aggregated_stats.csv')
+        aggregated_stats.to_csv(aggregated_stats_path, index=False)
+        self.logger.info(f"Aggregated impact stats saved to {aggregated_stats_path}")
 
-        self.generated_plots['impact_boxplots'] = plot_aggregated_impact_boxplots(
-            consolidated_df=consolidated_df, output_dir=plots_output_dir
-        )
-        self.generated_plots['impact_barcharts'] = plot_aggregated_impact_bar_charts(
-            consolidated_df=consolidated_df, output_dir=plots_output_dir
-        )
+        # Generate and save plots
+        plot_aggregated_impact_boxplots(consolidated_df, self.stage_output_dir)
+        plot_aggregated_impact_bar_charts(consolidated_df, self.stage_output_dir)
 
-    def _consolidate_reports(self, report_paths: List[str], round_col_name: str) -> pd.DataFrame:
+    def _consolidate_reports(self, report_paths: List[str], round_id_extractor) -> pd.DataFrame:
         """
-        Consolida uma lista de relatórios CSV em um único DataFrame, adicionando uma coluna de rodada.
-
-        Args:
-            report_paths: Lista de caminhos para os arquivos CSV.
-            round_col_name: Nome da coluna para armazenar o ID da rodada.
-
-        Returns:
-            Um DataFrame consolidado ou um DataFrame vazio se ocorrer um erro.
+        Consolidates multiple CSV reports into a single DataFrame.
         """
-        all_rounds_df = []
-        for report_path in report_paths:
+        all_dfs = []
+        for path in report_paths:
             try:
-                # Extrai o nome da rodada (ex: 'round-1') do caminho do arquivo
-                round_name = os.path.basename(os.path.dirname(os.path.dirname(report_path)))
-                df = pd.read_csv(report_path)
-                df[round_col_name] = round_name
-                all_rounds_df.append(df)
+                df = pd.read_csv(path)
+                # Extract round_id from path and add it as a column
+                df['round_id'] = round_id_extractor(path)
+                all_dfs.append(df)
             except Exception as e:
-                self.logger.error(f"Falha ao ler ou processar o relatório {report_path}: {e}")
-                continue
+                self.logger.error(f"Failed to read or process report {path}: {e}")
         
-        if not all_rounds_df:
-            self.logger.error("Nenhum relatório pôde ser lido com sucesso.")
+        if not all_dfs:
+            return pd.DataFrame()
+            
+        return pd.concat(all_dfs, ignore_index=True)
+
+    def _calculate_aggregated_stats(self, df: pd.DataFrame, value_col: str) -> pd.DataFrame:
+        """
+        Calculates aggregated statistics (mean, std, count) for a given value column.
+        Groups by metric, tenant, and any other relevant columns.
+        """
+        grouping_cols = [col for col in ['metric_name', 'tenant_id', 'phase'] if col in df.columns]
+        if not grouping_cols:
+            self.logger.error("Cannot determine grouping columns for aggregation.")
             return pd.DataFrame()
 
-        return pd.concat(all_rounds_df, ignore_index=True)
+        self.logger.info(f"Aggregating stats for '{value_col}' grouped by {grouping_cols}")
+        
+        aggregated = df.groupby(grouping_cols)[value_col].agg(['mean', 'std', 'count']).reset_index()
+        aggregated.rename(columns={
+            'mean': f'mean_{value_col}',
+            'std': f'std_{value_col}',
+            'count': 'num_rounds'
+        }, inplace=True)
+        
+        return aggregated
 
-    def _process_correlation_analysis(self, correlation_reports: List[str]):
+    def _process_correlation_analysis(self, correlation_dfs: List[pd.DataFrame]):
         """
-        Processa os relatórios de análise de correlação de múltiplas rodadas.
-        Consolida os dados, calcula estatísticas de consistência e gera visualizações.
+        Processes the correlation analysis reports.
         """
-        # Usa o método _consolidate_reports para carregar e unir os relatórios
-        consolidated_df = self._consolidate_reports(correlation_reports, round_col_name='round_id_from_path')
-        if consolidated_df.empty:
-            self.logger.error("A consolidação dos relatórios de correlação falhou.")
+        if not correlation_dfs:
+            self.logger.warning("No correlation DataFrames to process.")
+            return
+            
+        consolidated_corr_df = pd.concat(correlation_dfs, ignore_index=True)
+        if consolidated_corr_df.empty:
+            self.logger.error("Consolidation of correlation reports failed.")
             return
 
-        self.logger.info(f"Resultados de correlação de {len(correlation_reports)} rodadas consolidados.")
-
-        # Colunas para agrupar e analisar a consistência
-        group_by_cols = ['metric', 'phase', 'tenant1', 'tenant2']
+        self.logger.info(f"Correlation results from {len(correlation_dfs)} rounds consolidated.")
         
-        # Verificar se as colunas de agrupamento existem
-        for col in group_by_cols:
-            if col not in consolidated_df.columns:
-                self.logger.error(f"Coluna de agrupamento '{col}' não encontrada no DataFrame de correlação. Colunas disponíveis: {consolidated_df.columns.tolist()}")
-                return
-
-        # Calcular estatísticas de consistência da correlação entre as rodadas
-        correlation_consistency = consolidated_df.groupby(group_by_cols)['correlation'].agg(
-            mean_correlation='mean',
-            std_dev_correlation='std',
-            min_correlation='min',
-            max_correlation='max',
-            rounds_count='count'
-        ).reset_index()
-
-        # Salvar os resultados de consistência em um novo CSV
-        multi_round_output_dir = os.path.join(self.output_dir, self.experiment_name, self.name)
-        os.makedirs(multi_round_output_dir, exist_ok=True)
-
-        consistency_csv_path = os.path.join(multi_round_output_dir, 'multi_round_correlation_consistency.csv')
-        correlation_consistency.to_csv(consistency_csv_path, index=False)
-        self.logger.info(f"Estatísticas de consistência de correlação salvas em: {consistency_csv_path}")
-
-        # Gerar visualizações (a função de plotagem pode precisar de adaptação)
-        plots_output_dir = os.path.join(multi_round_output_dir, 'plots')
-        os.makedirs(plots_output_dir, exist_ok=True)
-
-        # A função plot_correlation_consistency_heatmap provavelmente espera um formato diferente.
-        # A implementação da plotagem será ajustada a seguir.
-        self.logger.info("Tentando gerar heatmap de consistência de correlação...")
-        plot_path = plot_correlation_consistency_heatmap(
-            correlation_consistency_df=correlation_consistency, # Passando o novo DataFrame
-            output_dir=plots_output_dir
-        )
-        self.generated_plots['correlation_heatmap'] = [plot_path] if plot_path else []
-
-    def _process_causality_analysis(self, causality_reports: List[str]):
-        """
-        Processa os relatórios de análise de causalidade de múltiplas rodadas.
-        """
-        all_causality_dfs = []
-        for report_path in causality_reports:
-            try:
-                round_name = os.path.basename(os.path.dirname(os.path.dirname(report_path)))
-                df = pd.read_csv(report_path)
-                df['round'] = round_name
-                all_causality_dfs.append(df)
-            except Exception as e:
-                self.logger.error(f"Falha ao ler o relatório de causalidade {report_path}: {e}")
-                continue
-
-        if not all_causality_dfs:
-            self.logger.error("Nenhum relatório de causalidade pôde ser lido com sucesso.")
-            return
-
-        consolidated_df = pd.concat(all_causality_dfs, ignore_index=True)
-        self.logger.info(f"Resultados de causalidade de {len(causality_reports)} rodadas consolidados.")
-
-        # Filtrar apenas por links causais significativos
-        causal_links = consolidated_df[consolidated_df['is_causal'] == True]
-
-        # Calcular a frequência de cada link causal
-        causality_frequency = causal_links.groupby(['source', 'target']).size().reset_index(name='frequency')
-        causality_frequency['total_rounds'] = len(causality_reports)
-        causality_frequency['consistency_rate'] = (causality_frequency['frequency'] / causality_frequency['total_rounds']) * 100
-
-        # Salvar os resultados agregados
-        multi_round_output_dir = os.path.join(self.output_dir, self.experiment_name, self.name)
-        aggregated_csv_path = os.path.join(multi_round_output_dir, 'multi_round_causality_frequency.csv')
-        causality_frequency.to_csv(aggregated_csv_path, index=False)
-        self.logger.info(f"Frequência de causalidade agregada salva em: {aggregated_csv_path}")
-
-        # Gerar visualizações de causalidade
-        plots_output_dir = os.path.join(multi_round_output_dir, 'plots')
-        os.makedirs(plots_output_dir, exist_ok=True)
-
-        matrix_plot_path = plot_causality_consistency_matrix(
-            causality_frequency, plots_output_dir
-        )
-        self.generated_plots['causality_matrix'] = [matrix_plot_path] if matrix_plot_path else []
-
-        graph_plot_path = plot_aggregated_causality_graph(
-            causality_frequency, plots_output_dir
-        )
-        self.generated_plots['causality_graph'] = [graph_plot_path] if graph_plot_path else []
-
-    def _calculate_aggregated_stats(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Calcula estatísticas descritivas agregadas a partir do DataFrame consolidado.
-        """
-        # Colunas para agrupar os dados, alinhadas com os nomes no DataFrame
-        group_by_cols = ['tenant_id', 'metric_name', 'experimental_phase']
-        
-        # Verificar se as colunas de agrupamento existem no DataFrame
-        for col in group_by_cols:
-            if col not in df.columns:
-                self.logger.error(f"Coluna de agrupamento '{col}' não encontrada no DataFrame. Colunas disponíveis: {df.columns.tolist()}")
-                # Levantar um erro ou retornar um DataFrame vazio para evitar falhas inesperadas
-                raise KeyError(f"Coluna de agrupamento ausente: {col}")
-
-        # Usar agregações nomeadas para maior clareza
-        aggregated_df = df.groupby(group_by_cols).agg(
-            mean_percentage_change=('percentage_change', 'mean'),
-            median_percentage_change=('percentage_change', 'median'),
-            std_percentage_change=('percentage_change', 'std'),
-            min_percentage_change=('percentage_change', 'min'),
-            max_percentage_change=('percentage_change', 'max'),
-            rounds_count=('round_id', 'count'),  # Usar round_id para contagem
-            significance_count=('is_significant', lambda x: x.sum()),
-            significance_freq=('is_significant', lambda x: x.mean())
-        ).reset_index()
-
-        # Renomear colunas para o formato desejado, se necessário
-        aggregated_df.rename(columns={
-            'mean_percentage_change': 'mean_change',
-            'median_percentage_change': 'median_change',
-            'std_percentage_change': 'std_dev',
-            'min_percentage_change': 'min_change',
-            'max_percentage_change': 'max_change',
+        # Standardize column names for aggregation
+        consolidated_corr_df.rename(columns={
+            'metric': 'metric_name'
         }, inplace=True)
 
-        # Calcular a frequência em porcentagem
-        aggregated_df['significance_freq'] = aggregated_df['significance_freq'] * 100
+        # Calculate mean correlation
+        grouping_cols = ['metric_name', 'phase', 'tenant1', 'tenant2']
+        # Check for available columns before grouping
+        valid_grouping_cols = [col for col in grouping_cols if col in consolidated_corr_df.columns]
+        
+        if not valid_grouping_cols:
+            self.logger.error("Could not find necessary columns to group correlation data.")
+            return
 
-        return aggregated_df
+        aggregated_corr = consolidated_corr_df.groupby(valid_grouping_cols)['correlation'].agg(['mean', 'std']).reset_index()
+        aggregated_corr.rename(columns={'mean': 'mean_correlation', 'std': 'std_correlation'}, inplace=True)
+
+        # Save consolidated data
+        consolidated_corr_path = os.path.join(self.stage_output_dir, 'multi_round_correlation_all.csv')
+        aggregated_corr.to_csv(consolidated_corr_path, index=False)
+        self.logger.info(f"Consolidated correlation data saved to {consolidated_corr_path}")
+
+        # Rename 'metric_name' to 'metric' for compatibility with the plotting function
+        if 'metric_name' in aggregated_corr.columns:
+            aggregated_corr.rename(columns={'metric_name': 'metric'}, inplace=True)
+
+        # Generate consistency heatmap
+        plot_correlation_consistency_heatmap(aggregated_corr, self.stage_output_dir)
+
+    def _process_causality_analysis(self, causality_dfs: List[pd.DataFrame]):
+        """
+        Processes the causality analysis reports.
+        """
+        if not causality_dfs:
+            self.logger.warning("No causality DataFrames to process.")
+            return
+
+        consolidated_causality_df = pd.concat(causality_dfs, ignore_index=True)
+        if consolidated_causality_df.empty:
+            self.logger.error("Consolidation of causality reports failed.")
+            return
+
+        self.logger.info(f"Causality results from {len(causality_dfs)} rounds consolidated.")
+        
+        # Save consolidated data
+        consolidated_causality_path = os.path.join(self.stage_output_dir, 'multi_round_causality_all.csv')
+        consolidated_causality_df.to_csv(consolidated_causality_path, index=False)
+        self.logger.info(f"Consolidated causality data saved to {consolidated_causality_path}")
+
+        # Calculate frequency and consistency of causal links
+        num_rounds = len(causality_dfs)
+        causality_frequency = consolidated_causality_df.groupby(['source', 'target']).size().reset_index(name='frequency')
+        causality_frequency['consistency_rate'] = causality_frequency['frequency'] / num_rounds
+        
+        # Save frequency data
+        causality_freq_path = os.path.join(self.stage_output_dir, 'multi_round_causality_frequency.csv')
+        causality_frequency.to_csv(causality_freq_path, index=False)
+        self.logger.info(f"Causality link frequency data saved to {causality_freq_path}")
+
+        # Generate plots
+        plot_causality_consistency_matrix(causality_frequency, self.stage_output_dir)
+        plot_aggregated_causality_graph(causality_frequency, self.stage_output_dir)
 

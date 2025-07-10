@@ -33,7 +33,7 @@ def suppress_statsmodels_warnings():
         # Other common statistical warnings
         warnings.filterwarnings('ignore', message='.*p-value.*')
         
-        # Matplotlib warnings - Mais agressivo na filtragem de warnings de fonte
+        # Matplotlib warnings - More aggressive filtering of font warnings
         warnings.filterwarnings('ignore', category=UserWarning, message='.*findfont.*')
         warnings.filterwarnings('ignore', category=UserWarning, message='.*font.*not found.*')
         warnings.filterwarnings('ignore', category=UserWarning, message='.*family.*not found.*')
@@ -47,45 +47,45 @@ def suppress_statsmodels_warnings():
 
 def configure_matplotlib(config=None):
     """
-    Centraliza a configuração do matplotlib para evitar inconsistências.
-    Deve ser chamado no início de cada script ou módulo que usa visualizações.
+    Centralizes matplotlib configuration to prevent inconsistencies.
+    Should be called at the beginning of each script or module that uses visualizations.
     
     Args:
-        config: Configuração opcional do pipeline, para ler configurações específicas.
+        config: Optional pipeline configuration to read specific settings from.
     """
     import matplotlib
-    matplotlib.use('Agg')  # Use o backend não interativo Agg
+    matplotlib.use('Agg')  # Use the non-interactive Agg backend
     
-    # Fontes padrão que geralmente estão disponíveis em sistemas Linux
+    # Default fonts that are generally available on Linux systems
     font_family = 'sans-serif'
     font_size = 12
     
-    # Leia configurações do arquivo de configuração, se disponível
+    # Read settings from the configuration file, if available
     if config and 'visualization' in config and 'fonts' in config['visualization']:
         font_config = config['visualization']['fonts']
         font_family = font_config.get('family', font_family)
         font_size = font_config.get('size', font_size)
     
-    # Configuração de fontes para evitar warnings
+    # Configure fonts to avoid warnings
     matplotlib.rcParams['font.family'] = font_family
     
-    # Definir listas de fontes disponíveis em praticamente todos os sistemas
+    # Define lists of fonts available on almost all systems
     matplotlib.rcParams['font.sans-serif'] = [
         'DejaVu Sans', 'Arial', 'Helvetica', 'Liberation Sans', 
         'FreeSans', 'Ubuntu', 'Noto Sans', 'sans-serif'
     ]
     
-    # Mesmo que usemos 'serif', forneça alternativas para Times New Roman
+    # Even if using 'serif', provide alternatives for Times New Roman
     matplotlib.rcParams['font.serif'] = [
         'DejaVu Serif', 'Liberation Serif', 'FreeSerif', 
         'Bitstream Vera Serif', 'Noto Serif', 'serif'
     ]
     
-    # Configurações adicionais para evitar warnings
+    # Additional settings to avoid warnings
     matplotlib.rcParams['figure.max_open_warning'] = 100
     matplotlib.rcParams['font.size'] = font_size
     
-    # Configurações para qualidade de saída
+    # Settings for output quality
     plot_quality = "high"
     if config and 'visualization' in config and 'plot_quality' in config['visualization']:
         plot_quality = config['visualization']['plot_quality']
@@ -100,7 +100,7 @@ def configure_matplotlib(config=None):
         matplotlib.rcParams['savefig.dpi'] = 100
         matplotlib.rcParams['figure.dpi'] = 80
     
-    # Configuração para garantir que legendas não causem problemas de layout
+    # Configuration to ensure legends do not cause layout issues
     matplotlib.rcParams['legend.loc'] = 'best'
 
 
@@ -145,25 +145,25 @@ def validate_data_availability(config: dict) -> bool:
     missing_files = []
     total_expected = len(selected_rounds) * len(phase_names) * len(selected_tenants) * len(selected_metrics)
     
-    # Usar a estrutura de diretório real em vez de assumir os nomes
+    # Use the actual directory structure instead of assuming names
     for round_name in selected_rounds:
         round_dir = os.path.join(data_root, round_name)
         if not os.path.exists(round_dir):
             logger.warning(f"Round directory not found: {round_dir}")
             continue
             
-        # Buscar fases reais em vez de assumir os nomes
+        # Find actual phases instead of assuming names
         actual_phases = [d for d in os.listdir(round_dir) 
                         if os.path.isdir(os.path.join(round_dir, d))]
         
-        # Mapear fase real para nome canônico
+        # Map the actual phase to a canonical name
         phase_mapping = {}
         for phase in actual_phases:
             canonical = normalize_phase_name(phase)
             if canonical:
                 phase_mapping[canonical] = phase
         
-        # Se não houver fases conhecidas, usar as pastas encontradas
+        # If no known phases are found, use the discovered folders
         if not phase_mapping:
             phase_mapping = {phase: phase for phase in actual_phases}
             
@@ -181,7 +181,7 @@ def validate_data_availability(config: dict) -> bool:
                         missing_files.append(file_path)
 
     if missing_files:
-        # Limitar o número de arquivos mostrados para evitar poluição do log
+        # Limit the number of files shown to avoid polluting the log
         missing_count = len(missing_files)
         if missing_count > 10:
             sample = missing_files[:5] + ["..."] + missing_files[-5:]
@@ -199,9 +199,9 @@ def validate_data_availability(config: dict) -> bool:
         logger.info("Pre-flight check successful. All expected raw data files were found.")
         return True
 
-# Mapeamento Canônico de Fases
-# Este dicionário define o mapeamento de vários possíveis nomes de fase para um único nome canônico.
-# O nome canônico é a chave do dicionário.
+# Canonical Phase Mapping
+# This dictionary defines the mapping from various possible phase names to a single canonical name.
+# The canonical name is the dictionary key.
 CANONICAL_PHASE_MAPPING = {
     '1 - Baseline': ['baseline', '1 - baseline', 'Baseline'],
     '2 - CPU Noise': ['cpu-noise', '2 - cpu noise', 'CPU Noise'],
@@ -212,19 +212,19 @@ CANONICAL_PHASE_MAPPING = {
     '7 - Recovery': ['recovery', '7 - recovery', 'Recovery']
 }
 
-# Invertendo o mapeamento para busca rápida
+# Inverting the mapping for quick lookup
 _REVERSE_CANONICAL_MAPPING = {alias.lower(): canonical 
                              for canonical, aliases in CANONICAL_PHASE_MAPPING.items() 
                              for alias in aliases + [canonical]}
 
 def normalize_phase_name(name: str) -> Optional[str]:
     """
-    Normaliza um nome de fase para o formato canônico.
+    Normalizes a phase name to its canonical format.
 
     Args:
-        name: O nome da fase a ser normalizado.
+        name: The phase name to normalize.
 
     Returns:
-        O nome da fase canônico ou None se não for encontrado.
+        The canonical phase name or None if not found.
     """
     return _REVERSE_CANONICAL_MAPPING.get(name.lower())

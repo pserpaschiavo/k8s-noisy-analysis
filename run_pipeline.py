@@ -1,137 +1,146 @@
 #!/usr/bin/env python3
 """
-Script to run the multi-tenant time series analysis pipeline.
+Main entry point for executing the multi-tenant time series analysis pipeline.
+
+This script orchestrates the execution of various analysis stages, from data
+ingestion to final report generation. It supports processing multiple experimental
+rounds, running analysis for each round, and then consolidating the results.
 
 Usage:
-    ./run_pipeline.py [--config CONFIG_PATH] 
-                     [--data-root DATA_ROOT] 
-                     [--output-dir OUTPUT_DIR]
-                     [--selected-metrics METRICS [METRICS ...]]
-                     [--selected-tenants TENANTS [TENANTS ...]]
-                     [--selected-rounds ROUNDS [ROUNDS ...]]
+    ./run_pipeline.py --config <path_to_config.yaml>
 
-Examples:
-    ./run_pipeline.py --config config/pipeline_config.yaml
-    ./run_pipeline.py --selected-metrics cpu_usage memory_usage --selected-tenants tenant-a tenant-b
+Example:
+    ./run_pipeline.py --config config/pipeline_config_sfi2.yaml
 """
 import sys
 import logging
 import argparse
-import pandas as pd
 from typing import Dict, Any
 import os
-import yaml
-from copy import deepcopy
 
-# Importar todas as classes de estágio do pipeline
+# Import all pipeline stage classes
 from src.data_ingestion import DataIngestionStage
+from src.data_segment import DataSegmentationStage
 from src.analysis_descriptive import DescriptiveAnalysisStage
 from src.analysis_correlation import CorrelationAnalysisStage
 from src.analysis_causality import CausalityAnalysisStage
 from src.analysis_impact import ImpactAnalysisStage
 from src.analysis_phase_comparison import PhaseComparisonStage
 from src.analysis_multi_round import MultiRoundAnalysisStage
+from src.analysis_fault_tolerance import FaultToleranceAnalysisStage
 from src.report_generation import ReportGenerationStage
 from src.config import PipelineConfig
+from src.utils import configure_matplotlib, validate_data_availability
 
 def main():
     """
-    Ponto de entrada principal para a execução do pipeline de análise.
+    Main entry point for pipeline execution.
     """
-    parser = argparse.ArgumentParser(description="Executa o pipeline de análise de dados do k8s-noisy.")
-    parser.add_argument('--config', type=str, required=True, help='Caminho para o arquivo de configuração YAML.')
+    parser = argparse.ArgumentParser(description="Run the k8s-noisy data analysis pipeline.")
+    parser.add_argument('--config', type=str, required=True, help='Path to the main YAML configuration file.')
     args = parser.parse_args()
 
-    try:
-        # Configuração do logging
-        logging.basicConfig(
-            level=logging.INFO, 
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            stream=sys.stdout
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO, 
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        stream=sys.stdout
+    )
+
+    # Load main configuration
+    config = PipelineConfig(args.config)
+
+    # Configure Matplotlib for non-interactive plotting
+    configure_matplotlib()
+
+    # --- Per-Round Analysis ---
+    logger = logging.getLogger(__name__)
+    selected_rounds = config.get_selected_rounds()
+
+    if not selected_rounds:
+        # Try to infer rounds from the data directory structure if not in config
+        data_root = config.get_data_root()
+        if os.path.isdir(data_root):
+            subdirs = [d for d in os.listdir(data_root) if os.path.isdir(os.path.join(data_root, d)) and d.startswith('round-')]
+            if subdirs:
+                logger.info(f"Rounds not specified in config, inferred from data directory: {subdirs}")
+                selected_rounds = sorted(subdirs)
+
+    if not selected_rounds:
+        logger.error("No rounds specified in config and could not infer any from the data directory. Aborting.")
+        return
+
+    all_rounds_results = {}
+    all_pipeline_results = {}
+
+    # Per-round analysis
+    for round_id in selected_rounds:
+        logging.info(f"Processing round: {round_id}")
+        current_round_results = {}
+        
+        # Data Ingestion
+        data_ingestion_stage = DataIngestionStage(config)
+        # The first stage receives no prior data or results.
+        ingestion_results = data_ingestion_stage.execute(data=None, all_results={}, round_id=round_id)
+        ingested_data = ingestion_results.get("ingested_data")
+        current_round_results[data_ingestion_stage.stage_name] = ingestion_results
+
+        if ingested_data is None or ingested_data.empty:
+            logging.warning(f"Skipping round {round_id} due to no data being ingested.")
+            continue
+
+        # Data Segmentation
+        data_segmentation_stage = DataSegmentationStage(config)
+        segmentation_results = data_segmentation_stage.execute(data=ingested_data, all_results=current_round_results, round_id=round_id)
+        segmented_data = segmentation_results.get("segmented_data")
+        current_round_results[data_segmentation_stage.stage_name] = segmentation_results
+
+        if segmented_data is None:
+            logging.warning(f"Skipping analysis for round {round_id} due to segmentation failure.")
+            continue
+
+        # Standard Analysis Stages
+        analysis_stages = [
+            DescriptiveAnalysisStage(config),
+            ImpactAnalysisStage(config),
+            CorrelationAnalysisStage(config),
+            CausalityAnalysisStage(config),
+            PhaseComparisonStage(config),
+            FaultToleranceAnalysisStage(config)
+        ]
+
+        for stage in analysis_stages:
+            logging.info(f"Executing stage: {stage.stage_name} for round: {round_id}")
+            stage_results = stage.execute(data=segmented_data, all_results=current_round_results, round_id=round_id)
+            current_round_results[stage.stage_name] = stage_results
+
+        all_rounds_results[round_id] = current_round_results
+
+    # Consolidate results for multi-round and report generation
+    all_pipeline_results['per_round'] = all_rounds_results
+
+    # --- Multi-Round Analysis ---
+    if len(selected_rounds) > 1:
+        logger.info("Executing multi-round analysis stage...")
+        multi_round_analysis_stage = MultiRoundAnalysisStage(config)
+        multi_round_results = multi_round_analysis_stage.execute(
+            data=None, 
+            all_results=all_pipeline_results, 
+            round_id='multi-round'
         )
+        all_pipeline_results['multi_round_analysis'] = multi_round_results
+    else:
+        logger.info("Skipping multi-round analysis as only one round was processed.")
 
-        # Carregar configuração principal
-        main_config = PipelineConfig(args.config)
-        logging.info(f"Configuração principal carregada de: {args.config}")
+    # --- Report Generation ---
+    logger.info("Executing report generation stage...")
+    report_generation_stage = ReportGenerationStage(config)
+    report_generation_stage.execute(
+        all_results=all_pipeline_results
+    )
 
-        # Obter rodadas selecionadas
-        selected_rounds = main_config.get_selected_rounds()
-        if not selected_rounds:
-            logging.error("Nenhuma 'selected_rounds' encontrada na configuração. A análise multi-round não pode prosseguir.")
-            sys.exit(1)
+    logger.info("Pipeline execution completed successfully.")
 
-        # --- Execução Individual por Rodada ---
-        for round_id in selected_rounds:
-            logging.info(f"--- INICIANDO PROCESSAMENTO DA RODADA: {round_id} ---")
-            
-            # Criar uma configuração específica para a rodada a partir do dicionário da config principal
-            round_config_dict = deepcopy(main_config.config_data)
-            
-            # Define o diretório de saída completo para a rodada
-            round_output_dir = os.path.join(
-                main_config.get_output_dir(), 
-                main_config.get_experiment_name(), 
-                round_id
-            )
-            round_config_dict['output_dir'] = round_output_dir
-            
-            # Esvazia o nome do experimento para evitar que os estágios o adicionem novamente
-            round_config_dict['experiment_name'] = '' 
-            round_config_dict['selected_rounds'] = [round_id]
-
-            # Salvar a configuração da rodada em um arquivo temporário
-            temp_config_path = os.path.join('config', f"temp_config_{round_id}.yaml")
-            with open(temp_config_path, 'w') as f:
-                yaml.dump(round_config_dict, f)
-
-            # Criar uma instância de PipelineConfig para a rodada
-            round_config = PipelineConfig(temp_config_path)
-
-            # Inicializar o contexto do pipeline para a rodada
-            pipeline_context: Dict[str, Any] = {"config": round_config}
-
-            # Estágios a serem executados para cada rodada individualmente
-            single_round_stages = [
-                DataIngestionStage(round_config),
-                DescriptiveAnalysisStage(round_config),
-                ImpactAnalysisStage(round_config),
-                CorrelationAnalysisStage(round_config),
-                CausalityAnalysisStage(round_config),
-                PhaseComparisonStage(round_config),
-            ]
-
-            for stage in single_round_stages:
-                pipeline_context = stage.execute(pipeline_context)
-            
-            # Limpar o arquivo de configuração temporário
-            os.remove(temp_config_path)
-            
-            logging.info(f"--- PROCESSAMENTO DA RODADA {round_id} CONCLUÍDO ---")
-
-        # --- Consolidação e Análise Multi-Round ---
-        logging.info("--- INICIANDO ANÁLISE MULTI-ROUND CONSOLIDADA ---")
-        multi_round_context = {"config": main_config}
-        multi_round_stage = MultiRoundAnalysisStage(main_config)
-        multi_round_context = multi_round_stage.execute(multi_round_context)
-
-        # --- Geração do Relatório Final ---
-        logging.info("--- GERANDO RELATÓRIO FINAL CONSOLIDADO ---")
-        report_stage = ReportGenerationStage(
-            config=main_config,
-            descriptive_stats=pd.DataFrame(),
-            impact_results=pd.DataFrame(),
-            correlation_results=pd.DataFrame(),
-            causality_results=pd.DataFrame(),
-            phase_comparison_results=pd.DataFrame(),
-            multi_round_stage=multi_round_stage
-        )
-        report_stage.execute(multi_round_context)
-
-        logging.info("Pipeline multi-round executado com sucesso.")
-
-    except Exception as e:
-        logging.error(f"Ocorreu um erro fatal no pipeline: {e}", exc_info=True)
-        sys.exit(1)
 
 if __name__ == '__main__':
     main()

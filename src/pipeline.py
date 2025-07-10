@@ -1,18 +1,7 @@
 #!/usr/bin/env python3
 """
 Module: pipeline.py
-Description: Orchestration system for the complete multi-tenant time series analysis pipeline.
-
-This module implements classes and functions for the ordered execution of the entire analysis flow:
-1. Data Ingestion
-2. DataFrame Processing and Export
-3. Descriptive Analysis
-4. Correlation Analysis
-5. Causality Analysis
-6. Report Generation
-
-The Pipeline class is the central orchestration point, while PipelineStage serves as
-the base for the different pipeline stages.
+Description: Defines the main pipeline for data analysis, orchestrating various stages.
 """
 import os
 import sys

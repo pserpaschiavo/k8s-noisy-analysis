@@ -118,3 +118,25 @@ Este documento serve como um guia de alto nível para as fases de trabalho no pi
 - [x] **Analisar Resultados Consolidados:**
   - **Status:** Concluído.
   - **Descrição:** Interpretar os resultados agregados para extrair conclusões sobre a estabilidade e variabilidade do impacto dos "noisy neighbours".
+
+---
+
+### Fase 7: Ajuste Fino e Validação Final
+
+*Objetivo: Realizar os ajustes finais no pipeline, garantindo que todas as saídas (CSVs, plots) estejam consistentes, legíveis e prontas para publicação. Validar a execução de ponta a ponta após as últimas modificações.*
+
+- [ ] **Normalizar Nomes de Métricas para Visualização:**
+  - **Status:** Em andamento.
+  - **Descrição:** Implementar o uso de nomes de exibição amigáveis para métricas nos gráficos e relatórios, buscando a informação do arquivo de configuração para garantir clareza e profissionalismo nos artefatos gerados.
+
+- [ ] **Garantir Geração Correta do Arquivo Parquet:**
+  - **Status:** Em andamento.
+  - **Descrição:** Investigar e corrigir o problema que impede a criação do arquivo de dados processados (`.parquet`) mesmo quando ele não existe, garantindo que o pipeline possa ser executado do zero de forma confiável.
+
+- [x] **Validar Inclusão de Novas Métricas:**
+  - **Status:** Concluído.
+  - **Descrição:** Executar o pipeline completo e verificar se as métricas `network_total_bandwidth` e `disk_throughput_total` são processadas e aparecem em todos os artefatos (CSVs, plots) de todas as fases da análise.
+
+- [ ] **Ajustar Geração de Relatório Final:**
+  - **Status:** A fazer.
+  - **Descrição:** Garantir que todos os novos gráficos (descritivos com nomes normalizados, multi-round, etc.) sejam corretamente coletados e incluídos no relatório final em Markdown.

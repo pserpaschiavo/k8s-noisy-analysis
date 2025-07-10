@@ -1,52 +1,70 @@
-
+"""
+Module: pipeline_stage.py
+Description: Defines the base class for all pipeline stages.
+"""
 import logging
 import time
-from typing import Dict, Any
+from typing import Dict, Any, Optional
+import pandas as pd
 
 class PipelineStage:
-    """Base class for pipeline stages."""
+    """
+    Base class for all stages in the analysis pipeline.
+    It defines the common interface and execution logic.
+    """
     
-    def __init__(self, name: str, description: str):
+    def __init__(self, stage_name: str, description: str):
         """
         Initializes a pipeline stage.
         
         Args:
-            name: Name of the stage.
-            description: Description of the stage's purpose.
+            stage_name (str): The unique name of the stage.
+            description (str): A brief description of what the stage does.
         """
-        self.name = name
+        self.stage_name = stage_name
         self.description = description
-        self.logger = logging.getLogger(f"pipeline.{name}")
+        self.logger = logging.getLogger(f"pipeline.{stage_name}")
     
-    def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, data: Optional[pd.DataFrame], all_results: Dict[str, Any], round_id: str) -> Dict[str, Any]:
         """
-        Executes this pipeline stage.
+        Executes the main logic of the stage. This method acts as a wrapper.
         
         Args:
-            context: Dictionary with the current pipeline context.
-                     Contains data shared between stages.
+            data (Optional[pd.DataFrame]): The primary DataFrame passed from the previous stage.
+            all_results (Dict[str, Any]): A dictionary containing all results from previous stages.
+            round_id (str): The identifier for the current processing round.
         
         Returns:
-            Updated dictionary with the result of this stage.
+            Dict[str, Any]: A dictionary containing the results produced by this stage.
         """
-        self.logger.info(f"Starting stage: {self.name}")
+        self.logger.info(f"Starting stage: {self.stage_name} for round: {round_id}")
         start_time = time.time()
         
-        result = self._execute_implementation(context)
-        
+        try:
+            result = self._execute_implementation(data, all_results, round_id)
+        except Exception as e:
+            self.logger.error(f"Error executing stage {self.stage_name} for round {round_id}: {e}", exc_info=True)
+            # Return an empty dictionary or re-raise to halt the pipeline
+            return {}
+            
         elapsed_time = time.time() - start_time
-        self.logger.info(f"Stage {self.name} completed in {elapsed_time:.2f} seconds")
+        self.logger.info(f"Stage {self.stage_name} for round {round_id} completed in {elapsed_time:.2f} seconds")
         
         return result
     
-    def _execute_implementation(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def _execute_implementation(self, data: Optional[pd.DataFrame], all_results: Dict[str, Any], round_id: str) -> Dict[str, Any]:
         """
-        Specific implementation of the stage. Must be overridden by derived classes.
+        The specific implementation of the stage's logic. This method must be overridden by all subclasses.
         
         Args:
-            context: Current pipeline context.
+            data (Optional[pd.DataFrame]): The primary DataFrame from the previous stage.
+            all_results (Dict[str, Any]): All results from previous stages.
+            round_id (str): The current processing round's identifier.
+            
+        Raises:
+            NotImplementedError: If a subclass does not implement this method.
             
         Returns:
-            Updated context after stage execution.
+            Dict[str, Any]: The results of this stage's execution.
         """
-        raise NotImplementedError("Subclasses must implement this method.")
+        raise NotImplementedError("Subclasses must implement the _execute_implementation method.")

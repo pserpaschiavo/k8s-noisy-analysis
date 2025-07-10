@@ -1,10 +1,10 @@
 """
 Module: correlation_plots.py
-Description: Módulo para visualizações de correlações intra-fase.
+Description: Module for intra-phase correlation visualizations.
 
-Este módulo implementa funções para visualizar correlações entre tenants
-dentro de cada fase experimental, incluindo redes de correlação, heatmaps
-e análises de estabilidade entre rounds.
+This module implements functions to visualize correlations between tenants
+within each experimental phase, including correlation networks, heatmaps,
+and stability analyses across rounds.
 """
 
 import os

@@ -1,64 +1,86 @@
 """
 Module: data_export.py
-Description: Utility functions for saving and loading processed DataFrames (long/wide) in efficient formats.
+Description: Handles the export of DataFrames to various file formats.
 """
-import pandas as pd
 import os
-from typing import Optional
+import pandas as pd
+import logging
+from typing import Dict, Any, Optional
 
-def save_dataframe(df: pd.DataFrame, out_path: str, format: str = 'parquet'):
-    """Save DataFrame to disk in the specified format (parquet/csv)."""
-    os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    if format == 'parquet':
-        df.to_parquet(out_path, index=False)
-    elif format == 'csv':
-        df.to_csv(out_path, index=False)
-    else:
-        raise ValueError(f"Unsupported format: {format}")
+from .pipeline_stage import PipelineStage
+from .config import PipelineConfig
 
-def load_dataframe(in_path: str, format: Optional[str] = None) -> pd.DataFrame:
-    """Load DataFrame from disk in the specified format (parquet/csv)."""
-    if not format:
-        if in_path.endswith('.parquet'):
-            format = 'parquet'
-        elif in_path.endswith('.csv'):
-            format = 'csv'
+# Setup logging
+logger = logging.getLogger(__name__)
+
+def save_dataframe(df: pd.DataFrame, path: str, file_format: str = 'parquet'):
+    """
+    Saves a DataFrame to a specified path and format.
+    """
+    try:
+        if file_format == 'parquet':
+            df.to_parquet(path, index=False)
+        elif file_format == 'csv':
+            df.to_csv(path, index=False)
         else:
-            raise ValueError("Cannot infer file format from extension.")
-    if format == 'parquet':
-        return pd.read_parquet(in_path)
-    elif format == 'csv':
-        return pd.read_csv(in_path)
-    else:
-        raise ValueError(f"Unsupported format: {format}")
+            logger.error(f"Unsupported file format: {file_format}")
+            return
+        logger.info(f"DataFrame successfully saved to {path}")
+    except Exception as e:
+        logger.error(f"Error saving DataFrame to {path}: {e}")
 
-def export_segmented_long(
-    df: pd.DataFrame,
-    out_dir: str,
-    experiment_id: str,
-    round_id: str,
-    phase: str,
-    format: str = 'parquet'
-):
-    """Exports a filtered long subset to a directory organized by experiment/round/phase."""
-    subdir = os.path.join(out_dir, experiment_id, round_id, phase)
-    os.makedirs(subdir, exist_ok=True)
-    out_path = os.path.join(subdir, f"long.{format}")
-    save_dataframe(df, out_path, format=format)
-    return out_path
+def load_dataframe(path: str, file_format: str = 'parquet') -> Optional[pd.DataFrame]:
+    """
+    Loads a DataFrame from a specified path and format.
+    """
+    try:
+        if file_format == 'parquet':
+            df = pd.read_parquet(path)
+        elif file_format == 'csv':
+            df = pd.read_csv(path)
+        else:
+            logger.error(f"Unsupported file format: {file_format}")
+            return None
+        logger.info(f"DataFrame successfully loaded from {path}")
+        return df
+    except FileNotFoundError:
+        logger.error(f"File not found at {path}")
+        return None
+    except Exception as e:
+        logger.error(f"Error loading DataFrame from {path}: {e}")
+        return None
 
-def export_segmented_wide(
-    df: pd.DataFrame,
-    out_dir: str,
-    experiment_id: str,
-    round_id: str,
-    phase: str,
-    metric: str,
-    format: str = 'parquet'
-):
-    """Exports a wide subset to a directory organized by experiment/round/phase/metric."""
-    subdir = os.path.join(out_dir, experiment_id, round_id, phase, metric)
-    os.makedirs(subdir, exist_ok=True)
-    out_path = os.path.join(subdir, f"wide.{format}")
-    save_dataframe(df, out_path, format=format)
-    return out_path
+class DataExportStage(PipelineStage):
+    """
+    Pipeline stage for exporting the processed DataFrame.
+    """
+    def __init__(self, config: PipelineConfig):
+        super().__init__("data_export", "Export processed data")
+        self.config = config
+
+    def _execute_implementation(self, data: Optional[pd.DataFrame], all_results: Dict[str, Any], round_id: str) -> Dict[str, Any]:
+        """
+        Exports the processed DataFrame to a Parquet file.
+        This stage runs after data ingestion and processing for a specific round.
+        """
+        self.logger.info(f"Starting data export for round '{round_id}'...")
+        if data is None or data.empty:
+            self.logger.error("Input DataFrame 'data' is not available for export.")
+            return {}
+
+        # The data passed to this stage is already for a specific round
+        round_df = data
+        
+        # Define the output path for the round-specific Parquet file
+        output_dir = self.config.get_output_dir_for_round("data_export", round_id)
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Use a descriptive filename for the round's data
+        output_path = os.path.join(output_dir, f"processed_data_{round_id}.parquet")
+        
+        # Save the DataFrame
+        save_dataframe(round_df, output_path, file_format='parquet')
+        
+        self.logger.info(f"Data for round '{round_id}' exported successfully to {output_path}.")
+        
+        return {"processed_data_path": output_path}

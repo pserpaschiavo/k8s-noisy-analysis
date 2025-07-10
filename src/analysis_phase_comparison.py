@@ -25,47 +25,50 @@ from src.visualization.phase_comparison_plots import (
 def compute_phase_stats_comparison(df: pd.DataFrame, metric: str, round_id: str, tenants: Optional[List[str]] = None) -> pd.DataFrame:
     """
     Calculates comparative statistics for a metric across different phases for each tenant.
-    Recognizes the new 7-phase experimental structure.
+    This function is designed to work with the new 7-phase experimental structure.
     
     Args:
-        df: Long DataFrame with the data.
-        metric: Name of the metric for analysis.
-        round_id: ID of the round for analysis.
-        tenants: List of tenants to analyze. If None, uses all available.
+        df: A long-format DataFrame containing the data.
+        metric: The name of the metric to analyze.
+        round_id: The ID of the round to analyze.
+        tenants: A list of tenants to analyze. If None, all available tenants are used.
         
     Returns:
-        DataFrame with comparative statistics per tenant and phase.
+        A DataFrame with comparative statistics per tenant and phase.
     """
     # Filter data for the specified metric and round
     subset = df[(df['metric_name'] == metric) & (df['round_id'] == round_id)].copy()
     
-    # If tenants are not specified, use all available ones
+    # If tenants are not specified, use all available ones from the subset
     if tenants is None:
         tenants = subset['tenant_id'].unique().tolist()
     
-    assert tenants is not None
+    assert tenants is not None, "Tenant list cannot be None after initialization."
 
-    # A normalização agora é feita na ingestão. O código pode confiar nos nomes canônicos.
+    # Normalization is now handled during data ingestion. The code can rely on canonical phase names.
     available_phases = sorted(subset['experimental_phase'].unique())
-    baseline_phase_name = normalize_phase_name('Baseline') # Obtém o nome canônico da baseline
+    baseline_phase_name = normalize_phase_name('Baseline') # Get the canonical baseline name
 
     if baseline_phase_name not in available_phases:
-        logging.warning(f"Fase de baseline canônica '\'{baseline_phase_name}\'' não encontrada para a métrica {metric} no round {round_id}. A análise de variação de fase será pulada.")
+        logging.warning(
+            f"Canonical baseline phase '{baseline_phase_name}' not found for metric {metric} "
+            f"in round {round_id}. Phase variation analysis will be skipped."
+        )
         return pd.DataFrame()
 
-    # Estrutura para armazenar resultados
+    # Structure to store results
     results = []
     
     # For each combination of tenant and phase
     for tenant in tenants:
         tenant_data = {'tenant_id': tenant}
         
-        # Métricas base para o tenant (na baseline)
+        # Base metrics for the tenant (during the baseline phase)
         baseline_data = subset[(subset['tenant_id'] == tenant) & 
                               (subset['experimental_phase'] == baseline_phase_name)]
         
         if baseline_data.empty:
-            logging.warning(f"Sem dados para o tenant {tenant} na fase baseline.")
+            logging.warning(f"No data available for tenant {tenant} in the baseline phase. Skipping.")
             continue
 
         base_mean = baseline_data['metric_value'].mean()
@@ -74,7 +77,7 @@ def compute_phase_stats_comparison(df: pd.DataFrame, metric: str, round_id: str,
         tenant_data[f'{baseline_phase_name}_mean'] = base_mean
         tenant_data[f'{baseline_phase_name}_std'] = base_std
 
-        # Para cada fase de stress, compara com a baseline
+        # For each stress phase, compare its metrics against the baseline
         for phase in available_phases:
             phase_key_mean = f'{phase}_mean'
             phase_key_std = f'{phase}_std'
@@ -102,7 +105,7 @@ def compute_phase_stats_comparison(df: pd.DataFrame, metric: str, round_id: str,
                         change_pct = ((phase_mean - base_mean) / abs(base_mean)) * 100
                         tenant_data[phase_key_vs_baseline_pct] = change_pct
                     else:
-                        tenant_data[phase_key_vs_baseline_pct] = 0.0
+                        tenant_data[phase_key_vs_baseline_pct] = 0.0 if phase_mean == base_mean else float('inf')
                 else:
                     tenant_data[phase_key_vs_baseline_pct] = None
         
@@ -122,62 +125,66 @@ class PhaseComparisonStage(PipelineStage):
     def __init__(self, config: PipelineConfig):
         """Initializes the phase comparison stage."""
         super().__init__(
-            name="phase_comparison_analysis",
+            stage_name="phase_comparison_analysis",
             description="Performs comparative analysis between experimental phases."
         )
         self.config = config
 
-    def _execute_implementation(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def _execute_implementation(self, data: Optional[pd.DataFrame], all_results: Dict[str, Any], round_id: str) -> Dict[str, Any]:
         """
-        Executes the phase comparison analysis.
+        Executes the phase comparison analysis for a specific round.
+        
+        Args:
+            data: The DataFrame for the current round.
+            all_results: A dictionary containing all results from previous stages.
+            round_id: The identifier for the current processing round.
+            
+        Returns:
+            A dictionary containing the results of this stage.
         """
-        self.logger.info("Starting phase comparison analysis.")
-        rounds_data = context.get('rounds_data', {})
-        if not rounds_data:
-            self.logger.warning("No rounds data found in context. Skipping phase comparison.")
-            return context
+        self.logger.info(f"Starting phase comparison analysis for round: {round_id}")
+        
+        if data is None or data.empty:
+            self.logger.warning(f"No data for round {round_id}, skipping phase comparison.")
+            return {}
 
-        all_stats = []
+        output_dir = self.config.get_output_dir_for_round(self.stage_name, round_id)
+        metrics_to_analyze = data['metric_name'].unique()
+        
+        round_stats = []
 
-        for round_id, round_data in rounds_data.items():
-            self.logger.info(f"Processing round: {round_id}")
-            df = round_data.get('data')
-            if df is None or df.empty:
-                self.logger.warning(f"No data for round {round_id}, skipping.")
+        for metric in metrics_to_analyze:
+            self.logger.info(f"Analyzing metric '{metric}' for round '{round_id}'")
+
+            stats_df = compute_phase_stats_comparison(
+                data, 
+                metric=metric,
+                round_id=round_id
+            )
+            
+            if stats_df.empty:
+                self.logger.warning(f"No stats computed for metric {metric} in round {round_id}.")
                 continue
 
-            output_dir = self.config.get_output_dir_for_round("phase_comparison_analysis", round_id)
-            metrics_to_analyze = df['metric_name'].unique()
+            # The plotting function may need a more explicit output path
+            plot_phase_comparison(stats_df, metric, output_dir, round_id)
+            
+            stats_df['metric'] = metric
+            round_stats.append(stats_df)
 
-            for metric in metrics_to_analyze:
-                self.logger.info(f"Analyzing metric '{metric}' for round '{round_id}'")
+        if not round_stats:
+            self.logger.warning(f"No phase comparison statistics were generated for round {round_id}.")
+            return {}
 
-                stats_df = compute_phase_stats_comparison(
-                    df, 
-                    metric=metric,
-                    round_id=round_id
-                )
-                
-                if stats_df.empty:
-                    self.logger.warning(f"No stats computed for metric {metric} in round {round_id}.")
-                    continue
+        # Consolidate all stats for the current round into a single DataFrame
+        round_stats_df = pd.concat(round_stats, ignore_index=True)
+        
+        # Save the consolidated stats for the round
+        round_csv_path = os.path.join(output_dir, f'phase_comparison_stats_{round_id}.csv')
+        round_stats_df.to_csv(round_csv_path, index=False)
+        self.logger.info(f"Round-specific phase comparison stats saved to {round_csv_path}")
 
-                # A função de plot agora pode precisar de um caminho de saída mais explícito
-                plot_phase_comparison(stats_df, metric, output_dir, round_id)
-                
-                stats_df['round_id'] = round_id
-                all_stats.append(stats_df)
-
-        if all_stats:
-            final_stats_df = pd.concat(all_stats, ignore_index=True)
-            # Salvar o consolidado no diretório principal do experimento
-            exp_output_dir = self.config.get_output_dir()
-            final_csv_path = os.path.join(exp_output_dir, 'phase_comparison_all_rounds.csv')
-            final_stats_df.to_csv(final_csv_path, index=False)
-            self.logger.info(f"Aggregated phase comparison stats saved to {final_csv_path}")
-            context['phase_comparison_stats'] = final_stats_df
-            self.logger.info("Phase comparison analysis completed successfully.")
-        else:
-            self.logger.warning("No phase comparison statistics were generated.")
-
-        return context
+        self.logger.info(f"Phase comparison analysis for round {round_id} completed successfully.")
+        
+        # The result is a dictionary containing the DataFrame of stats for this round
+        return {'phase_comparison_stats': round_stats_df}

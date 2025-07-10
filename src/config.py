@@ -8,40 +8,40 @@ from typing import Dict, Any, Optional, List
 
 class PipelineConfig:
     """
-    Classe para carregar e acessar a configuração do pipeline a partir de um arquivo YAML.
+    Loads and provides access to the pipeline configuration from a YAML file.
     """
     def __init__(self, config_path: str):
         """
-        Inicializa o objeto de configuração.
+        Initializes the configuration object.
 
         Args:
-            config_path (str): O caminho para o arquivo de configuração YAML.
+            config_path (str): The path to the YAML configuration file.
         """
-        with open(config_path, 'r') as f:
+        with open(config_path, 'r', encoding='utf-8') as f:
             self.config_data: Dict[str, Any] = yaml.safe_load(f)
 
     def get(self, key: str, default: Any = None) -> Any:
         """
-        Obtém um valor da configuração.
+        Gets a value from the configuration.
         """
         return self.config_data.get(key, default)
 
     def get_base_output_dir(self) -> str:
         """
-        Retorna o diretório de saída base definido na configuração.
+        Returns the base output directory defined in the configuration.
         """
         return self.get('output_dir', 'outputs')
 
     def get_experiment_name(self) -> str:
         """
-        Retorna o nome do experimento.
+        Returns the name of the experiment.
         """
         return self.get('experiment_name', 'default_experiment')
 
     def get_output_dir(self, stage_name: Optional[str] = None) -> str:
         """
-        Cria e retorna o diretório de saída para um estágio específico do pipeline.
-        Se stage_name for None, retorna o diretório base do experimento.
+        Creates and returns the output directory for a specific pipeline stage.
+        If stage_name is None, returns the base directory for the experiment.
         """
         base_output_dir = self.get_base_output_dir()
         experiment_name = self.get_experiment_name()
@@ -56,54 +56,62 @@ class PipelineConfig:
 
     def get_output_dir_for_round(self, stage_name: str, round_id: str) -> str:
         """
-        Cria e retorna o diretório de saída para um estágio específico dentro de uma rodada.
-        A estrutura será: <base_output_dir>/<experiment_name>/<round_id>/<stage_name>
+        Creates and returns the output directory for a specific stage within a round.
+        The structure will be: <base_output_dir>/<experiment_name>/<round_id>/<stage_name>
         """
-        experiment_output_dir = self.get_output_dir() # Retorna a pasta base do experimento
+        experiment_output_dir = self.get_output_dir() # Returns the base experiment folder
         round_stage_dir = os.path.join(experiment_output_dir, round_id, stage_name)
         os.makedirs(round_stage_dir, exist_ok=True)
         return round_stage_dir
 
     def get_processed_data_path(self) -> Optional[str]:
         """
-        Retorna o caminho para o arquivo de dados processados (Parquet).
+        Builds and returns the full path for the processed data file (Parquet)
+        from the directory and filename defined in the configuration.
+        Returns None if the keys are not defined.
         """
-        return self.get('processed_data_path')
+        processed_dir = self.get('processed_data_dir')
+        parquet_name = self.get('output_parquet_name')
+        
+        if processed_dir and parquet_name:
+            return os.path.join(processed_dir, parquet_name)
+        
+        return None
 
     def get_data_root(self) -> str:
         """
-        Retorna o diretório raiz dos dados brutos do experimento.
+        Returns the root directory for the raw experiment data.
         """
         return self.get('data_root', 'exp_data')
 
     def get_selected_metrics(self) -> Optional[List[str]]:
         """
-        Retorna a lista de métricas selecionadas.
+        Returns the list of selected metrics.
         """
         return self.get('selected_metrics')
 
     def get_selected_tenants(self) -> Optional[List[str]]:
         """
-        Retorna a lista de tenants selecionados.
+        Returns the list of selected tenants.
         """
         return self.get('selected_tenants')
 
     def get_selected_rounds(self) -> Optional[List[str]]:
         """
-        Retorna a lista de rounds selecionados.
+        Returns the list of selected rounds.
         """
         return self.get('selected_rounds')
 
     def get_selected_phases(self) -> Optional[List[str]]:
         """
-        Retorna a lista de fases selecionadas.
+        Returns the list of selected phases.
         """
         return self.get('selected_phases')
 
     def get_metric_display_names(self) -> Dict[str, str]:
         """
-        Retorna o mapeamento de nomes de métricas para nomes de exibição amigáveis.
-        Retorna um dicionário vazio se não for encontrado.
+        Returns the mapping of metric names to friendly display names.
+        Returns an empty dictionary if not found.
         """
         visualization_config = self.get('visualization', {})
         return visualization_config.get('metric_display_names', {})

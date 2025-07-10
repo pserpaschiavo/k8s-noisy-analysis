@@ -5,34 +5,23 @@ Description: Descriptive statistics and plotting utilities for multi-tenant time
 import os
 import pandas as pd
 import numpy as np
-# Removendo configuração local do matplotlib
-import matplotlib
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
-import matplotlib.patches as mpatches
-import seaborn as sns
-from functools import lru_cache
 import logging
+from typing import Dict, Any, List, Optional
 
 from src.utils import configure_matplotlib
 from src.pipeline_stage import PipelineStage
 from src.config import PipelineConfig
-from typing import Dict, Any, List
 from src.visualization.descriptive_plots import (
     plot_metric_timeseries_multi_tenant_all_phases,
     plot_metric_barplot_by_phase,
     plot_metric_boxplot
 )
 
-# Configuração centralizada do matplotlib
+# Centralized matplotlib configuration
 configure_matplotlib()
 
 # Setup logging
 logger = logging.getLogger(__name__)
-
-# Use the style from config
-# plt.style.use('tableau-colorblind10') # Removed to use centralized config
-
 
 def compute_descriptive_stats(df, groupby_cols=None) -> pd.DataFrame:
     """
@@ -40,15 +29,16 @@ def compute_descriptive_stats(df, groupby_cols=None) -> pd.DataFrame:
     grouped by the specified columns.
     
     Args:
-        df: DataFrame com os dados a serem analisados
-        groupby_cols: List of columns to group by
+        df (pd.DataFrame): DataFrame with the data to be analyzed.
+        groupby_cols (List[str], optional): List of columns to group by. 
+                                            Defaults to ['tenant_id', 'metric_name', 'experimental_phase', 'round_id'].
         
     Returns:
-        DataFrame with descriptive statistics
+        pd.DataFrame: DataFrame with descriptive statistics.
     """
     
     if groupby_cols is None:
-        groupby_cols = ['tenant_id', 'metric_name', 'experimental_phase', 'round_id']
+        groupby_cols=['tenant_id', 'metric_name', 'experimental_phase', 'round_id']
     
     # More comprehensive statistics including skewness and kurtosis
     stats = df.groupby(groupby_cols)['metric_value'].agg([
@@ -57,7 +47,7 @@ def compute_descriptive_stats(df, groupby_cols=None) -> pd.DataFrame:
         ('kurtosis', lambda x: x.kurtosis())
     ]).reset_index()
     
-    logger.info(f"Computed descriptive stats for {len(groupby_cols)} groups with {len(stats)} rows")
+    logger.info(f"Computed descriptive stats for {len(stats)} rows, grouped by {len(groupby_cols)} columns.")
     return stats
 
 
@@ -69,124 +59,134 @@ class DescriptiveAnalysisStage(PipelineStage):
         super().__init__("descriptive_analysis", "Descriptive statistics and anomaly detection")
         self.config = config
 
-    def _execute_implementation(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def _execute_implementation(self, data: Optional[pd.DataFrame], all_results: Dict[str, Any], round_id: str) -> Dict[str, Any]:
         """
         Executes the descriptive analysis stage.
+        
+        Args:
+            data (pd.DataFrame): The input data for this stage.
+            all_results (Dict[str, Any]): Dictionary containing results from previous stages.
+            round_id (str): The ID of the current processing round.
+
+        Returns:
+            Dict[str, Any]: A dictionary containing the results of this stage.
         """
-        self.logger.info("Starting descriptive analysis...")
-        df = context.get('data')
-        if df is None or df.empty:
-            self.logger.error("DataFrame 'data' not available for descriptive analysis.")
-            return context
+        self.logger.info(f"Starting descriptive analysis for round '{round_id}'...")
+        if data is None or data.empty:
+            self.logger.error("Input DataFrame 'data' is not available for descriptive analysis.")
+            return {}
+
+        # Filter data for the current round
+        round_df = data[data['round_id'] == round_id].copy()
+        if round_df.empty:
+            self.logger.warning(f"No data found for round '{round_id}' in DescriptiveAnalysisStage. Skipping.")
+            return {}
 
         # Compute descriptive stats
-        descriptive_stats = compute_descriptive_stats(df)
-        context['descriptive_stats'] = descriptive_stats
+        descriptive_stats = compute_descriptive_stats(round_df)
         
         # Save to CSV
-        output_dir = self.config.get_output_dir("descriptive_analysis")
-        csv_path = os.path.join(output_dir, "descriptive_stats.csv")
+        output_dir = self.config.get_output_dir_for_round("descriptive_analysis", round_id)
+        csv_path = os.path.join(output_dir, f"descriptive_stats_{round_id}.csv")
         descriptive_stats.to_csv(csv_path, index=False)
-        self.logger.info(f"Descriptive stats saved to {csv_path}")
+        self.logger.info(f"Descriptive stats for round '{round_id}' saved to {csv_path}")
 
-        # --- Reintegrar a geração de plots ---
+        # --- Generate plots ---
+        self.logger.info(f"Generating descriptive plots for round '{round_id}'...")
         plot_paths = []
         
-        # Extrair round_id e métricas do contexto/config
-        if 'round_id' in df.columns and not df['round_id'].empty:
-            round_id = df['round_id'].unique()[0]
-        else:
-            self.logger.warning("Could not determine round_id from DataFrame. Skipping plot generation.")
-            return context
-
         selected_metrics = self.config.get_selected_metrics()
         if not selected_metrics:
-            self.logger.warning("No selected metrics found in config. Skipping plot generation.")
-            return context
+            selected_metrics = round_df['metric_name'].unique()
 
         for metric in selected_metrics:
-            self.logger.info(f"Generating descriptive plots for metric: {metric} in round: {round_id}")
-            
-            # Plot: Time series com todas as fases
-            path = plot_metric_timeseries_multi_tenant_all_phases(df, metric, round_id, output_dir)
-            if path:
-                plot_paths.append(path)
+            metric_df = round_df[round_df['metric_name'] == metric]
+            if metric_df.empty:
+                self.logger.warning(f"No data for metric '{metric}' in round '{round_id}'. Skipping plot generation.")
+                continue
 
-            # Plot: Barplot por fase
-            path = plot_metric_barplot_by_phase(df, metric, round_id, output_dir)
-            if path:
-                plot_paths.append(path)
+            try:
+                # Generate plots that require the full round data for a metric
+                self.logger.debug(f"Generating barplot for {metric} in round {round_id}")
+                path = plot_metric_barplot_by_phase(metric_df, metric, round_id, output_dir, self.config)
+                if path: plot_paths.append(path)
 
-            # Plot: Boxplot por fase
-            path = plot_metric_boxplot(df, metric, round_id, output_dir)
-            if path:
-                plot_paths.append(path)
-        
-        context['descriptive_plots'] = plot_paths
-        self.logger.info(f"Generated {len(plot_paths)} descriptive plots.")
-        # --- Fim da reintegração ---
+                self.logger.debug(f"Generating boxplot for {metric} in round {round_id}")
+                path = plot_metric_boxplot(metric_df, metric, round_id, output_dir, self.config)
+                if path: plot_paths.append(path)
 
-        self.logger.info("Descriptive analysis completed.")
-        return context
+                self.logger.debug(f"Generating multi-tenant timeseries for {metric} in round {round_id}")
+                path = plot_metric_timeseries_multi_tenant_all_phases(metric_df, metric, round_id, output_dir, self.config)
+                if path: plot_paths.append(path)
+
+            except Exception as e:
+                self.logger.error(f"Error generating plots for metric '{metric}' in round '{round_id}': {e}", exc_info=True)
+
+        self.logger.info(f"Generated {len(plot_paths)} descriptive plots for round '{round_id}'.")
+
+        return {
+            "descriptive_stats_path": csv_path,
+            "plot_paths": plot_paths
+        }
 
 
 def detect_anomalies(df: pd.DataFrame, metric: str, phase: str, round_id: str, window_size: int = 10, threshold: float = 2.0) -> pd.DataFrame:
     """
-    Detecta anomalias nas séries temporais usando rolling window e Z-score.
+    Detects anomalies in time series using rolling window and Z-score.
     
     Args:
-        df: DataFrame em formato long
-        metric: Nome da métrica para analisar
-        phase: Fase experimental para filtrar
-        round_id: ID do round para filtrar
-        window_size: Tamanho da janela para médias móveis
-        threshold: Limiar de Z-score para considerar um ponto como anomalia
+        df: DataFrame in long format
+        metric: Metric name to analyze
+        phase: Experimental phase to filter
+        round_id: Round ID to filter
+        window_size: Window size for rolling mean and std
+        threshold: Z-score threshold to consider a point as an anomaly
         
     Returns:
-        DataFrame com as anomalias detectadas
+        DataFrame with detected anomalies
     """
     subset = df[(df['metric_name'] == metric) & (df['experimental_phase'] == phase) & (df['round_id'] == round_id)].copy()
     if subset.empty:
-        logger.warning(f"Sem dados para detecção de anomalias: {metric}, {phase}, {round_id}")
+        logger.warning(f"No data for anomaly detection: {metric}, {phase}, {round_id}")
         return pd.DataFrame()
     
     if not pd.api.types.is_datetime64_any_dtype(subset['timestamp']):
         subset['timestamp'] = pd.to_datetime(subset['timestamp'], errors='coerce')
     
-    # Ordenar por timestamp para rolling window
+    # Sort by timestamp for rolling window
     subset = subset.sort_values(['tenant_id', 'timestamp'])
     
-    # Inicializar DataFrame para resultados
+    # Initialize results DataFrame
     anomalies = pd.DataFrame()
     
-    # Processar cada tenant separadamente
+    # Process each tenant separately
     for tenant, group in subset.groupby('tenant_id'):
-        # Calcular estatísticas rolling (média e desvio padrão)
+        # Calculate rolling statistics (mean and std)
         rolling_mean = group['metric_value'].rolling(window=window_size, center=True).mean()
         rolling_std = group['metric_value'].rolling(window=window_size, center=True).std()
         
-        # Substituir NaN no início/fim do rolling por médias globais
+        # Replace NaN at the beginning/end of rolling with global means
         rolling_mean = rolling_mean.fillna(group['metric_value'].mean())
         rolling_std = rolling_std.fillna(group['metric_value'].std())
-        rolling_std = rolling_std.replace(0, group['metric_value'].std())  # Evitar divisão por zero
+        rolling_std = rolling_std.replace(0, group['metric_value'].std())  # Avoid division by zero
         
-        # Calcular Z-score
+        # Calculate Z-score
         z_scores = np.abs((group['metric_value'] - rolling_mean) / rolling_std)
         
-        # Identificar anomalias
+        # Identify anomalies
         is_anomaly = z_scores > threshold
         
-        # Filtrar anomalias e adicionar ao DataFrame de resultados
+        # Filter anomalies and add to results DataFrame
         tenant_anomalies = group[is_anomaly].copy()
         if not tenant_anomalies.empty:
             tenant_anomalies['z_score'] = z_scores[is_anomaly]
             anomalies = pd.concat([anomalies, tenant_anomalies])
     
-    # Ordenar por gravidade (Z-score)
+    # Sort by severity (Z-score)
     if not anomalies.empty:
         anomalies = anomalies.sort_values('z_score', ascending=False)
-        logger.info(f"Detectadas {len(anomalies)} anomalias para {metric} em {phase}, {round_id}")
+        logger.info(f"Detected {len(anomalies)} anomalies for {metric} in {phase}, {round_id}")
     else:
-        logger.info(f"Nenhuma anomalia detectada para {metric} em {phase}, {round_id}")
+        logger.info(f"No anomalies detected for {metric} in {phase}, {round_id}")
     
     return anomalies

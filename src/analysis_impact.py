@@ -3,13 +3,14 @@ Module: src.analysis_impact
 Description: Provides analysis to quantify the impact of noisy neighbors on tenants.
 """
 import pandas as pd
+import numpy as np
 import logging
 import os
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 from scipy.stats import ttest_ind
 
 from src.pipeline_stage import PipelineStage
-from src.visualization.impact_plots import plot_impact_summary # Importa a função de plotagem
+from src.visualization.impact_plots import plot_impact_summary
 from src.config import PipelineConfig
 
 logger = logging.getLogger(__name__)
@@ -22,53 +23,57 @@ class ImpactAnalysisStage(PipelineStage):
         super().__init__("impact_analysis", "Impact analysis of noisy neighbors")
         self.config = config
 
-    def _execute_implementation(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def _execute_implementation(self, data: Optional[pd.DataFrame], all_results: Dict[str, Any], round_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Calculates the impact by comparing metrics from a baseline phase to other phases.
 
         Args:
-            context: The pipeline context, containing the long DataFrame.
+            data: The DataFrame with time series data for the current round.
+            all_results: A dictionary containing results from previous stages.
+            round_id: The identifier for the current execution round.
 
         Returns:
-            The updated context with impact analysis results.
+            A dictionary containing the impact analysis results and artifact paths.
         """
-        df_long = context.get('data')
-        if df_long is None or df_long.empty:
-            self.logger.error("DataFrame 'data' not available for impact analysis.")
-            return context
+        if data is None or data.empty:
+            self.logger.error("Input data is not available for impact analysis. Skipping stage.")
+            return {}
 
-        self.logger.info("Starting impact analysis...")
+        if not round_id:
+            self.logger.error("Round ID is not specified. Skipping stage.")
+            return {}
+
+        self.logger.info(f"Starting impact analysis for round: {round_id}...")
         
-        impact_results = self.calculate_impact(df_long)
+        impact_summary = self.calculate_impact(data)
         
-        if impact_results.empty:
+        if impact_summary.empty:
             self.logger.warning("Impact analysis resulted in an empty DataFrame. Skipping artifact generation.")
-            return context
+            return {}
             
-        context['impact_analysis_results'] = impact_results
-        
-        # --- Geração de Artefatos ---
-        output_dir = self.config.get_output_dir("impact_analysis")
+        # --- Artifact Generation ---
+        output_dir = self.config.get_output_dir_for_round(self.stage_name, round_id)
+        results: Dict[str, Any] = {"impact_metrics": impact_summary}
 
-        # 1. Exportar resultados para CSV
-        csv_path = os.path.join(output_dir, 'impact_analysis_results.csv')
+        # 1. Export results to CSV
+        csv_path = os.path.join(output_dir, 'impact_analysis_summary.csv')
         try:
-            impact_results.to_csv(csv_path, index=False)
+            impact_summary.to_csv(csv_path, index=False)
             self.logger.info(f"Impact analysis results saved to {csv_path}")
-            context['impact_analysis_csv_path'] = csv_path
+            results['csv_path'] = csv_path
         except Exception as e:
             self.logger.error(f"Failed to save impact analysis CSV: {e}")
 
-        # 2. Gerar plots de impacto
+        # 2. Generate impact plots
         try:
-            plot_paths = plot_impact_summary(impact_results, output_dir)
+            plot_paths = plot_impact_summary(impact_summary, output_dir)
             self.logger.info(f"Generated {len(plot_paths)} impact plots.")
-            context['impact_plot_paths'] = plot_paths
+            results['plot_paths'] = plot_paths
         except Exception as e:
             self.logger.error(f"Failed to generate impact plots: {e}")
         
         self.logger.info("Impact analysis completed successfully.")
-        return context
+        return results
 
     def calculate_impact(self, df: pd.DataFrame, baseline_phase_name: str = 'Baseline') -> pd.DataFrame:
         """
@@ -82,32 +87,51 @@ class ImpactAnalysisStage(PipelineStage):
         Returns:
             A DataFrame containing the impact analysis results, including percentage changes.
         """
-        # Encontrar o nome completo da fase de baseline (pode ter um prefixo numérico)
+        # Find the full name of the baseline phase (it might have a numeric prefix)
         baseline_phases = [p for p in df['experimental_phase'].unique() if baseline_phase_name in p]
         if not baseline_phases:
             self.logger.warning(f"No baseline phase found containing the name '{baseline_phase_name}'. Skipping impact analysis.")
             return pd.DataFrame()
         
-        # Assumir a primeira encontrada como a baseline
+        # Assume the first one found is the baseline
         actual_baseline_phase = baseline_phases[0]
         self.logger.info(f"Using '{actual_baseline_phase}' as the baseline for impact calculation.")
 
-        # Calcular a média das métricas por tenant na fase de baseline
+        # Calculate the mean of metrics per tenant in the baseline phase
         baseline_df = df[df['experimental_phase'] == actual_baseline_phase]
-        baseline_means = baseline_df.groupby(['tenant_id', 'metric_name'])['metric_value'].mean().reset_index()
-        baseline_means.rename(columns={'metric_value': 'baseline_mean'}, inplace=True)
+        baseline_stats = baseline_df.groupby(['tenant_id', 'metric_name'])['metric_value'].agg(['mean', 'std', 'count']).reset_index()
+        baseline_stats.rename(columns={'mean': 'baseline_mean', 'std': 'baseline_std', 'count': 'baseline_count'}, inplace=True)
 
-        # Calcular a média das métricas em todas as fases
-        phase_stats = df.groupby(['tenant_id', 'metric_name', 'experimental_phase'])['metric_value'].agg(['mean', 'std']).reset_index()
+        # Calculate the mean and std of metrics in all phases
+        phase_stats = df.groupby(['tenant_id', 'metric_name', 'experimental_phase'])['metric_value'].agg(['mean', 'std', 'count']).reset_index()
 
-        # Juntar os dados de baseline com as médias das fases
-        impact_df = pd.merge(phase_stats, baseline_means, on=['tenant_id', 'metric_name'])
+        # Join baseline data with phase averages
+        impact_df = pd.merge(phase_stats, baseline_stats, on=['tenant_id', 'metric_name'])
 
-        # Calcular a variação percentual e a volatilidade
+        # Calculate percentage change and volatility
         impact_df['percentage_change'] = ((impact_df['mean'] - impact_df['baseline_mean']) / impact_df['baseline_mean']) * 100
         impact_df.rename(columns={'std': 'volatility'}, inplace=True)
 
-        # Realizar teste de significância estatística (t-test)
+        # Calculate Cohen's d for effect size
+        n1 = impact_df['baseline_count']
+        n2 = impact_df['count']
+        s1 = impact_df['baseline_std']
+        s2 = impact_df['volatility'] # Renamed from 'std'
+
+        # Pooled standard deviation, handle potential division by zero
+        s_pooled_numerator = (n1 - 1) * s1**2 + (n2 - 1) * s2**2
+        s_pooled_denominator = n1 + n2 - 2
+        
+        # Avoid division by zero or invalid values
+        with np.errstate(divide='ignore', invalid='ignore'):
+            s_pooled = np.sqrt(s_pooled_numerator / s_pooled_denominator)
+            impact_df['cohen_d'] = (impact_df['mean'] - impact_df['baseline_mean']) / s_pooled
+
+        # Replace inf/-inf with NaN and then fill NaN with 0
+        impact_df.replace([np.inf, -np.inf], np.nan, inplace=True)
+        impact_df['cohen_d'].fillna(0, inplace=True)
+
+        # Perform statistical significance test (t-test)
         p_values = []
         for _, row in impact_df.iterrows():
             baseline_data = df[
@@ -129,22 +153,22 @@ class ImpactAnalysisStage(PipelineStage):
                 p_values.append(None)
         
         impact_df['p_value'] = p_values
-        impact_df['is_significant'] = impact_df['p_value'] < 0.05 # Nível de significância de 5%
+        impact_df['is_significant'] = impact_df['p_value'] < 0.05 # 5% significance level
 
-        # Remover a própria fase de baseline dos resultados para focar no impacto
+        # Remove the baseline phase itself from the results to focus on impact
         impact_df = impact_df[impact_df['experimental_phase'] != actual_baseline_phase]
 
         self.logger.info(f"Calculated impact for {len(impact_df)} combinations of tenant/metric/phase.")
 
-        # Garantir que a coluna tenant_id está presente
+        # Ensure the tenant_id column is present
         if 'tenant_id' not in impact_df.columns:
             self.logger.error("Column 'tenant_id' is missing from the impact analysis DataFrame.")
-            # Tentar recuperar o tenant_id se houver apenas um no contexto
+            # Try to recover tenant_id if there is only one in the context
             if len(df['tenant_id'].unique()) == 1:
                 impact_df['tenant_id'] = df['tenant_id'].unique()[0]
                 self.logger.info("Recovered single tenant_id for impact analysis.")
             else:
-                 return pd.DataFrame() # Retorna DF vazio se não for possível resolver
+                 return pd.DataFrame() # Return empty DF if it cannot be resolved
 
         return impact_df
 

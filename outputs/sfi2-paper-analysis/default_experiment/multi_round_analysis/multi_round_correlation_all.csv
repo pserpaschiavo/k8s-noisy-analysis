@@ -1,0 +1,214 @@
+metric_name,phase,tenant1,tenant2,mean_correlation,std_correlation
+cpu_usage,1 - Baseline,tenant-cpu,tenant-dsk,-0.2686189746947156,0.02678378346246311
+cpu_usage,1 - Baseline,tenant-cpu,tenant-mem,-0.2351337347794253,0.028025038452208533
+cpu_usage,1 - Baseline,tenant-cpu,tenant-ntk,0.3530412802420955,0.312261607374359
+cpu_usage,1 - Baseline,tenant-dsk,tenant-mem,0.8656352652770499,0.019288731739140513
+cpu_usage,1 - Baseline,tenant-dsk,tenant-ntk,0.048144356835499356,0.5554254767511406
+cpu_usage,1 - Baseline,tenant-mem,tenant-ntk,0.0845074533206084,0.5566473308344492
+cpu_usage,2 - CPU Noise,tenant-cpu,tenant-dsk,0.1090281344022593,0.13471934848171405
+cpu_usage,2 - CPU Noise,tenant-cpu,tenant-mem,0.14448722055293864,0.21226336462888684
+cpu_usage,2 - CPU Noise,tenant-cpu,tenant-nsy,0.024896217149227417,0.0809769945415229
+cpu_usage,2 - CPU Noise,tenant-cpu,tenant-ntk,0.12950379287830202,0.1473672487257547
+cpu_usage,2 - CPU Noise,tenant-dsk,tenant-mem,0.32383968990218726,0.009832922586948503
+cpu_usage,2 - CPU Noise,tenant-dsk,tenant-nsy,0.10791764252159756,0.10062959599467407
+cpu_usage,2 - CPU Noise,tenant-dsk,tenant-ntk,0.2525401870216373,0.05747607206672245
+cpu_usage,2 - CPU Noise,tenant-mem,tenant-nsy,0.15646365676314944,0.10366019657508427
+cpu_usage,2 - CPU Noise,tenant-mem,tenant-ntk,0.3098082121465972,0.0273075586237349
+cpu_usage,2 - CPU Noise,tenant-nsy,tenant-ntk,0.046909335980031275,0.09761651523747605
+cpu_usage,3 - Memory Noise,tenant-cpu,tenant-dsk,0.17625019028987374,0.12923536437254435
+cpu_usage,3 - Memory Noise,tenant-cpu,tenant-mem,0.22086141174357019,0.14812494144439733
+cpu_usage,3 - Memory Noise,tenant-cpu,tenant-nsy,0.17469743780512384,0.16585048214026912
+cpu_usage,3 - Memory Noise,tenant-cpu,tenant-ntk,0.18720430849710143,0.08975878399009683
+cpu_usage,3 - Memory Noise,tenant-dsk,tenant-mem,0.31851411115182926,0.021467454025353567
+cpu_usage,3 - Memory Noise,tenant-dsk,tenant-nsy,0.2224174421815062,0.06436761332811755
+cpu_usage,3 - Memory Noise,tenant-dsk,tenant-ntk,0.29307241094326214,0.14458975138125763
+cpu_usage,3 - Memory Noise,tenant-mem,tenant-nsy,0.19929236046360474,0.0605357245991321
+cpu_usage,3 - Memory Noise,tenant-mem,tenant-ntk,0.4355985435071441,0.04662917710413539
+cpu_usage,3 - Memory Noise,tenant-nsy,tenant-ntk,0.23401101841703098,0.12869953696114117
+cpu_usage,4 - Network Noise,tenant-cpu,tenant-dsk,0.2102177366980635,0.045065456028505174
+cpu_usage,4 - Network Noise,tenant-cpu,tenant-mem,0.24563077678520293,0.01553879428426209
+cpu_usage,4 - Network Noise,tenant-cpu,tenant-nsy,0.22973519124560557,0.05774889718947065
+cpu_usage,4 - Network Noise,tenant-cpu,tenant-ntk,0.14265310332946227,0.0902197474825305
+cpu_usage,4 - Network Noise,tenant-dsk,tenant-mem,0.4139744260453395,0.19505094386517838
+cpu_usage,4 - Network Noise,tenant-dsk,tenant-nsy,0.4387219973142094,0.03449314396515187
+cpu_usage,4 - Network Noise,tenant-dsk,tenant-ntk,0.2985651044261172,0.09650551357509608
+cpu_usage,4 - Network Noise,tenant-mem,tenant-nsy,0.5132510847550441,0.03700989913450679
+cpu_usage,4 - Network Noise,tenant-mem,tenant-ntk,0.32471352021390354,0.11973264560335589
+cpu_usage,4 - Network Noise,tenant-nsy,tenant-ntk,0.31392914073534284,0.022968718257361163
+cpu_usage,5 - Disk Noise,tenant-cpu,tenant-dsk,0.16388670693460297,0.0876904376165137
+cpu_usage,5 - Disk Noise,tenant-cpu,tenant-mem,0.3042609517337283,0.046983671963193294
+cpu_usage,5 - Disk Noise,tenant-cpu,tenant-nsy,0.3792977720218094,0.030252616264809407
+cpu_usage,5 - Disk Noise,tenant-cpu,tenant-ntk,0.19323732853001419,0.0690112288622621
+cpu_usage,5 - Disk Noise,tenant-dsk,tenant-mem,0.4203812034578554,0.06486293996440144
+cpu_usage,5 - Disk Noise,tenant-dsk,tenant-nsy,0.4043314394494528,0.15497024450255462
+cpu_usage,5 - Disk Noise,tenant-dsk,tenant-ntk,0.40443306247920147,0.15422713982263803
+cpu_usage,5 - Disk Noise,tenant-mem,tenant-nsy,0.49597622113477846,0.049050789125199556
+cpu_usage,5 - Disk Noise,tenant-mem,tenant-ntk,0.506063479845718,0.037650323768871986
+cpu_usage,5 - Disk Noise,tenant-nsy,tenant-ntk,0.4342394794185971,0.08269102028457992
+cpu_usage,6 - Combined Noise,tenant-cpu,tenant-dsk,0.16054324940499407,0.02337090308376473
+cpu_usage,6 - Combined Noise,tenant-cpu,tenant-mem,0.2814008105735412,0.027927097416525867
+cpu_usage,6 - Combined Noise,tenant-cpu,tenant-nsy,0.168461550671844,0.014152130535455448
+cpu_usage,6 - Combined Noise,tenant-cpu,tenant-ntk,0.2222575433182797,0.07496015528017887
+cpu_usage,6 - Combined Noise,tenant-dsk,tenant-mem,0.4407628569571365,0.04999877563568376
+cpu_usage,6 - Combined Noise,tenant-dsk,tenant-nsy,0.5015784960070654,0.01587020517371504
+cpu_usage,6 - Combined Noise,tenant-dsk,tenant-ntk,0.4252814939494837,0.05890103425320224
+cpu_usage,6 - Combined Noise,tenant-mem,tenant-nsy,0.5024782578940843,0.041577373211628445
+cpu_usage,6 - Combined Noise,tenant-mem,tenant-ntk,0.3852484909257186,0.047225019897634384
+cpu_usage,6 - Combined Noise,tenant-nsy,tenant-ntk,0.38592817556062725,0.02273923833747543
+cpu_usage,7 - Recovery,tenant-cpu,tenant-dsk,0.14548977009757072,0.08238289496966268
+cpu_usage,7 - Recovery,tenant-cpu,tenant-mem,0.009894049528201726,0.13282360413536762
+cpu_usage,7 - Recovery,tenant-cpu,tenant-nsy,0.05948374208547998,0.09986367097313557
+cpu_usage,7 - Recovery,tenant-cpu,tenant-ntk,0.11102164945561506,0.014409859744303711
+cpu_usage,7 - Recovery,tenant-dsk,tenant-mem,0.3645918090347924,0.08992751203575486
+cpu_usage,7 - Recovery,tenant-dsk,tenant-nsy,0.03864547740338366,0.028487302109494753
+cpu_usage,7 - Recovery,tenant-dsk,tenant-ntk,0.2790931387806465,0.0557181697939342
+cpu_usage,7 - Recovery,tenant-mem,tenant-nsy,0.12332134459480538,0.07804977658768392
+cpu_usage,7 - Recovery,tenant-mem,tenant-ntk,0.2144163704297084,0.037775999058645586
+cpu_usage,7 - Recovery,tenant-nsy,tenant-ntk,-0.10822220346192557,0.18037841100914526
+disk_throughput_total,1 - Baseline,tenant-cpu,tenant-dsk,0.44947188467248983,0.4661028038414662
+disk_throughput_total,1 - Baseline,tenant-cpu,tenant-ntk,0.9898052490484515,
+disk_throughput_total,1 - Baseline,tenant-dsk,tenant-ntk,0.7404505399986562,0.04536371689594152
+disk_throughput_total,2 - CPU Noise,tenant-dsk,tenant-mem,-0.020301763598323915,
+disk_throughput_total,2 - CPU Noise,tenant-dsk,tenant-nsy,0.03174154536253637,0.026858325446472243
+disk_throughput_total,3 - Memory Noise,tenant-dsk,tenant-mem,-0.006917388443724182,0.08216656918036903
+disk_throughput_total,3 - Memory Noise,tenant-dsk,tenant-nsy,0.060811983380650456,
+disk_throughput_total,4 - Network Noise,tenant-dsk,tenant-mem,0.011030612504212544,0.014641544338898993
+disk_throughput_total,4 - Network Noise,tenant-dsk,tenant-nsy,0.05940644349311647,0.013619655732575632
+disk_throughput_total,4 - Network Noise,tenant-mem,tenant-nsy,-0.04036102151684257,0.0013625981737294512
+disk_throughput_total,5 - Disk Noise,tenant-dsk,tenant-nsy,0.09211199252460323,0.10234285306634666
+disk_throughput_total,6 - Combined Noise,tenant-dsk,tenant-nsy,0.3188474321740416,0.06288265287119864
+disk_throughput_total,7 - Recovery,tenant-dsk,tenant-mem,-0.09143974786198894,0.13042413292221636
+disk_throughput_total,7 - Recovery,tenant-dsk,tenant-nsy,0.12952705507530005,0.28300865090754634
+disk_throughput_total,7 - Recovery,tenant-mem,tenant-nsy,-0.08101358054342424,0.0156959804746658
+memory_usage,1 - Baseline,tenant-cpu,tenant-dsk,-0.3988719345749007,0.14658722683761305
+memory_usage,1 - Baseline,tenant-cpu,tenant-mem,-0.2404645733425063,0.31916029487720077
+memory_usage,1 - Baseline,tenant-cpu,tenant-ntk,-0.6882363605456181,0.16502670441719025
+memory_usage,1 - Baseline,tenant-dsk,tenant-mem,0.8055571975290458,0.16343441754577187
+memory_usage,1 - Baseline,tenant-dsk,tenant-ntk,0.7562078435305918,0.14545092976826596
+memory_usage,1 - Baseline,tenant-mem,tenant-ntk,0.659386613418551,0.1994693462599039
+memory_usage,2 - CPU Noise,tenant-cpu,tenant-dsk,0.0318129345276476,0.08584197508260542
+memory_usage,2 - CPU Noise,tenant-cpu,tenant-mem,-0.010221724491060591,0.06482895521448433
+memory_usage,2 - CPU Noise,tenant-cpu,tenant-nsy,0.03137208332833124,0.020938328735359727
+memory_usage,2 - CPU Noise,tenant-cpu,tenant-ntk,0.008329604512113389,0.05039210623790812
+memory_usage,2 - CPU Noise,tenant-dsk,tenant-mem,-0.06670595567761135,0.07721922321024319
+memory_usage,2 - CPU Noise,tenant-dsk,tenant-nsy,0.06431771914866558,0.020582847075002283
+memory_usage,2 - CPU Noise,tenant-dsk,tenant-ntk,-0.024958624957947723,0.1293645011195621
+memory_usage,2 - CPU Noise,tenant-mem,tenant-nsy,-0.007391756229494016,0.09694840677174608
+memory_usage,2 - CPU Noise,tenant-mem,tenant-ntk,0.23399550531309976,0.07688441330994049
+memory_usage,2 - CPU Noise,tenant-nsy,tenant-ntk,0.045366244044936145,0.03225710778651114
+memory_usage,3 - Memory Noise,tenant-cpu,tenant-dsk,0.14072274557785464,0.032687480590492285
+memory_usage,3 - Memory Noise,tenant-cpu,tenant-mem,-0.013890779383780458,0.10633200541848466
+memory_usage,3 - Memory Noise,tenant-cpu,tenant-nsy,0.07165255685076906,0.14642363787691218
+memory_usage,3 - Memory Noise,tenant-cpu,tenant-ntk,-0.05748912862045407,0.09631263762817746
+memory_usage,3 - Memory Noise,tenant-dsk,tenant-mem,0.05684424939393881,0.2109025806182696
+memory_usage,3 - Memory Noise,tenant-dsk,tenant-nsy,-0.019537978420467988,0.16266774556058655
+memory_usage,3 - Memory Noise,tenant-dsk,tenant-ntk,0.09404954793959304,0.03484307832366922
+memory_usage,3 - Memory Noise,tenant-mem,tenant-nsy,-0.06311609325210625,0.13110935944788363
+memory_usage,3 - Memory Noise,tenant-mem,tenant-ntk,-0.004527604642881313,0.11433401239727951
+memory_usage,3 - Memory Noise,tenant-nsy,tenant-ntk,0.01184237521647187,0.14127952460571305
+memory_usage,4 - Network Noise,tenant-cpu,tenant-dsk,0.0477088837151034,0.09121731016230103
+memory_usage,4 - Network Noise,tenant-cpu,tenant-mem,0.0005158457110358353,0.0923794477196819
+memory_usage,4 - Network Noise,tenant-cpu,tenant-nsy,-0.009294500045015938,0.05011680926025948
+memory_usage,4 - Network Noise,tenant-cpu,tenant-ntk,-0.001960200842638681,0.11393837826073852
+memory_usage,4 - Network Noise,tenant-dsk,tenant-mem,-0.07047892966652812,0.06246288679983516
+memory_usage,4 - Network Noise,tenant-dsk,tenant-nsy,0.052992082295248016,0.07319561336035117
+memory_usage,4 - Network Noise,tenant-dsk,tenant-ntk,0.06812424900863971,0.07810978908586735
+memory_usage,4 - Network Noise,tenant-mem,tenant-nsy,-0.10449020097285532,0.29022721599593093
+memory_usage,4 - Network Noise,tenant-mem,tenant-ntk,-0.03619403090950269,0.0823554017993622
+memory_usage,4 - Network Noise,tenant-nsy,tenant-ntk,-0.21701405287641742,0.4781644829965601
+memory_usage,5 - Disk Noise,tenant-cpu,tenant-dsk,-0.06010285837332488,0.060081813134172365
+memory_usage,5 - Disk Noise,tenant-cpu,tenant-mem,0.020387563468678375,0.049608699963733106
+memory_usage,5 - Disk Noise,tenant-cpu,tenant-nsy,-0.004724120836218597,0.010660376827784496
+memory_usage,5 - Disk Noise,tenant-cpu,tenant-ntk,0.07610678463517455,0.04607865903728984
+memory_usage,5 - Disk Noise,tenant-dsk,tenant-mem,-0.0829006456714949,0.044740711259276075
+memory_usage,5 - Disk Noise,tenant-dsk,tenant-nsy,0.07599322839166149,0.045075876085086064
+memory_usage,5 - Disk Noise,tenant-dsk,tenant-ntk,-0.04155514144820773,0.24382961191864694
+memory_usage,5 - Disk Noise,tenant-mem,tenant-nsy,0.20420179559116644,0.05681197296886408
+memory_usage,5 - Disk Noise,tenant-mem,tenant-ntk,0.04178962397352207,0.28007494308027625
+memory_usage,5 - Disk Noise,tenant-nsy,tenant-ntk,0.21376439470017458,0.21016185003405466
+memory_usage,6 - Combined Noise,tenant-cpu,tenant-dsk,-0.05072104976999481,0.05974223360701067
+memory_usage,6 - Combined Noise,tenant-cpu,tenant-mem,-0.03525133588601673,0.18326017609991832
+memory_usage,6 - Combined Noise,tenant-cpu,tenant-nsy,0.060286458567030445,0.16505409049614742
+memory_usage,6 - Combined Noise,tenant-cpu,tenant-ntk,-0.042712677034525255,0.08098676629288505
+memory_usage,6 - Combined Noise,tenant-dsk,tenant-mem,-0.02759788619824437,0.15242518643316716
+memory_usage,6 - Combined Noise,tenant-dsk,tenant-nsy,0.03983917210688545,0.11012804218870254
+memory_usage,6 - Combined Noise,tenant-dsk,tenant-ntk,0.005996492562020671,0.047640541054035646
+memory_usage,6 - Combined Noise,tenant-mem,tenant-nsy,-0.14537989735569992,0.3008099748567104
+memory_usage,6 - Combined Noise,tenant-mem,tenant-ntk,-0.03516694882335254,0.10582373155913526
+memory_usage,6 - Combined Noise,tenant-nsy,tenant-ntk,0.09334508379854091,0.13788157979030619
+memory_usage,7 - Recovery,tenant-cpu,tenant-dsk,-0.027966345563333994,0.011140925645433999
+memory_usage,7 - Recovery,tenant-cpu,tenant-mem,-0.13889722960461245,0.039556302944023736
+memory_usage,7 - Recovery,tenant-cpu,tenant-nsy,-0.010371751563655144,0.026414597284098593
+memory_usage,7 - Recovery,tenant-cpu,tenant-ntk,-0.1636034969492888,0.05832887211698882
+memory_usage,7 - Recovery,tenant-dsk,tenant-mem,-0.005018032316404954,0.13873729577392083
+memory_usage,7 - Recovery,tenant-dsk,tenant-nsy,0.06189104763885076,0.1600372568845932
+memory_usage,7 - Recovery,tenant-dsk,tenant-ntk,-0.15447385241834463,0.09049003757870469
+memory_usage,7 - Recovery,tenant-mem,tenant-nsy,-0.009586723215629542,0.26556766182353314
+memory_usage,7 - Recovery,tenant-mem,tenant-ntk,0.2303198961650154,0.4248342794310593
+memory_usage,7 - Recovery,tenant-nsy,tenant-ntk,0.07580909589912456,0.10241715962008457
+network_total_bandwidth,1 - Baseline,tenant-cpu,tenant-dsk,0.25262631308471856,0.25397092572969543
+network_total_bandwidth,1 - Baseline,tenant-cpu,tenant-mem,0.19325569474576518,0.37554330390737684
+network_total_bandwidth,1 - Baseline,tenant-cpu,tenant-ntk,0.2717338108247111,0.34990297177475516
+network_total_bandwidth,1 - Baseline,tenant-dsk,tenant-mem,0.7267994727145178,0.07187790366679134
+network_total_bandwidth,1 - Baseline,tenant-dsk,tenant-ntk,0.745379436154074,0.08858039343124019
+network_total_bandwidth,1 - Baseline,tenant-mem,tenant-ntk,0.8088579471267568,0.03760309338443449
+network_total_bandwidth,2 - CPU Noise,tenant-cpu,tenant-dsk,0.11347307511056454,0.06683476288006909
+network_total_bandwidth,2 - CPU Noise,tenant-cpu,tenant-mem,0.20636526295094137,0.02453181191549513
+network_total_bandwidth,2 - CPU Noise,tenant-cpu,tenant-nsy,0.07016983666582713,0.062194105549830715
+network_total_bandwidth,2 - CPU Noise,tenant-cpu,tenant-ntk,0.26346753118292027,0.07483989844513018
+network_total_bandwidth,2 - CPU Noise,tenant-dsk,tenant-mem,0.20253100980654085,0.13494354817247686
+network_total_bandwidth,2 - CPU Noise,tenant-dsk,tenant-nsy,0.10662892155542247,0.08734068980520614
+network_total_bandwidth,2 - CPU Noise,tenant-dsk,tenant-ntk,0.24910729384404584,0.010477778787268393
+network_total_bandwidth,2 - CPU Noise,tenant-mem,tenant-nsy,0.15785836378684762,0.05642105149380512
+network_total_bandwidth,2 - CPU Noise,tenant-mem,tenant-ntk,0.27394133356238864,0.1260164565258707
+network_total_bandwidth,2 - CPU Noise,tenant-nsy,tenant-ntk,0.15714583528285395,0.1069738814135551
+network_total_bandwidth,3 - Memory Noise,tenant-cpu,tenant-dsk,0.15247314132874024,0.039164256847070734
+network_total_bandwidth,3 - Memory Noise,tenant-cpu,tenant-mem,0.13830153953482544,0.03192094699080601
+network_total_bandwidth,3 - Memory Noise,tenant-cpu,tenant-nsy,0.10828261403650165,0.14226819757267198
+network_total_bandwidth,3 - Memory Noise,tenant-cpu,tenant-ntk,0.19999618451302,0.0843678194194118
+network_total_bandwidth,3 - Memory Noise,tenant-dsk,tenant-mem,0.15973046069529362,0.060559617459918585
+network_total_bandwidth,3 - Memory Noise,tenant-dsk,tenant-nsy,0.1506478196866148,0.03100911061563591
+network_total_bandwidth,3 - Memory Noise,tenant-dsk,tenant-ntk,0.2118303349831964,0.02346183260988333
+network_total_bandwidth,3 - Memory Noise,tenant-mem,tenant-nsy,0.08481620775535649,0.04171345417632917
+network_total_bandwidth,3 - Memory Noise,tenant-mem,tenant-ntk,0.24406567795862388,0.050319829972414715
+network_total_bandwidth,3 - Memory Noise,tenant-nsy,tenant-ntk,0.2002053000873111,0.09462903291298651
+network_total_bandwidth,4 - Network Noise,tenant-cpu,tenant-dsk,0.08475195533548467,0.0887133008660316
+network_total_bandwidth,4 - Network Noise,tenant-cpu,tenant-mem,0.16751660147910438,0.05993586440002926
+network_total_bandwidth,4 - Network Noise,tenant-cpu,tenant-nsy,0.03465189672862213,0.051886003467807085
+network_total_bandwidth,4 - Network Noise,tenant-cpu,tenant-ntk,0.2984626373927879,0.09940839607442356
+network_total_bandwidth,4 - Network Noise,tenant-dsk,tenant-mem,0.16028853529547737,0.047673731799781724
+network_total_bandwidth,4 - Network Noise,tenant-dsk,tenant-nsy,0.07437301667075608,0.03685635474353367
+network_total_bandwidth,4 - Network Noise,tenant-dsk,tenant-ntk,0.22390740658136246,0.08088610035518475
+network_total_bandwidth,4 - Network Noise,tenant-mem,tenant-nsy,0.06314401537446977,0.044101453094769934
+network_total_bandwidth,4 - Network Noise,tenant-mem,tenant-ntk,0.25523758970432714,0.07775312585992851
+network_total_bandwidth,4 - Network Noise,tenant-nsy,tenant-ntk,0.12356944542840957,0.052120617588865284
+network_total_bandwidth,5 - Disk Noise,tenant-cpu,tenant-dsk,0.19875257066153676,0.12955056201286363
+network_total_bandwidth,5 - Disk Noise,tenant-cpu,tenant-mem,0.2906662915957327,0.046083418541111525
+network_total_bandwidth,5 - Disk Noise,tenant-cpu,tenant-nsy,0.09748456119746607,0.08061523213533854
+network_total_bandwidth,5 - Disk Noise,tenant-cpu,tenant-ntk,0.26263140337328517,0.07255208402310978
+network_total_bandwidth,5 - Disk Noise,tenant-dsk,tenant-mem,0.22557301529595267,0.1391059989704654
+network_total_bandwidth,5 - Disk Noise,tenant-dsk,tenant-nsy,0.11995829711135464,0.04636878786913449
+network_total_bandwidth,5 - Disk Noise,tenant-dsk,tenant-ntk,0.2216979026018503,0.04863067745982034
+network_total_bandwidth,5 - Disk Noise,tenant-mem,tenant-nsy,0.15794250640977753,0.0809179861264835
+network_total_bandwidth,5 - Disk Noise,tenant-mem,tenant-ntk,0.25273375777797574,0.0633031513091801
+network_total_bandwidth,5 - Disk Noise,tenant-nsy,tenant-ntk,0.2486897919698322,0.047230340220432356
+network_total_bandwidth,6 - Combined Noise,tenant-cpu,tenant-dsk,0.19988110538702097,0.05481564179848639
+network_total_bandwidth,6 - Combined Noise,tenant-cpu,tenant-mem,0.15811793017621573,0.05387262480871173
+network_total_bandwidth,6 - Combined Noise,tenant-cpu,tenant-nsy,0.15464567763062878,0.04870277828543066
+network_total_bandwidth,6 - Combined Noise,tenant-cpu,tenant-ntk,0.2744890672506923,0.037963916979674744
+network_total_bandwidth,6 - Combined Noise,tenant-dsk,tenant-mem,0.15169715013603532,0.1036930006967951
+network_total_bandwidth,6 - Combined Noise,tenant-dsk,tenant-nsy,0.27605840168441564,0.05878966276828739
+network_total_bandwidth,6 - Combined Noise,tenant-dsk,tenant-ntk,0.3036717393441666,0.12136533325013195
+network_total_bandwidth,6 - Combined Noise,tenant-mem,tenant-nsy,0.19265322496474477,0.0923371399432427
+network_total_bandwidth,6 - Combined Noise,tenant-mem,tenant-ntk,0.2245243955341367,0.0583570889774069
+network_total_bandwidth,6 - Combined Noise,tenant-nsy,tenant-ntk,0.2741695822828321,0.09594752683490534
+network_total_bandwidth,7 - Recovery,tenant-cpu,tenant-dsk,0.18942255033456634,0.11383500456803472
+network_total_bandwidth,7 - Recovery,tenant-cpu,tenant-mem,0.23436463166802476,0.06674655917637788
+network_total_bandwidth,7 - Recovery,tenant-cpu,tenant-nsy,0.0299227889044275,0.033686794510513964
+network_total_bandwidth,7 - Recovery,tenant-cpu,tenant-ntk,0.20006747633550534,0.10392182286505229
+network_total_bandwidth,7 - Recovery,tenant-dsk,tenant-mem,0.1959424676283187,0.05452841859979186
+network_total_bandwidth,7 - Recovery,tenant-dsk,tenant-nsy,0.06277020661301685,0.0706375960252548
+network_total_bandwidth,7 - Recovery,tenant-dsk,tenant-ntk,0.23499656006935102,0.08861700356785256
+network_total_bandwidth,7 - Recovery,tenant-mem,tenant-nsy,-0.12007617803422856,0.038419785500506426
+network_total_bandwidth,7 - Recovery,tenant-mem,tenant-ntk,0.2738840337152597,0.09307562208235107
+network_total_bandwidth,7 - Recovery,tenant-nsy,tenant-ntk,0.03943628389466892,0.11959542538029637
