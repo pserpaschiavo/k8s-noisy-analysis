@@ -10,7 +10,7 @@ The pipeline consists of **10 fully functional stages** that execute without err
 
 1.  ✅ **Data Ingestion**: Loads raw data from experiments (supports Parquet and experiment_folder)
 2.  ✅ **Data Validation**: Validates data quality and generates validation reports
-3.  ✅ **Data Export**: Saves consolidated data in efficient formats
+3.  ✅ **Data Export**: Saves consolidated data in efficient formats (Parquet, CSV, JSON)
 4.  ✅ **Descriptive Analysis**: Calculates statistics and generates time-relative visualizations
 5.  ✅ **Correlation Analysis**: Cross-correlation analysis (CCF) with 61+ plots generated
 6.  ✅ **Causality Analysis**: Granger tests and Transfer Entropy implementation
@@ -111,6 +111,23 @@ The `run_optimized_pipeline.sh` script provides:
 - Enhanced warning suppression
 - Output verification
 - Summary of execution results
+
+### Working with Parquet Data
+
+The pipeline now fully supports Parquet format for data export and analysis:
+
+```bash
+# Convert CSV data to consolidated Parquet (SFI2 paper data)
+python3 scripts/convert_sfi2_paper_to_parquet.py --consolidate
+
+# Extract specific subsets from the consolidated Parquet
+python3 scripts/extract_parquet_data.py --metric nginx_connections --stats
+
+# Analyze Parquet data with the included Jupyter notebook
+jupyter notebook análise_parquet.ipynb
+```
+
+See the [Parquet Usage Guide](docs/parquet_usage.md) for detailed information on working with the Parquet files.
 
 ### Command-Line Options
 

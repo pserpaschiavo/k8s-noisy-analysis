@@ -1,0 +1,99 @@
+# SFI2 Paper Analysis Pipeline Configuration
+
+# Input/Output Directories
+data_root: ./data/sfi2-paper
+processed_data_dir: ./data/processed
+output_dir: ./outputs/sfi2-paper-analysis
+
+# Data ingestion configuration
+output_parquet_name: sfi2_paper.parquet
+
+# Data selection
+selected_metrics:
+  - cpu_usage
+  - memory_usage
+  - network_total_bandwidth
+  - disk_throughput_total
+  
+selected_tenants:
+  - tenant-cpu
+  - tenant-mem
+  - tenant-ntk
+  - tenant-dsk
+  - tenant-nsy
+
+# Rounds to process
+selected_rounds:
+  - round-1
+  - round-2
+  - round-3
+
+# Analysis-specific configurations
+correlation_analysis:
+  methods:
+    - pearson
+    - spearman
+  # New parameter for correlation threshold
+  threshold: 0.3  # Reduced from 0.5 to capture more correlations
+  
+causality:
+  granger_max_lag: 5
+  granger_threshold: 0.05
+  transfer_entropy_bins: 8
+
+# Visualization parameters
+visualization:
+  plot_quality: "high"  # high, medium, low - affects DPI and size
+  fonts:
+    family: "sans-serif"  # Use "sans-serif" to avoid warnings with "serif"
+    size: 12
+    title_size: 14
+  metric_display_names:
+    cpu_usage: "CPU Usage (Cores)"
+    memory_usage: "Memory Usage (B)"
+    network_total_bandwidth: "Network Bandwidth (B/s)"
+    disk_throughput_total: "Disk Throughput (B/s)"
+  correlation_graph:
+    threshold: 0.3     # Threshold for correlation graphs
+  causality_graph:
+    threshold: 0.05    # Threshold for causality graphs
+  heatmap:
+    cmap: "coolwarm"   # Colormap for heatmaps
+  boxplot:
+    notch: true        # Use boxplots with notch
+  time_series:
+    line_width: 1.5    # Line width in time series plots
+  
+# Multi-round analysis configuration
+multi_round_analysis:
+  effect_size:
+    methods: ["cohen_d", "eta_squared"]
+    baseline_phase: "1 - Baseline"
+  meta_analysis:
+    p_value_combination: "fisher"  # or "stouffer"
+    confidence_level: 0.95
+    alpha: 0.05
+  correlation:
+    method: "pearson"  # or "spearman", "kendall"
+    min_periods: 3
+    min_stable_rounds: 2  # Minimum rounds to consider a correlation stable
+    significance_threshold: 0.5  # Significant correlation threshold
+  performance:
+    use_cache: true
+    parallel_processing: false
+    gpu_acceleration: false    # Enable GPU acceleration
+    gpu_memory_limit: 0.8      # GPU memory usage limit (0.0-1.0)
+    large_dataset_threshold: 10000  # Number of rows to consider a large dataset
+  visualization:
+    heatmap_colormap: "RdBu_r"
+    show_significance_markers: true
+    effect_size_thresholds:
+      small: 0.2
+      medium: 0.5
+      large: 0.8
+  
+# Visualization options
+plots:
+  figure_size: [10, 6]
+  style: tableau-colorblind10
+  dpi: 100
