@@ -31,6 +31,7 @@ from src.analysis_phase_comparison import PhaseComparisonStage
 from src.analysis_multi_round import MultiRoundAnalysisStage
 from src.analysis_fault_tolerance import FaultToleranceAnalysisStage
 from src.report_generation import ReportGenerationStage
+from src.analysis_export import AnalysisExportStage, export_analysis_results_for_external_tools
 from src.config import PipelineConfig
 from src.utils import configure_matplotlib, validate_data_availability
 
@@ -129,6 +130,12 @@ def main():
             logging.info(f"Executing stage: {stage.stage_name} for round: {round_id}")
             stage_results = stage.execute(data=segmented_data, all_results=current_round_results, round_id=round_id)
             current_round_results[stage.stage_name] = stage_results
+            
+        # Export Analysis Results to Parquet for external tools
+        export_stage = AnalysisExportStage(config)
+        export_results = export_stage.execute(data=segmented_data, all_results=current_round_results, round_id=round_id)
+        current_round_results[export_stage.stage_name] = export_results
+        logger.info(f"Analysis results for round {round_id} exported to Parquet tables.")
 
         all_rounds_results[round_id] = current_round_results
 
@@ -141,16 +148,13 @@ def main():
         # Concatenar todos os DataFrames com dados de todos os rounds
         consolidated_df = pd.concat(all_pipeline_results['all_segmented_data'], ignore_index=True)
         
-        # Salvar o DataFrame consolidado no arquivo parquet
-        processed_data_path = config.get_processed_data_path()
-        if processed_data_path:
-            data_dir = os.path.dirname(processed_data_path)
-            os.makedirs(data_dir, exist_ok=True)
-            consolidated_df.to_parquet(processed_data_path, index=False)
-            logger.info(f"Saved consolidated data from all rounds to {processed_data_path}")
-            
-            # Adicionar o DataFrame consolidado ao contexto do pipeline
-            all_pipeline_results['consolidated_df'] = consolidated_df
+        # Usar o novo utilitário para garantir a geração correta do arquivo Parquet
+        from src.data_parquet_utils import fix_parquet_generation
+        fix_parquet_generation(config, consolidated_df)
+        logger.info(f"Saved consolidated data from all rounds to {config.get_processed_data_path()}")
+        
+        # Armazenar o DataFrame consolidado nos resultados do pipeline
+        all_pipeline_results['consolidated_df'] = consolidated_df
     
     # --- Multi-Round Analysis ---
     if len(selected_rounds) > 1:
@@ -171,6 +175,12 @@ def main():
     report_generation_stage.execute(
         all_results=all_pipeline_results
     )
+    
+    # --- Final Export of All Results for External Tools ---
+    logger.info("Exporting consolidated analysis results for external tools...")
+    exported_tables = export_analysis_results_for_external_tools(config, all_pipeline_results)
+    logger.info(f"Exported {len(exported_tables)} tables for external analysis tools.")
+    all_pipeline_results['exported_tables'] = exported_tables
 
     logger.info("Pipeline execution completed successfully.")
 

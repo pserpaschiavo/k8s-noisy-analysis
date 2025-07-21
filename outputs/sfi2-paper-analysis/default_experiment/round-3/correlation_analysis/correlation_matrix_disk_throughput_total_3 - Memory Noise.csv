@@ -1,6 +1,0 @@
-tenant_id,tenant-cpu,tenant-dsk,tenant-mem,tenant-nsy,tenant-ntk
-tenant-cpu,,,,,
-tenant-dsk,,1.0,,0.060811983380650456,
-tenant-mem,,,,,
-tenant-nsy,,0.060811983380650456,,1.0,
-tenant-ntk,,,,,

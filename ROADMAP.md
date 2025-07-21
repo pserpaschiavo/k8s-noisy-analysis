@@ -129,9 +129,9 @@ Este documento serve como um guia de alto nível para as fases de trabalho no pi
   - **Status:** Em andamento.
   - **Descrição:** Implementar o uso de nomes de exibição amigáveis para métricas nos gráficos e relatórios, buscando a informação do arquivo de configuração para garantir clareza e profissionalismo nos artefatos gerados.
 
-- [ ] **Garantir Geração Correta do Arquivo Parquet:**
-  - **Status:** Em andamento.
-  - **Descrição:** Investigar e corrigir o problema que impede a criação do arquivo de dados processados (`.parquet`) mesmo quando ele não existe, garantindo que o pipeline possa ser executado do zero de forma confiável.
+- [x] **Garantir Geração Correta do Arquivo Parquet:**
+  - **Status:** Concluído.
+  - **Descrição:** Desenvolvido módulo `data_parquet_utils.py` que corrige o problema de criação do arquivo de dados processados (`.parquet`). Também implementado suporte para exportação de análises em formato Parquet para uso em outras ferramentas de visualização.
 
 - [x] **Validar Inclusão de Novas Métricas:**
   - **Status:** Concluído.
@@ -140,3 +140,7 @@ Este documento serve como um guia de alto nível para as fases de trabalho no pi
 - [ ] **Ajustar Geração de Relatório Final:**
   - **Status:** A fazer.
   - **Descrição:** Garantir que todos os novos gráficos (descritivos com nomes normalizados, multi-round, etc.) sejam corretamente coletados e incluídos no relatório final em Markdown.
+
+- [x] **Adicionar Suporte a Exportação em Formato Parquet para Ferramentas Externas:**
+  - **Status:** Concluído.
+  - **Descrição:** Implementado novo módulo `analysis_export.py` e classe `ParquetDataManager` para exportar resultados de análises em formato Parquet estruturado, facilitando a integração com ferramentas como Power BI, Tableau e outras plataformas de análise.
