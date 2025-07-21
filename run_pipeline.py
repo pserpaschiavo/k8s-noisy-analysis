@@ -17,10 +17,12 @@ import logging
 import argparse
 from typing import Dict, Any
 import os
+import pandas as pd
 
 # Import all pipeline stage classes
 from src.data_ingestion import DataIngestionStage
 from src.data_segment import DataSegmentationStage
+from src.data_export import DataExportStage
 from src.analysis_descriptive import DescriptiveAnalysisStage
 from src.analysis_correlation import CorrelationAnalysisStage
 from src.analysis_causality import CausalityAnalysisStage
@@ -99,6 +101,20 @@ def main():
             logging.warning(f"Skipping analysis for round {round_id} due to segmentation failure.")
             continue
 
+        # Data Export - Salvar os dados processados em formato parquet
+        data_export_stage = DataExportStage(config)
+        export_results = data_export_stage.execute(data=segmented_data, all_results=current_round_results, round_id=round_id)
+        current_round_results[data_export_stage.stage_name] = export_results
+        
+        # Também salvar para posterior consolidação
+        # Vamos armazenar os dados segmentados para cada round em uma lista
+        if 'all_segmented_data' not in all_pipeline_results:
+            all_pipeline_results['all_segmented_data'] = []
+        
+        # Adicionar os dados do round atual (já inclui a coluna round_id)
+        all_pipeline_results['all_segmented_data'].append(segmented_data)
+        logging.info(f"Stored segmented data for round {round_id} for later consolidation")
+
         # Standard Analysis Stages
         analysis_stages = [
             DescriptiveAnalysisStage(config),
@@ -119,6 +135,23 @@ def main():
     # Consolidate results for multi-round and report generation
     all_pipeline_results['per_round'] = all_rounds_results
 
+    # --- Consolidar e salvar dados de todos os rounds ---
+    if 'all_segmented_data' in all_pipeline_results and all_pipeline_results['all_segmented_data']:
+        logger.info("Consolidating data from all rounds...")
+        # Concatenar todos os DataFrames com dados de todos os rounds
+        consolidated_df = pd.concat(all_pipeline_results['all_segmented_data'], ignore_index=True)
+        
+        # Salvar o DataFrame consolidado no arquivo parquet
+        processed_data_path = config.get_processed_data_path()
+        if processed_data_path:
+            data_dir = os.path.dirname(processed_data_path)
+            os.makedirs(data_dir, exist_ok=True)
+            consolidated_df.to_parquet(processed_data_path, index=False)
+            logger.info(f"Saved consolidated data from all rounds to {processed_data_path}")
+            
+            # Adicionar o DataFrame consolidado ao contexto do pipeline
+            all_pipeline_results['consolidated_df'] = consolidated_df
+    
     # --- Multi-Round Analysis ---
     if len(selected_rounds) > 1:
         logger.info("Executing multi-round analysis stage...")
