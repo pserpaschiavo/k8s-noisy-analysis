@@ -15,7 +15,6 @@ tqdm>=4.62.0  # Para barras de progresso
 tabulate>=0.8.9 # Para gerar tabelas formatadas
 pillow>=9.0.0  # Para suporte a animações e salvar GIFs
 python-louvain>=0.16  # Para detecção de comunidades em redes
-pickle5>=0.0.10  # Suporte avançado para pickle (usado no cache)
 
 # Dependências opcionais para aceleração GPU
 # Instalação específica da plataforma pode ser necessária
