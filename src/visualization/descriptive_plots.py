@@ -9,6 +9,7 @@ import pandas as pd
 import numpy as np
 import logging
 import matplotlib.patches as mpatches
+import re
 from typing import Dict, List, Optional
 
 from src.config import PipelineConfig
@@ -30,8 +31,12 @@ def plot_metric_timeseries_multi_tenant(df: pd.DataFrame, metric: str, phase: st
 
     subset['timestamp'] = pd.to_datetime(subset['timestamp'], errors='coerce')
     
-    metric_display_names = config.get_metric_display_names()
-    metric_display_name = metric_display_names.get(metric, metric)
+    # Get display name from global config
+    metric_info = PUBLICATION_CONFIG.get('metric_display_names', {}).get(metric)
+    if isinstance(metric_info, dict):
+        metric_display_name = metric_info.get('name', metric)
+    else:
+        metric_display_name = metric_info or metric
     
     phase_display = PUBLICATION_CONFIG['phase_display_names'].get(phase, phase)
     tenant_colors = PUBLICATION_CONFIG['tenant_colors']
@@ -72,13 +77,17 @@ def plot_metric_timeseries_multi_tenant_all_phases(df: pd.DataFrame, metric: str
     subset['timestamp'] = pd.to_datetime(subset['timestamp'], errors='coerce')
     subset = subset.sort_values('timestamp')
 
-    metric_display_names = config.get_metric_display_names()
-    metric_display_name = metric_display_names.get(metric, metric)
+    metric_info = PUBLICATION_CONFIG.get('metric_display_names', {}).get(metric)
+    if isinstance(metric_info, dict):
+        metric_display_name = metric_info.get('name', metric)
+    else:
+        metric_display_name = metric_info or metric
     
     tenant_colors = PUBLICATION_CONFIG['tenant_colors']
     tenant_markers = PUBLICATION_CONFIG['tenant_markers']
     tenant_display_names = PUBLICATION_CONFIG['tenant_display_names']
     phase_colors = PUBLICATION_CONFIG['phase_colors']
+    phase_hatches = PUBLICATION_CONFIG.get('phase_hatches', {})
     phase_display_names = PUBLICATION_CONFIG['phase_display_names']
 
     fig, ax = plt.subplots(figsize=(15, 7))
@@ -104,30 +113,116 @@ def plot_metric_timeseries_multi_tenant_all_phases(df: pd.DataFrame, metric: str
     phases = sorted(subset['experimental_phase'].unique(), 
                     key=lambda p: subset[subset['experimental_phase'] == p]['timestamp'].min())
 
+    # Helper: map various phase label formats to canonical config keys
+    canonical_by_number = {
+        1: '1 - Baseline',
+        2: '2 - CPU Noise',
+        3: '3 - Memory Noise',
+        4: '4 - Network Noise',
+        5: '5 - Disk Noise',
+        6: '6 - Combined Noise',
+        7: '7 - Recovery',
+    }
+
     for phase in phases:
         phase_df = subset[subset['experimental_phase'] == phase]
         if phase_df.empty:
             continue
         start_time = (phase_df['timestamp'].min() - round_start_time).total_seconds()
         end_time = (phase_df['timestamp'].max() - round_start_time).total_seconds()
-        
-        clean_phase_name = phase.strip()
-        base_phase_name = clean_phase_name.split(' - ', 1)[-1]
-        normalized_base_name = base_phase_name.lower().replace(' ', '-')
 
-        color = phase_colors.get(clean_phase_name)
+        # Guard against zero-width spans
+        if not np.isfinite(start_time) or not np.isfinite(end_time):
+            logger.warning(f"Invalid start/end time for phase '{phase}'. Skipping shading.")
+            continue
+        if end_time <= start_time:
+            end_time = start_time + 1.0  # minimal visible width
+
+        clean_phase_name = str(phase).strip()
+
+        # Try to parse leading number and flexible separator variants like '1-Baseline', '1 - Baseline'
+        m = re.match(r"^(\s*(?P<num>\d+)\s*[-–—]?\s*)?(?P<label>.*)$", clean_phase_name)
+        phase_num = None
+        phase_label = clean_phase_name
+        if m:
+            num_str = m.group('num')
+            if num_str:
+                try:
+                    phase_num = int(num_str)
+                except Exception:
+                    phase_num = None
+            lbl = m.group('label').strip()
+            if lbl:
+                phase_label = lbl
+
+        # Build candidate keys for color/display mapping
+        candidates: List[str] = []
+        if phase_num in canonical_by_number:
+            candidates.append(canonical_by_number[phase_num])  # canonical "X - Name"
+        candidates.extend([
+            clean_phase_name,
+            clean_phase_name.replace(' - ', '-'),  # e.g., '1-Baseline'
+            clean_phase_name.replace('-', ' - '),  # e.g., '1 - Baseline'
+            phase_label,
+            phase_label.title(),
+            phase_label.replace('-', ' ').title(),
+            phase_label.lower().replace(' ', '-'),  # normalized base
+        ])
+
+        # Deduplicate while keeping order
+        seen = set()
+        candidates = [c for c in candidates if not (c in seen or seen.add(c))]
+
+        # Resolve color
+        color = None
+        for key in candidates:
+            if key in phase_colors:
+                color = phase_colors[key]
+                break
+        if not color and phase_num in canonical_by_number:
+            # Last attempt: canonical key by number
+            color = phase_colors.get(canonical_by_number[phase_num])
         if not color:
-            color = phase_colors.get(normalized_base_name)
-        if not color:
-            logger.warning(f"No color found for phase '{clean_phase_name}' or base name '{normalized_base_name}'. Defaulting.")
+            logger.warning(f"No color found for phase variants {candidates}. Using default shade.")
             color = '#dddddd'
 
-        display_name = phase_display_names.get(clean_phase_name, 
-                                               phase_display_names.get(base_phase_name, 
-                                                                       phase_display_names.get(normalized_base_name, clean_phase_name)))
-        
-        ax.axvspan(start_time, end_time, color=color, alpha=0.35, lw=0)
-        phase_patches.append(mpatches.Patch(color=color, alpha=0.35, label=display_name))
+    # Resolve display name
+        display_name = None
+        for key in candidates:
+            if key in phase_display_names:
+                display_name = phase_display_names[key]
+                break
+        if not display_name and phase_num in canonical_by_number:
+            display_name = phase_display_names.get(canonical_by_number[phase_num])
+        if not display_name:
+            # Fallback to cleaned label
+            display_name = phase_label
+
+        # Resolve hatch pattern (optional)
+        hatch = None
+        for key in candidates:
+            if key in phase_hatches:
+                hatch = phase_hatches[key]
+                break
+        if hatch is None and phase_num in canonical_by_number:
+            hatch = phase_hatches.get(canonical_by_number[phase_num], '')
+
+        # Draw shaded span behind the lines (use bar-like rectangle to support hatch)
+        # Note: axvspan doesn't support hatch directly, so draw a Rectangle
+        from matplotlib.patches import Rectangle
+        rect = Rectangle((start_time, ax.get_ylim()[0]),
+                         width=(end_time - start_time),
+                         height=(ax.get_ylim()[1] - ax.get_ylim()[0]),
+                         facecolor=color,
+                         alpha=0.20,
+                         edgecolor='none',
+                         hatch=hatch or None,
+                         zorder=0.4)
+        ax.add_patch(rect)
+
+        # Legend patch with same styling
+        legend_patch = mpatches.Patch(facecolor=color, edgecolor='black', alpha=0.20, label=display_name, hatch=hatch or None)
+        phase_patches.append(legend_patch)
 
     # Combine legends
     tenant_legend = ax.legend(title='Tenant', bbox_to_anchor=(1.05, 1), loc='upper left')
@@ -153,8 +248,11 @@ def plot_metric_barplot_by_phase(df: pd.DataFrame, metric: str, round_id: str, o
         logger.warning(f"No data for bar plot: {metric}, {round_id}. Check input dataframe.")
         return None
 
-    metric_display_names = config.get_metric_display_names()
-    metric_display_name = metric_display_names.get(metric, metric)
+    metric_info = PUBLICATION_CONFIG.get('metric_display_names', {}).get(metric)
+    if isinstance(metric_info, dict):
+        metric_display_name = metric_info.get('name', metric)
+    else:
+        metric_display_name = metric_info or metric
     
     tenant_display_names = PUBLICATION_CONFIG['tenant_display_names']
     phase_display_names = PUBLICATION_CONFIG['phase_display_names']
@@ -187,8 +285,11 @@ def plot_metric_boxplot(df: pd.DataFrame, metric: str, round_id: str, out_dir: s
         logger.warning(f"No data for box plot: {metric}, {round_id}. Check input dataframe.")
         return None
 
-    metric_display_names = config.get_metric_display_names()
-    metric_display_name = metric_display_names.get(metric, metric)
+    metric_info = PUBLICATION_CONFIG.get('metric_display_names', {}).get(metric)
+    if isinstance(metric_info, dict):
+        metric_display_name = metric_info.get('name', metric)
+    else:
+        metric_display_name = metric_info or metric
     
     tenant_display_names = PUBLICATION_CONFIG['tenant_display_names']
     phase_display_names = PUBLICATION_CONFIG['phase_display_names']
@@ -227,8 +328,11 @@ def plot_anomalies(df: pd.DataFrame, anomalies: pd.DataFrame, metric: str, phase
     subset['timestamp'] = pd.to_datetime(subset['timestamp'], errors='coerce')
     anomalies['timestamp'] = pd.to_datetime(anomalies['timestamp'], errors='coerce')
 
-    metric_display_names = config.get_metric_display_names()
-    metric_display_name = metric_display_names.get(metric, metric)
+    metric_info = PUBLICATION_CONFIG.get('metric_display_names', {}).get(metric)
+    if isinstance(metric_info, dict):
+        metric_display_name = metric_info.get('name', metric)
+    else:
+        metric_display_name = metric_info or metric
     
     phase_display = PUBLICATION_CONFIG['phase_display_names'].get(phase, phase)
     tenant_colors = PUBLICATION_CONFIG['tenant_colors']

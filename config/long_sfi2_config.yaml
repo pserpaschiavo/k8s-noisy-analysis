@@ -12,9 +12,10 @@ output_parquet_name: sfi2_long.parquet
 selected_metrics:
   - cpu_usage
   - memory_usage
-  - network_total_bandwidth
-  - disk_throughput_total
-  
+  - network_transmit
+  - network_receive
+  - disk_io_total
+
 selected_tenants:
   - tenant-cpu
   - tenant-mem
@@ -56,7 +57,8 @@ visualization:
   metric_display_names:
     cpu_usage: "CPU Usage (Cores)"
     memory_usage: "Memory Usage (B)"
-    network_total_bandwidth: "Network Bandwidth (B/s)"
+    network_receive: "Network Receive (B/s)"
+    network_transmit: "Network Transmit (B/s)"
     disk_io_total: "Disk I/O (B/s)"
   correlation_graph:
     threshold: 0.3     # Threshold for correlation graphs

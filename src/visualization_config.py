@@ -9,14 +9,15 @@ elements to ensure consistency and readability across all generated plots.
 
 # Standard configuration for academic publications
 PUBLICATION_CONFIG = {
-    # Consistent color scheme for tenants (colorblind-friendly)
+    # Consistent color scheme for tenants (Okabe–Ito: colorblind-friendly)
+    # Palette reference: https://jfly.uni-koeln.de/color/
     'tenant_colors': {
-        'tenant-cpu': '#1f77b4',      # Muted Blue
-        'tenant-mem': '#ff7f0e',  # Safety Orange
-        'tenant-ntk': '#2ca02c', # Cooked Asparagus Green
-        'tenant-dsk': '#d62728', # Brick Red
-        'tenant-nsy': '#9467bd',   # Muted Purple
-        'default': '#8c564b',        # Chestnut
+        'tenant-cpu': '#0072B2',  # Blue
+        'tenant-mem': '#E69F00',  # Orange
+        'tenant-ntk': '#009E73',  # Bluish green
+        'tenant-dsk': '#CC79A7',  # Reddish purple
+        'tenant-nsy': '#D55E00',  # Vermillion
+        'default':   '#56B4E9',   # Sky blue
     },
     
     # Consistent marker styles for tenants
@@ -38,15 +39,27 @@ PUBLICATION_CONFIG = {
         'tenant-nsy': 'Noisy Tenant',
     },
     
-    # Standardized color scheme for experimental phases
+    # Standardized color scheme for experimental phases (Okabe–Ito, neutral gray for baseline)
     'phase_colors': {
-        '1 - Baseline': '#7f7f7f',       # Medium Gray
-        '2 - CPU Noise': '#e41a1c',      # Red
-        '3 - Memory Noise': '#377eb8',   # Blue
-        '4 - Network Noise': '#4daf4a',  # Green
-        '5 - Disk Noise': '#984ea3',     # Purple
-        '6 - Combined Noise': '#ff7f00', # Orange
-        '7 - Recovery': '#a65628',       # Brown
+        '1 - Baseline': '#9A9A9A',  # Neutral Gray
+        '2 - CPU Noise': '#D55E00',  # Vermillion
+        '3 - Memory Noise': '#009E73',  # Bluish green
+        '4 - Network Noise': '#56B4E9',  # Sky blue
+        '5 - Disk Noise': '#CC79A7',  # Reddish purple
+        '6 - Combined Noise': '#E69F00',  # Orange
+        '7 - Recovery': '#0072B2',  # Blue
+    },
+
+    # Optional hatch patterns per phase to aid in grayscale / colorblind contexts
+    # Valid patterns examples: '/', '\\', '|', '-', '+', 'x', 'o', 'O', '.', '*'
+    'phase_hatches': {
+        '1 - Baseline': '',
+        '2 - CPU Noise': '///',
+        '3 - Memory Noise': '\\\\\\',
+        '4 - Network Noise': '++',
+        '5 - Disk Noise': 'xx',
+        '6 - Combined Noise': '..',
+        '7 - Recovery': '--',
     },
 
     # Standardized display names for metrics
