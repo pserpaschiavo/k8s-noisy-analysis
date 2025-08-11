@@ -27,11 +27,12 @@ warnings.filterwarnings("ignore", "Unable to solve the eigenvalue problem")
 
 # Attempt to import the pyinform library for a more robust Transfer Entropy implementation
 try:
-    from pyinform.transferentropy import transfer_entropy
+    from pyinform.transferentropy import transfer_entropy as _transfer_entropy_impl
     PYINFORM_AVAILABLE = True
     logger.info("pyinform library found. Using optimized implementation for Transfer Entropy.")
 except ImportError:
     PYINFORM_AVAILABLE = False
+    _transfer_entropy_impl = None  # type: ignore
     logger.warning("pyinform is not installed. Transfer Entropy will use a basic implementation. "
                    "For better results, install with: pip install pyinform")
 
@@ -86,8 +87,8 @@ def _calculate_transfer_entropy(x: np.ndarray, y: np.ndarray, bins: int = 5, k: 
         return 0.0
     
     # Handle potential NaN values from resampling or gaps
-    if np.isnan(x).any(): x = np.nan_to_num(x, nan=np.nanmean(x))
-    if np.isnan(y).any(): y = np.nan_to_num(y, nan=np.nanmean(y))
+    if np.isnan(x).any(): x = np.nan_to_num(x, nan=float(np.nanmean(x)))
+    if np.isnan(y).any(): y = np.nan_to_num(y, nan=float(np.nanmean(y)))
     
     if PYINFORM_AVAILABLE:
         try:
@@ -96,7 +97,8 @@ def _calculate_transfer_entropy(x: np.ndarray, y: np.ndarray, bins: int = 5, k: 
             y_norm = (y - np.min(y)) / (np.max(y) - np.min(y) + 1e-8)
             x_bin = np.floor(x_norm * (bins - 1)).astype(int)
             y_bin = np.floor(y_norm * (bins - 1)).astype(int)
-            return float(transfer_entropy(y_bin, x_bin, k=k, local=False))
+            if PYINFORM_AVAILABLE and _transfer_entropy_impl is not None:
+                return float(_transfer_entropy_impl(y_bin, x_bin, k=k, local=False))
         except Exception as e:
             logger.warning(f"Error using pyinform for TE: {e}. Falling back to basic implementation.")
     
@@ -131,12 +133,14 @@ class CausalityAnalysisStage(PipelineStage):
             return {}
 
         output_dir = self.config.get_output_dir_for_round(self.stage_name, round_id)
+        csv_dir = os.path.join(output_dir, 'csv')
+        os.makedirs(csv_dir, exist_ok=True)
         
         metrics = self.config.get_selected_metrics() or data['metric_name'].unique()
         phases = self.config.get_selected_phases() or data['experimental_phase'].unique()
         
-        all_causality_results = []
-        generated_artifacts = {'plots': {}, 'data': {}}
+        all_causality_results: list[pd.DataFrame] = []
+        generated_artifacts: Dict[str, Any] = {'plots': {}, 'data': {}}
 
         for metric in metrics:
             for phase in phases:
@@ -183,6 +187,28 @@ class CausalityAnalysisStage(PipelineStage):
         # Consolidate all results for the round
         final_results_df = pd.concat(all_causality_results, ignore_index=True)
         
+        # Save tidy causality results as CSVs
+        if 'p-value' in final_results_df.columns:
+            granger_tidy = final_results_df[final_results_df['p-value'].notna()].copy()
+        else:
+            granger_tidy = pd.DataFrame()
+        if 'score' in final_results_df.columns:
+            te_tidy = final_results_df[final_results_df['score'].notna()].copy()
+        else:
+            te_tidy = pd.DataFrame()
+        if not granger_tidy.empty:
+            if 'round_id' not in granger_tidy.columns:
+                granger_tidy['round_id'] = round_id
+            granger_csv = os.path.join(csv_dir, f'granger_tidy_{round_id}.csv')
+            granger_tidy.to_csv(granger_csv, index=False)
+            generated_artifacts['data']['granger_tidy'] = granger_csv
+        if not te_tidy.empty:
+            if 'round_id' not in te_tidy.columns:
+                te_tidy['round_id'] = round_id
+            te_csv = os.path.join(csv_dir, f'transfer_entropy_tidy_{round_id}.csv')
+            te_tidy.to_csv(te_csv, index=False)
+            generated_artifacts['data']['te_tidy'] = te_csv
+
         # This is the main output for the multi-round analysis
         return {
             "causality_results": final_results_df,
@@ -192,7 +218,9 @@ class CausalityAnalysisStage(PipelineStage):
     def _process_causality_results(self, matrix, metric, phase, round_id, method, output_dir, threshold, threshold_mode, value_type, results_list, artifacts_dict):
         """Helper to process and save results for a given causality method."""
         # Save matrix to CSV
-        csv_path = os.path.join(output_dir, f"{method}_matrix_{metric}_{phase}.csv")
+        csv_dir = os.path.join(output_dir, 'csv')
+        os.makedirs(csv_dir, exist_ok=True)
+        csv_path = os.path.join(csv_dir, f"{method}_matrix_{metric}_{phase}.csv")
         matrix.to_csv(csv_path)
         artifacts_dict['data'][f"{method}_matrix_{metric}_{phase}"] = csv_path
 

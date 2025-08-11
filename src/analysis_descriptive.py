@@ -60,16 +60,9 @@ class DescriptiveAnalysisStage(PipelineStage):
         self.config = config
 
     def _execute_implementation(self, data: Optional[pd.DataFrame], all_results: Dict[str, Any], round_id: str) -> Dict[str, Any]:
-        """
-        Executes the descriptive analysis stage.
-        
-        Args:
-            data (pd.DataFrame): The input data for this stage.
-            all_results (Dict[str, Any]): Dictionary containing results from previous stages.
-            round_id (str): The ID of the current processing round.
+        """Execute the descriptive analysis for a given round and save artifacts.
 
-        Returns:
-            Dict[str, Any]: A dictionary containing the results of this stage.
+        Returns a dict with CSV path and generated plot paths.
         """
         self.logger.info(f"Starting descriptive analysis for round '{round_id}'...")
         if data is None or data.empty:
@@ -82,22 +75,23 @@ class DescriptiveAnalysisStage(PipelineStage):
             self.logger.warning(f"No data found for round '{round_id}' in DescriptiveAnalysisStage. Skipping.")
             return {}
 
-        # Compute descriptive stats
+        # Compute descriptive stats and save CSV under a csv/ subfolder
         descriptive_stats = compute_descriptive_stats(round_df)
-        
-        # Save to CSV
-        output_dir = self.config.get_output_dir_for_round("descriptive_analysis", round_id)
-        csv_path = os.path.join(output_dir, f"descriptive_stats_{round_id}.csv")
+        output_dir = self.config.get_output_dir_for_round(self.stage_name, round_id)
+        csv_dir = os.path.join(output_dir, 'csv')
+        os.makedirs(csv_dir, exist_ok=True)
+        csv_path = os.path.join(csv_dir, f"descriptive_stats_{round_id}.csv")
+        # Ensure round_id column exists in the output
+        if 'round_id' not in descriptive_stats.columns:
+            descriptive_stats['round_id'] = round_id
         descriptive_stats.to_csv(csv_path, index=False)
         self.logger.info(f"Descriptive stats for round '{round_id}' saved to {csv_path}")
 
-        # --- Generate plots ---
+        # Generate plots
         self.logger.info(f"Generating descriptive plots for round '{round_id}'...")
-        plot_paths = []
-        
-        selected_metrics = self.config.get_selected_metrics()
-        if not selected_metrics:
-            selected_metrics = round_df['metric_name'].unique()
+        plot_paths: List[str] = []
+
+        selected_metrics = self.config.get_selected_metrics() or round_df['metric_name'].unique()
 
         for metric in selected_metrics:
             metric_df = round_df[round_df['metric_name'] == metric]
@@ -106,18 +100,21 @@ class DescriptiveAnalysisStage(PipelineStage):
                 continue
 
             try:
-                # Generate plots that require the full round data for a metric
+                # Per-metric plots
                 self.logger.debug(f"Generating barplot for {metric} in round {round_id}")
                 path = plot_metric_barplot_by_phase(metric_df, metric, round_id, output_dir, self.config)
-                if path: plot_paths.append(path)
+                if path:
+                    plot_paths.append(path)
 
                 self.logger.debug(f"Generating boxplot for {metric} in round {round_id}")
                 path = plot_metric_boxplot(metric_df, metric, round_id, output_dir, self.config)
-                if path: plot_paths.append(path)
+                if path:
+                    plot_paths.append(path)
 
                 self.logger.debug(f"Generating multi-tenant timeseries for {metric} in round {round_id}")
                 path = plot_metric_timeseries_multi_tenant_all_phases(metric_df, metric, round_id, output_dir, self.config)
-                if path: plot_paths.append(path)
+                if path:
+                    plot_paths.append(path)
 
             except Exception as e:
                 self.logger.error(f"Error generating plots for metric '{metric}' in round '{round_id}': {e}", exc_info=True)

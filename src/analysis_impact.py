@@ -44,19 +44,28 @@ class ImpactAnalysisStage(PipelineStage):
             return {}
 
         self.logger.info(f"Starting impact analysis for round: {round_id}...")
-        
+
         impact_summary = self.calculate_impact(data)
-        
+
         if impact_summary.empty:
             self.logger.warning("Impact analysis resulted in an empty DataFrame. Skipping artifact generation.")
             return {}
-            
+
         # --- Artifact Generation ---
         output_dir = self.config.get_output_dir_for_round(self.stage_name, round_id)
         results: Dict[str, Any] = {"impact_metrics": impact_summary}
 
-        # 1. Export results to CSV
-        csv_path = os.path.join(output_dir, 'impact_analysis_summary.csv')
+        # Ensure round_id is present for precision
+        try:
+            if 'round_id' not in impact_summary.columns:
+                impact_summary['round_id'] = round_id
+        except Exception as e:
+            self.logger.warning(f"Could not annotate impact summary with round_id: {e}")
+
+    # 1. Export results to CSV
+    csv_dir = os.path.join(output_dir, 'csv')
+    os.makedirs(csv_dir, exist_ok=True)
+    csv_path = os.path.join(csv_dir, f'impact_analysis_summary_{round_id}.csv')
         try:
             impact_summary.to_csv(csv_path, index=False)
             self.logger.info(f"Impact analysis results saved to {csv_path}")
@@ -71,7 +80,7 @@ class ImpactAnalysisStage(PipelineStage):
             results['plot_paths'] = plot_paths
         except Exception as e:
             self.logger.error(f"Failed to generate impact plots: {e}")
-        
+
         self.logger.info("Impact analysis completed successfully.")
         return results
 

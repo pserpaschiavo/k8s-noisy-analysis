@@ -178,9 +178,13 @@ class PhaseComparisonStage(PipelineStage):
 
         # Consolidate all stats for the current round into a single DataFrame
         round_stats_df = pd.concat(round_stats, ignore_index=True)
-        
+
         # Save the consolidated stats for the round
-        round_csv_path = os.path.join(output_dir, f'phase_comparison_stats_{round_id}.csv')
+        csv_dir = os.path.join(output_dir, 'csv')
+        os.makedirs(csv_dir, exist_ok=True)
+        round_csv_path = os.path.join(csv_dir, f'phase_comparison_stats_{round_id}.csv')
+        if 'round_id' not in round_stats_df.columns:
+            round_stats_df['round_id'] = round_id
         round_stats_df.to_csv(round_csv_path, index=False)
         self.logger.info(f"Round-specific phase comparison stats saved to {round_csv_path}")
 
