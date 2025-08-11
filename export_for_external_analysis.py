@@ -515,6 +515,284 @@ def generate_sample_data() -> dict:
         'causality': causality
     }
 
+def export_for_external_validation(config: PipelineConfig, output_dir: str, round_id: Optional[str] = None):
+    """
+    Exporta dados específicos para validação externa em ferramentas como R, MATLAB, Python com outros pacotes, etc.
+    Foca principalmente em dados para análise de Correlação, Causalidade de Granger e Transfer Entropy.
+    
+    Args:
+        config: Configuração do pipeline
+        output_dir: Diretório para os arquivos de saída
+        round_id: ID da rodada específica (opcional)
+    """
+    logger = logging.getLogger(__name__)
+    logger.info(f"Iniciando exportação para validação externa. Output dir: {output_dir}")
+    
+    # Cria estrutura de diretórios
+    external_dirs = {
+        'correlation': os.path.join(output_dir, 'correlation'),
+        'granger': os.path.join(output_dir, 'granger'),
+        'transfer_entropy': os.path.join(output_dir, 'transfer_entropy'),
+        'timeseries': os.path.join(output_dir, 'timeseries')
+    }
+    
+    for dir_name, dir_path in external_dirs.items():
+        os.makedirs(dir_path, exist_ok=True)
+        logger.debug(f"Criado diretório: {dir_path}")
+    
+    # Carrega dados - obter caminhos para arquivos de análise
+    output_base = config.get_base_output_dir()
+    multi_round_dir = os.path.join(output_base, 'default_experiment', 'multi_round_analysis')
+    correlation_path = os.path.join(multi_round_dir, 'multi_round_correlation_all.csv')
+    causality_path = os.path.join(multi_round_dir, 'multi_round_causality_all.csv')
+    
+    # Obtém caminho para dados brutos (Parquet)
+    processed_data_path = config.get_processed_data_path()
+    
+    # Verifica existência dos arquivos
+    files_exist = {
+        'correlation': os.path.exists(correlation_path),
+        'causality': os.path.exists(causality_path),
+        'processed_data': os.path.exists(processed_data_path) if processed_data_path else False
+    }
+    
+    logger.info(f"Arquivos encontrados: {files_exist}")
+    
+    # 1. Exportar dados de Correlação
+    if files_exist['correlation']:
+        logger.info("Processando dados de correlação")
+        try:
+            corr_df = pd.read_csv(correlation_path)
+            
+            # Normaliza nomes de colunas
+            if 'metric_name' in corr_df.columns and 'metric' not in corr_df.columns:
+                corr_df = corr_df.rename(columns={'metric_name': 'metric'})
+            
+            # Agrupa por fase e métrica
+            for (phase, metric), group in corr_df.groupby(['phase', 'metric']):
+                # Cria matriz de correlação completa
+                tenants = sorted(list(set(group['tenant1']) | set(group['tenant2'])))
+                corr_matrix = pd.DataFrame(np.eye(len(tenants)), index=tenants, columns=tenants)
+                
+                for _, row in group.iterrows():
+                    t1, t2, corr_value = row['tenant1'], row['tenant2'], row['mean_correlation']
+                    corr_matrix.loc[t1, t2] = corr_matrix.loc[t2, t1] = corr_value
+                    
+                # Salva a matriz de correlação
+                safe_metric = metric.replace('/', '_')
+                safe_phase = phase.replace(' ', '_')
+                filename = f"correlation_matrix_{safe_phase}_{safe_metric}.csv"
+                corr_matrix.to_csv(os.path.join(external_dirs['correlation'], filename))
+                logger.info(f"Salvo: {filename}")
+            
+            logger.info("Dados de correlação exportados com sucesso")
+        except Exception as e:
+            logger.error(f"Erro ao exportar dados de correlação: {e}")
+    
+    # 2. Exportar dados para Granger
+    if files_exist['causality']:
+        logger.info("Processando dados de causalidade")
+        try:
+            causality_df = pd.read_csv(causality_path)
+            
+            # Normaliza nomes de colunas
+            if 'metric_name' in causality_df.columns and 'metric' not in causality_df.columns:
+                causality_df = causality_df.rename(columns={'metric_name': 'metric'})
+            
+            # Seleciona colunas relevantes para Granger
+            granger_columns = ['phase', 'metric', 'source', 'target', 'p-value', 'score']
+            if all(col in causality_df.columns for col in granger_columns):
+                granger_df = causality_df[granger_columns]
+                
+                # Agrupa por fase e métrica
+                for (phase, metric), group in granger_df.groupby(['phase', 'metric']):
+                    safe_metric = metric.replace('/', '_')
+                    safe_phase = phase.replace(' ', '_')
+                    filename = f"granger_results_{safe_phase}_{safe_metric}.csv"
+                    group.to_csv(os.path.join(external_dirs['granger'], filename), index=False)
+                    logger.info(f"Salvo: {filename}")
+                
+                logger.info("Dados de Granger exportados com sucesso")
+            else:
+                missing = [col for col in granger_columns if col not in causality_df.columns]
+                logger.warning(f"Colunas necessárias não encontradas: {missing}")
+        except Exception as e:
+            logger.error(f"Erro ao exportar dados de Granger: {e}")
+    
+    # 3. Exportar dados para Transfer Entropy (TE)
+    if files_exist['causality']:
+        logger.info("Processando dados para Transfer Entropy")
+        try:
+            causality_df = pd.read_csv(causality_path)
+            
+            # Normaliza nomes de colunas
+            if 'metric_name' in causality_df.columns and 'metric' not in causality_df.columns:
+                causality_df = causality_df.rename(columns={'metric_name': 'metric'})
+            
+            # Para TE, precisamos dos pares fonte-destino
+            te_columns = ['phase', 'metric', 'source', 'target']
+            if all(col in causality_df.columns for col in te_columns):
+                te_df = causality_df[te_columns].drop_duplicates()
+                
+                # Agrupa por fase e métrica
+                for (phase, metric), group in te_df.groupby(['phase', 'metric']):
+                    safe_metric = metric.replace('/', '_')
+                    safe_phase = phase.replace(' ', '_')
+                    filename = f"transfer_entropy_pairs_{safe_phase}_{safe_metric}.csv"
+                    group.to_csv(os.path.join(external_dirs['transfer_entropy'], filename), index=False)
+                    logger.info(f"Salvo: {filename}")
+                
+                logger.info("Dados para Transfer Entropy exportados com sucesso")
+            else:
+                missing = [col for col in te_columns if col not in causality_df.columns]
+                logger.warning(f"Colunas necessárias não encontradas: {missing}")
+        except Exception as e:
+            logger.error(f"Erro ao exportar dados para Transfer Entropy: {e}")
+    
+    # 4. Exportar séries temporais brutas (opcional, mas útil para análises personalizadas)
+    if files_exist['processed_data'] and processed_data_path:  # Garantir que não é None
+        logger.info("Processando séries temporais brutas")
+        try:
+            # Carrega o arquivo Parquet de dados processados
+            raw_df = pd.read_parquet(processed_data_path)
+            
+            if round_id:
+                raw_df = raw_df[raw_df['round_id'] == round_id]
+            
+            # Exporta séries temporais por fase/métrica
+            phases = raw_df['experimental_phase'].unique()
+            metrics = raw_df['metric_name'].unique()
+            
+            for phase in phases:
+                for metric in metrics:
+                    subset = raw_df[(raw_df['experimental_phase'] == phase) & 
+                                   (raw_df['metric_name'] == metric)]
+                    
+                    if not subset.empty:
+                        # Pivot para formato mais adequado para ferramentas externas
+                        pivot_df = subset.pivot_table(
+                            index='timestamp', 
+                            columns='tenant_id', 
+                            values='metric_value'
+                        )
+                        
+                        # Salva como CSV (formato mais universal)
+                        safe_metric = metric.replace('/', '_')
+                        safe_phase = phase.replace(' ', '_')
+                        filename = f"timeseries_{safe_phase}_{safe_metric}.csv"
+                        pivot_df.to_csv(os.path.join(external_dirs['timeseries'], filename))
+                        logger.info(f"Salvo: {filename}")
+            
+            logger.info("Séries temporais exportadas com sucesso")
+        except Exception as e:
+            logger.error(f"Erro ao exportar séries temporais: {e}")
+    
+    # 5. Criar arquivo README com instruções de uso
+    readme_content = """# Dados para Validação Externa de Correlação, Granger e Transfer Entropy
+
+Este diretório contém dados exportados para validação em ferramentas externas como R, MATLAB, Python (com outros pacotes), etc.
+
+## Estrutura de Diretórios
+
+- `correlation/`: Matrizes de correlação por fase e métrica
+- `granger/`: Resultados dos testes de causalidade de Granger
+- `transfer_entropy/`: Pares para análise de Transfer Entropy
+- `timeseries/`: Séries temporais brutas em formato pivot (timestamps × tenants)
+
+## Exemplos de Uso
+
+### R
+
+```r
+# Correlação
+corr_matrix <- read.csv("correlation/correlation_matrix_Baseline_cpu_usage.csv", row.names=1)
+library(corrplot)
+corrplot(as.matrix(corr_matrix))
+
+# Granger Causality
+library(vars)
+granger_pairs <- read.csv("transfer_entropy/transfer_entropy_pairs_Baseline_cpu_usage.csv")
+timeseries_data <- read.csv("timeseries/timeseries_Baseline_cpu_usage.csv")
+
+# Para cada par em granger_pairs, fazer teste:
+source_col <- granger_pairs$source[1]
+target_col <- granger_pairs$target[1]
+var_data <- timeseries_data[, c(target_col, source_col)]
+var_model <- VAR(var_data, p=3, type="const")
+causality(var_model, cause=source_col)
+```
+
+### MATLAB
+
+```matlab
+% Correlação
+corr_data = readtable("correlation/correlation_matrix_Baseline_cpu_usage.csv");
+corr_matrix = table2array(corr_data(:, 2:end));
+imagesc(corr_matrix);
+colorbar;
+
+% Transfer Entropy
+te_pairs = readtable("transfer_entropy/transfer_entropy_pairs_Baseline_cpu_usage.csv");
+ts_data = readtable("timeseries/timeseries_Baseline_cpu_usage.csv");
+
+% Para cada par em te_pairs, calcular TE:
+source = te_pairs.source{1};
+target = te_pairs.target{1};
+source_data = ts_data{:, source};
+target_data = ts_data{:, target};
+te_value = transferentropy(source_data, target_data);
+```
+
+### Python
+
+```python
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from statsmodels.tsa.stattools import grangercausalitytests
+
+# Correlação
+corr_matrix = pd.read_csv("correlation/correlation_matrix_Baseline_cpu_usage.csv", index_col=0)
+plt.figure(figsize=(10, 8))
+sns.heatmap(corr_matrix, annot=True, cmap='coolwarm')
+plt.title('Correlation Matrix')
+plt.show()
+
+# Granger Causality
+pairs = pd.read_csv("transfer_entropy/transfer_entropy_pairs_Baseline_cpu_usage.csv")
+ts_data = pd.read_csv("timeseries/timeseries_Baseline_cpu_usage.csv", index_col=0)
+
+# Para cada par, testar causalidade
+for _, row in pairs.iterrows():
+    source, target = row['source'], row['target']
+    test_data = ts_data[[target, source]].dropna()
+    result = grangercausalitytests(test_data, maxlag=5, verbose=False)
+    p_values = [result[i+1][0]['ssr_ftest'][1] for i in range(5)]
+    print(f"{source} -> {target}: min p-value = {min(p_values):.4f}")
+```
+
+## Validação Cruzada
+
+Estes dados foram exportados para permitir a validação dos resultados obtidos no pipeline principal usando ferramentas estatísticas alternativas. Compare os resultados obtidos em ferramentas externas com os salvos em:
+
+- Correlação: `multi_round_correlation_all.csv`
+- Granger: `multi_round_causality_all.csv`
+
+Gerado em: {datetime}
+"""
+    
+    # Adiciona a data/hora atual
+    from datetime import datetime
+    readme_content = readme_content.replace('{datetime}', datetime.now().strftime('%Y-%m-%d %H:%M'))
+    
+    # Salva o README
+    with open(os.path.join(output_dir, 'README.md'), 'w') as f:
+        f.write(readme_content)
+    
+    logger.info(f"Arquivo README.md criado em {output_dir}")
+    logger.info("Exportação para validação externa concluída com sucesso.")
+
+
 def debug_dataframe_types(df: pd.DataFrame) -> str:
     """
     Generate a debug report of DataFrame column types.
@@ -559,6 +837,8 @@ def main():
     parser.add_argument('--format', type=str, default='parquet', choices=['parquet', 'csv', 'excel', 'json', 'html'],
                       help='Formato de saída dos arquivos. Valores possíveis: parquet, csv, excel, json, html. Padrão: parquet')
     parser.add_argument('--demo', action='store_true', help='Gerar dados de exemplo para demonstração/teste.')
+    parser.add_argument('--external-validation', action='store_true', 
+                      help='Exportar dados em formatos otimizados para validação externa de correlação, Granger e Transfer Entropy.')
     parser.add_argument('--debug', action='store_true', help='Ativar modo de depuração com logs detalhados.')
     args = parser.parse_args()
 
@@ -589,7 +869,13 @@ def main():
             args.round = 'round-1'
             logger.info(f"Usando round_id padrão para demo: {args.round}")
     
-    # Exportar análises
+    # Modo especial para validação externa
+    if args.external_validation:
+        logger.info("Modo de validação externa ativado - exportando dados otimizados para ferramentas externas")
+        export_for_external_validation(config=config, output_dir=args.output, round_id=args.round)
+        return 0
+    
+    # Exportar análises (modo padrão)
     success = export_analyses(
         config=config, 
         output_dir=args.output, 
