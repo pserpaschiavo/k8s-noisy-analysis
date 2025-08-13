@@ -18,8 +18,8 @@ selected_metrics:
 selected_tenants:
   - tenant-cpu
   - tenant-mem
-  - tenant-ntk
   - tenant-dsk
+  - tenant-ntk
   - tenant-nsy
 
 # Rounds to process
@@ -58,9 +58,8 @@ visualization:
   metric_display_names:
     cpu_usage: "CPU Usage (Cores)"
     memory_usage: "Memory Usage (B)"
-    network_receive: "Network Receive (B/s)"
-    network_transmit: "Network Transmit (B/s)"
     disk_io_total: "Disk I/O (B/s)"
+    network_throughput: "Network Throughput (B/s)"
   correlation_graph:
     threshold: 0.3     # Threshold for correlation graphs
   causality_graph:

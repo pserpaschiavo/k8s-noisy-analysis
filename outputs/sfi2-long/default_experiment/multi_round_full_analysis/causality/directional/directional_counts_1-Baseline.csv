@@ -1,0 +1,6 @@
+source,tenant-cpu,tenant-dsk,tenant-mem,tenant-nsy,tenant-ntk
+tenant-cpu,0.0,17.0,22.0,0.0,22.0
+tenant-dsk,23.0,0.0,16.0,0.0,11.0
+tenant-mem,22.0,18.0,0.0,0.0,21.0
+tenant-nsy,0.0,0.0,0.0,0.0,0.0
+tenant-ntk,25.0,16.0,25.0,0.0,0.0

@@ -14,8 +14,8 @@ PUBLICATION_CONFIG = {
     'tenant_colors': {
         'tenant-cpu': '#0072B2',  # Blue
         'tenant-mem': '#E69F00',  # Orange
-        'tenant-ntk': '#009E73',  # Bluish green
         'tenant-dsk': '#CC79A7',  # Reddish purple
+        'tenant-ntk': '#009E73',  # Bluish green
         'tenant-nsy': '#D55E00',  # Vermillion
         'default':   '#56B4E9',   # Sky blue
     },
@@ -24,8 +24,8 @@ PUBLICATION_CONFIG = {
     'tenant_markers': {
         'tenant-cpu': 'o',
         'tenant-mem': 's',
-        'tenant-ntk': '^',
         'tenant-dsk': 'D',
+        'tenant-ntk': 'X',
         'tenant-nsy': 'v',
         'default': 'x',
     },
@@ -34,8 +34,8 @@ PUBLICATION_CONFIG = {
     'tenant_display_names': {
         'tenant-cpu': 'CPU Tenant',
         'tenant-mem': 'Memory Tenant',
-        'tenant-ntk': 'Network Tenant',
         'tenant-dsk': 'Storage Tenant',
+        'tenant-ntk': 'Network Tenant',
         'tenant-nsy': 'Noisy Tenant',
     },
     
@@ -56,8 +56,8 @@ PUBLICATION_CONFIG = {
         '1 - Baseline': '',
         '2 - CPU Noise': '///',
         '3 - Memory Noise': '\\\\\\',
-        '4 - Network Noise': '++',
-        '5 - Disk Noise': 'xx',
+        '4 - Disk Noise': 'xx',
+        '5 - Network Noise': '++',
         '6 - Combined Noise': '..',
         '7 - Recovery': '--',
     },
@@ -68,7 +68,7 @@ PUBLICATION_CONFIG = {
         'memory_usage': {'name': 'Memory Usage', 'unit': 'Bytes'},
         'network_io': {'name': 'Network I/O', 'unit': 'Bytes/s'},
         'disk_io': {'name': 'Disk I/O', 'unit': 'Bytes/s'},
-        'network_usage': {'name': 'Network Usage', 'unit': 'Bytes/s'},
+        'network_throughput': {'name': 'Network Throughput', 'unit': 'Bytes/s'},
         'disk_usage': {'name': 'Disk Usage', 'unit': 'Bytes/s'},
         'memory_usage_bytes': {'name': 'Memory Usage', 'unit': 'Bytes'},
     },
@@ -78,8 +78,8 @@ PUBLICATION_CONFIG = {
         '1 - Baseline': 'Baseline',
         '2 - CPU Noise': 'CPU Noise',
         '3 - Memory Noise': 'Memory Noise',
-        '4 - Network Noise': 'Network Noise',
-        '5 - Disk Noise': 'Disk Noise',
+        '4 - Disk Noise': 'Disk Noise',
+        '5 - Network Noise': 'Network Noise',
         '6 - Combined Noise': 'Combined Noise',
         '7 - Recovery': 'Recovery',
     },

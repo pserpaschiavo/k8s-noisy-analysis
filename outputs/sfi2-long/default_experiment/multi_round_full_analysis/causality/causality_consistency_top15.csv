@@ -1,0 +1,16 @@
+method,metric,source,target,frequency,consistency_rate
+granger,cpu_usage,tenant-cpu,tenant-dsk,10,100.0
+granger,cpu_usage,tenant-cpu,tenant-mem,10,100.0
+granger,cpu_usage,tenant-cpu,tenant-nsy,10,100.0
+granger,cpu_usage,tenant-cpu,tenant-ntk,10,100.0
+granger,cpu_usage,tenant-dsk,tenant-cpu,10,100.0
+granger,cpu_usage,tenant-dsk,tenant-mem,10,100.0
+granger,cpu_usage,tenant-dsk,tenant-nsy,10,100.0
+granger,cpu_usage,tenant-dsk,tenant-ntk,10,100.0
+granger,cpu_usage,tenant-mem,tenant-cpu,10,100.0
+granger,cpu_usage,tenant-mem,tenant-dsk,10,100.0
+granger,cpu_usage,tenant-mem,tenant-nsy,10,100.0
+granger,cpu_usage,tenant-mem,tenant-ntk,10,100.0
+granger,cpu_usage,tenant-nsy,tenant-cpu,10,100.0
+granger,cpu_usage,tenant-nsy,tenant-dsk,10,100.0
+granger,cpu_usage,tenant-nsy,tenant-mem,10,100.0

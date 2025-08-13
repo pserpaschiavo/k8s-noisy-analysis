@@ -18,8 +18,8 @@ selected_metrics:
 selected_tenants:
   - tenant-cpu
   - tenant-mem
-  - tenant-ntk
   - tenant-dsk
+  - tenant-ntk
   - tenant-nsy
 
 # Rounds to process

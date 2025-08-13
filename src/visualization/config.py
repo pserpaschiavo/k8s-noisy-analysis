@@ -58,8 +58,8 @@ PUBLICATION_CONFIG = {
         "1 - Baseline": "Baseline",
         "2 - CPU Noise": "CPU Noise",
         "3 - Memory Noise": "Memory Noise",
-        "4 - Network Noise": "Network Noise",
-        "5 - Disk Noise": "Disk Noise",
+        "4 - Disk Noise": "Disk Noise",
+        "5 - Network Noise": "Network Noise",
         "6 - Combined Noise": "Combined Noise",
         "7 - Recovery": "Recovery"
     },

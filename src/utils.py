@@ -228,3 +228,57 @@ def normalize_phase_name(name: str) -> Optional[str]:
         The canonical phase name or None if not found.
     """
     return _REVERSE_CANONICAL_MAPPING.get(name.lower())
+
+
+def load_pipeline_output_files(out_dir: str):
+    """
+    Loads the pipeline output files needed for the consolidated analysis.
+    
+    Args:
+        out_dir: The output directory from the pipeline.
+        
+    Returns:
+        A tuple of (causality_df, correlation_df, impact_df) pandas DataFrames.
+        Any or all of these may be None if the corresponding file is not found.
+    """
+    import os
+    import pandas as pd
+    import glob
+    
+    logger.info("Loading pipeline output files for consolidated analysis...")
+    
+    # Initialize return values
+    causality_df = None
+    correlation_df = None  
+    impact_df = None
+    
+    try:
+        # Try to find causality files
+        causality_pattern = os.path.join(out_dir, "**/multi_round_causality_all.csv")
+        causality_files = glob.glob(causality_pattern, recursive=True)
+        if causality_files:
+            causality_df = pd.read_csv(causality_files[0])
+            logger.info(f"Loaded causality data from {causality_files[0]}")
+        
+        # Try to find correlation files
+        correlation_pattern = os.path.join(out_dir, "**/multi_round_correlation_all.csv")
+        correlation_files = glob.glob(correlation_pattern, recursive=True)
+        if correlation_files:
+            correlation_df = pd.read_csv(correlation_files[0])
+            logger.info(f"Loaded correlation data from {correlation_files[0]}")
+        
+        # Try to find impact files
+        impact_pattern = os.path.join(out_dir, "**/multi_round_impact_aggregated_stats.csv")
+        impact_files = glob.glob(impact_pattern, recursive=True)
+        if impact_files:
+            impact_df = pd.read_csv(impact_files[0])
+            logger.info(f"Loaded impact data from {impact_files[0]}")
+            
+        # Check if we have all required files
+        if causality_df is None or correlation_df is None or impact_df is None:
+            logger.warning("Not all required files found for consolidated analysis. "
+                          "Make sure the pipeline has generated all necessary outputs.")
+    except Exception as e:
+        logger.error(f"Error loading pipeline output files: {e}")
+    
+    return causality_df, correlation_df, impact_df
