@@ -12,8 +12,7 @@ output_parquet_name: sfi2_long.parquet
 selected_metrics:
   - cpu_usage
   - memory_usage
-  - network_transmit
-  - network_receive
+  - network_throughput
   - disk_io_total
 
 selected_tenants:
@@ -33,6 +32,8 @@ selected_rounds:
   - round-6
   - round-7
   - round-8
+  - round-9
+  - round-10
 
 # Analysis-specific configurations
 correlation_analysis:

@@ -79,3 +79,32 @@ PUBLICATION_CONFIG = {
         "score": "plasma"            # Sequential map for scores.
     }
 }
+
+
+def format_metric_name(raw: str) -> str:
+    """Normalize raw metric identifiers into a human-friendly display string.
+
+    Rules / heuristics:
+      - Safe cast to str, strip
+      - Replace underscores/dashes with spaces
+      - Collapse multiple spaces
+      - Title-case then apply explicit replacements for canonical forms
+    """
+    if raw is None:
+        return ""
+    import re as _re
+    s = str(raw).strip()
+    if not s:
+        return s
+    s = _re.sub(r'[\-_]+', ' ', s)
+    s = _re.sub(r'\s+', ' ', s).strip().lower()
+    replacements = {
+        'cpu usage': 'CPU Usage',
+        'memory usage': 'Memory Usage',
+        'disk io total': 'Disk I/O Total',
+        'disk io': 'Disk I/O',
+        'network receive': 'Network Receive',
+        'network transmit': 'Network Transmit',
+        'network throughput': 'Network Throughput',
+    }
+    return replacements.get(s, s.title())

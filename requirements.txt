@@ -5,19 +5,19 @@ matplotlib>=3.5.0
 seaborn>=0.11.0
 networkx>=2.6.0
 numpy>=1.20.0
-pyinform>=0.2.0  # Para Transfer Entropy
-statsmodels==0.14.2  # Para análise de causalidade de Granger
-scipy==1.13.1
-pyarrow>=8.0.0  # Para trabalhar com formato Parquet
-jupyter>=1.0.0   # Para notebooks (opcional)
+pyinform>=0.2.0  # For Transfer Entropy
+statsmodels==0.14.2  # For Granger causality analysis
+scipy
+pyarrow>=8.0.0  # For working with Parquet format
+jupyter>=1.0.0   # For notebooks (optional)
 scikit-learn>=1.0.0  # Para análises avançadas
-tqdm>=4.62.0  # Para barras de progresso
-tabulate>=0.8.9 # Para gerar tabelas formatadas
-pillow>=9.0.0  # Para suporte a animações e salvar GIFs
-python-louvain>=0.16  # Para detecção de comunidades em redes
+tqdm>=4.62.0  # For progress bars
+tabulate>=0.8.9 # For generating formatted tables
+pillow>=9.0.0  # For animation support and saving GIFs
+python-louvain>=0.16  # For community detection in networks
 
 # Dependências opcionais para aceleração GPU
-# Instalação específica da plataforma pode ser necessária
+# Platform-specific installation may be required
 # cupy>=12.0.0  # Descomente para usar CuPy (CUDA NumPy)
 # torch>=2.0.0  # Descomente para usar PyTorch
 # tensorflow>=2.10.0  # Descomente para usar TensorFlow

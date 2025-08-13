@@ -78,7 +78,7 @@ def main():
 
     # Per-round analysis
     for round_id in selected_rounds:
-        logging.info(f"Processing round: {round_id}")
+        logging.info(f"Processing:{round_id.capitalize()}")
         current_round_results = {}
         
         # Data Ingestion
@@ -89,7 +89,7 @@ def main():
         current_round_results[data_ingestion_stage.stage_name] = ingestion_results
 
         if ingested_data is None or ingested_data.empty:
-            logging.warning(f"Skipping round {round_id} due to no data being ingested.")
+            logging.warning(f"Skipping{round_id.capitalize()} due to no data being ingested.")
             continue
 
         # Data Segmentation
@@ -99,7 +99,7 @@ def main():
         current_round_results[data_segmentation_stage.stage_name] = segmentation_results
 
         if segmented_data is None:
-            logging.warning(f"Skipping analysis for round {round_id} due to segmentation failure.")
+            logging.warning(f"Skipping analysis for round{round_id.capitalize()} due to segmentation failure.")
             continue
 
         # Data Export - Salvar os dados processados em formato parquet
@@ -114,7 +114,7 @@ def main():
         
         # Adicionar os dados do round atual (já inclui a coluna round_id)
         all_pipeline_results['all_segmented_data'].append(segmented_data)
-        logging.info(f"Stored segmented data for round {round_id} for later consolidation")
+        logging.info(f"Stored segmented data for round{round_id.capitalize()} for later consolidation")
 
         # Standard Analysis Stages
         analysis_stages = [
@@ -127,7 +127,7 @@ def main():
         ]
 
         for stage in analysis_stages:
-            logging.info(f"Executing stage: {stage.stage_name} for round: {round_id}")
+            logging.info(f"Executing stage: {stage.stage_name} for round:{round_id.capitalize()}")
             stage_results = stage.execute(data=segmented_data, all_results=current_round_results, round_id=round_id)
             current_round_results[stage.stage_name] = stage_results
             
@@ -135,7 +135,7 @@ def main():
         export_stage = AnalysisExportStage(config)
         export_results = export_stage.execute(data=segmented_data, all_results=current_round_results, round_id=round_id)
         current_round_results[export_stage.stage_name] = export_results
-        logger.info(f"Analysis results for round {round_id} exported to Parquet tables.")
+        logger.info(f"Analysis results for round{round_id.capitalize()} exported to Parquet tables.")
 
         all_rounds_results[round_id] = current_round_results
 

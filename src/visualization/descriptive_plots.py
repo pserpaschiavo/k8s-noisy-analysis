@@ -56,7 +56,7 @@ def plot_metric_timeseries_multi_tenant(df: pd.DataFrame, metric: str, phase: st
                 color=tenant_colors.get(tenant_id, '#7f7f7f'),
                 label=tenant_display_names.get(tenant_id, tenant_id))
 
-    ax.set_title(f'Time Series: {metric_display_name} - {phase_display} (Round {round_id})', fontweight='bold')
+    ax.set_title(f'Time Series: {metric_display_name} - {phase_display} (round_id.capitalize())', fontweight='bold')
     ax.set_xlabel("Time (seconds from phase start)")
     ax.set_ylabel(metric_display_name)
     ax.legend(title='Tenant', bbox_to_anchor=(1.05, 1), loc='upper left')
@@ -229,7 +229,7 @@ def plot_metric_timeseries_multi_tenant_all_phases(df: pd.DataFrame, metric: str
     ax.add_artist(tenant_legend)
     ax.legend(handles=phase_patches, title="Phase", bbox_to_anchor=(1.05, 0), loc='lower left')
 
-    ax.set_title(f'Time Series: {metric_display_name} - All Phases (Round {round_id})', fontweight='bold')
+    ax.set_title(f'Time Series: {metric_display_name} - All Phases (round_id.capitalize())', fontweight='bold')
     ax.set_xlabel("Time (seconds from round start)")
     ax.set_ylabel(metric_display_name)
     ax.grid(True, which='both', linestyle='--', linewidth=0.5)
@@ -265,7 +265,7 @@ def plot_metric_barplot_by_phase(df: pd.DataFrame, metric: str, round_id: str, o
     fig, ax = plt.subplots(figsize=(12, 7))
     sns.barplot(data=plot_df, x='experimental_phase', y='metric_value', hue='tenant_id', palette=color_palette, errorbar='sd', capsize=0.1, ax=ax)
 
-    ax.set_title(f'Mean {metric_display_name} by Phase (Round {round_id})', fontweight='bold')
+    ax.set_title(f'Mean {metric_display_name} by Phase (round_id.capitalize())', fontweight='bold')
     ax.set_xlabel('Experimental Phase')
     ax.set_ylabel(f'Mean {metric_display_name}')
     ax.tick_params(axis='x', rotation=45)
@@ -302,7 +302,7 @@ def plot_metric_boxplot(df: pd.DataFrame, metric: str, round_id: str, out_dir: s
     fig, ax = plt.subplots(figsize=(14, 8))
     sns.boxplot(data=plot_df, x='experimental_phase', y='metric_value', hue='tenant_id', palette=color_palette, showfliers=False, ax=ax)
 
-    ax.set_title(f'Distribution of {metric_display_name} by Phase (Round {round_id})', fontweight='bold')
+    ax.set_title(f'Distribution of {metric_display_name} by Phase (round_id.capitalize())', fontweight='bold')
     ax.set_xlabel('Experimental Phase')
     ax.set_ylabel(metric_display_name)
     ax.tick_params(axis='x', rotation=45)
@@ -357,7 +357,7 @@ def plot_anomalies(df: pd.DataFrame, anomalies: pd.DataFrame, metric: str, phase
                    edgecolors='black', linewidth=1, zorder=10)
 
     ax.scatter([], [], color='red', s=100, marker='X', edgecolors='black', linewidth=1, label='Anomaly')
-    ax.set_title(f'Anomalies in {metric_display_name} - {phase_display} (Round {round_id})', fontweight='bold')
+    ax.set_title(f'Anomalies in {metric_display_name} - {phase_display} (round_id.capitalize())', fontweight='bold')
     ax.set_xlabel("Time (seconds from phase start)")
     ax.set_ylabel(metric_display_name)
     ax.grid(True, which='both', linestyle='--', linewidth=0.5)
@@ -389,7 +389,7 @@ def plot_metric_distribution_by_phase(df: pd.DataFrame, metric: str, round_id: s
     fig, ax = plt.subplots(figsize=(14, 8))
     sns.violinplot(data=plot_df, x='experimental_phase', y='metric_value', hue='tenant_id', palette=color_palette, inner='quartile', ax=ax)
 
-    ax.set_title(f'Distribution of {metric_display_name} by Phase (Round {round_id})', fontweight='bold')
+    ax.set_title(f'Distribution of {metric_display_name} by Phase (round_id.capitalize())', fontweight='bold')
     ax.set_xlabel('Experimental Phase')
     ax.set_ylabel(metric_display_name)
     ax.tick_params(axis='x', rotation=45)
@@ -421,7 +421,7 @@ def plot_metric_heatmap(df: pd.DataFrame, metric: str, round_id: str, out_dir: s
     fig, ax = plt.subplots(figsize=(18, 8))
     sns.heatmap(pivot_df, ax=ax, cmap="viridis", cbar_kws={'label': metric_display_name})
 
-    ax.set_title(f'Heatmap of {metric_display_name} Over Time (Round {round_id})', fontweight='bold')
+    ax.set_title(f'Heatmap of {metric_display_name} Over Time (round_id.capitalize())', fontweight='bold')
     ax.set_xlabel('Time')
     ax.set_ylabel('Tenant')
     ax.tick_params(axis='x', rotation=90)

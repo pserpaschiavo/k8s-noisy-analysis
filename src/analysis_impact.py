@@ -61,11 +61,10 @@ class ImpactAnalysisStage(PipelineStage):
                 impact_summary['round_id'] = round_id
         except Exception as e:
             self.logger.warning(f"Could not annotate impact summary with round_id: {e}")
-
-    # 1. Export results to CSV
-    csv_dir = os.path.join(output_dir, 'csv')
-    os.makedirs(csv_dir, exist_ok=True)
-    csv_path = os.path.join(csv_dir, f'impact_analysis_summary_{round_id}.csv')
+        # 1. Export results to CSV
+        csv_dir = os.path.join(output_dir, 'csv')
+        os.makedirs(csv_dir, exist_ok=True)
+        csv_path = os.path.join(csv_dir, f'impact_analysis_summary_{round_id}.csv')
         try:
             impact_summary.to_csv(csv_path, index=False)
             self.logger.info(f"Impact analysis results saved to {csv_path}")
@@ -177,7 +176,7 @@ class ImpactAnalysisStage(PipelineStage):
                 impact_df['tenant_id'] = df['tenant_id'].unique()[0]
                 self.logger.info("Recovered single tenant_id for impact analysis.")
             else:
-                 return pd.DataFrame() # Return empty DF if it cannot be resolved
+                return pd.DataFrame()  # Return empty DF if it cannot be resolved
 
         return impact_df
 

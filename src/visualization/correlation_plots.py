@@ -19,6 +19,11 @@ import networkx as nx
 from matplotlib.colors import LinearSegmentedColormap
 
 from src.visualization_config import PUBLICATION_CONFIG
+try:
+    from src.visualization.config import format_metric_name
+except Exception:  # pragma: no cover
+    def format_metric_name(raw: str) -> str:  # fallback minimal
+        return raw
 from src.visualization.plots import save_plot
 
 logger = logging.getLogger(__name__)
@@ -29,7 +34,7 @@ def plot_correlation_heatmap(corr_matrix: pd.DataFrame, metric: str, phase: str,
         logger.warning(f"Empty correlation matrix for {metric}, {phase}, {round_id}")
         return None
 
-    metric_info = PUBLICATION_CONFIG['metric_display_names'].get(metric, {'name': metric})
+    metric_info = PUBLICATION_CONFIG['metric_display_names'].get(metric, {'name': format_metric_name(metric)})
     metric_name = metric_info['name']
     phase_display = PUBLICATION_CONFIG['phase_display_names'].get(phase, phase)
     cmap = PUBLICATION_CONFIG['heatmap_colormaps'].get('correlation', 'vlag')
@@ -43,7 +48,7 @@ def plot_correlation_heatmap(corr_matrix: pd.DataFrame, metric: str, phase: str,
         linewidths=0.5, mask=mask, cbar_kws={"label": f"{method.title()} Correlation", "shrink": 0.8}, ax=ax
     )
 
-    title = f'{method.title()} Correlation: {metric_name}\n{phase_display} - Round {round_id}'
+    title = f'{method.title()} Correlation: {metric_name}\n{phase_display} - Round {round_id.capitalize}'
     ax.set_title(title, fontweight='bold')
     out_path = os.path.join(out_dir, f"correlation_heatmap_{method}_{metric}_{phase}_{round_id}.png")
     save_plot(fig, out_path)
@@ -59,8 +64,8 @@ def plot_covariance_heatmap(cov_matrix: pd.DataFrame, metric: str, phase: str, r
 
     fig, ax = plt.subplots(figsize=(8, 6))
     sns.heatmap(cov_matrix, annot=True, cmap='crest', center=0, square=True, linewidths=0.5, cbar_kws={"label": "Covariance"}, ax=ax)
-    ax.set_title(f'Covariance between tenants\n{metric} - {phase} - {round_id}')
-    
+    ax.set_title(f'Covariance between tenants\n{format_metric_name(metric)} - {phase} - {round_id.capitalize()}')
+
     out_path = os.path.join(out_dir, f"covariance_heatmap_{metric}_{phase}_{round_id}.png")
     save_plot(fig, out_path)
 
@@ -120,8 +125,10 @@ def plot_ccf(ccf_dict: dict, metric: str, phase: str, round_id: str, out_dir: st
         else:
             direction = "Contemporaneous"
         
-        ax.set_title(f'Cross-correlation between {tenant1} and {tenant2}\n{metric} - {phase} - {round_id}\nRelationship: {direction}', 
-                 fontsize=12, fontweight='bold')
+        ax.set_title(
+            f'Cross-correlation between {tenant1} and {tenant2}\n{format_metric_name(metric)} - {phase} - {round_id.capitalize}\nRelationship: {direction}',
+            fontsize=12, fontweight='bold'
+        )
         ax.set_xlabel('Lag')
         ax.set_ylabel('Cross-correlation')
         ax.grid(True, linestyle='--', alpha=0.7)
